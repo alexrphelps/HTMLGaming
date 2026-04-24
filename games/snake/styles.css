@@ -1,0 +1,879 @@
+body {
+  background: black;
+  color: lime;
+  font-family: 'Courier New', monospace;
+  user-select: none;
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#scoreboard {
+  font-size: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 10px;
+  width: 220px;
+}
+
+canvas {
+  border: 2px solid lime;
+  background: black;
+  image-rendering: pixelated;
+  max-width: 90vmin; /* Responsive sizing */
+  max-height: 90vmin; /* Responsive sizing */
+}
+
+canvas.no-wrap {
+  outline: 3px solid red; /* Red border around the existing green border */
+  outline-offset: 0;
+}
+
+#startMenu {
+  color: lime;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 30px;
+  border: 2px solid lime;
+  border-radius: 15px;
+  width: 1000px; /* Match the game board size */
+  margin: 50px auto;
+  box-sizing: border-box;
+}
+
+#startMenu h2 {
+  margin-top: 0;
+  text-shadow: 0 0 5px lime;
+}
+
+.menu-section {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.menu-section h3 {
+  margin: 5px 0 10px 0;
+}
+
+/* Main menu layout - 2 columns */
+.main-menu-container {
+  display: flex;
+  width: 100%;
+}
+
+.menu-left-column, .menu-right-column {
+  width: 50%;
+  padding: 10px 20px;
+  box-sizing: border-box;
+}
+
+.menu-right-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Horizontal menu layout */
+.menu-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 20px;
+  margin: 15px 0;
+}
+
+.menu-col {
+  flex: 1;
+  min-width: 200px;
+  max-width: 800px;
+  padding: 15px;
+}
+
+/* Snake color selection and preview layout */
+.color-selection-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: stretch; /* Make both sections the same height */
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.color-selection, #colorPreview {
+  width: 48%;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center horizontally */
+  justify-content: center; /* Center vertically */
+  border: 1px dotted lime;
+  border-radius: 10px;
+  background-color: rgba(0, 128, 0, 0.1);
+  padding: 10px;
+}
+
+.color-selection h3, #colorPreview h3 {
+  margin: 5px 0 10px;
+  text-align: center;
+}
+
+#colorOptions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 10px;
+  margin: 10px auto;
+  justify-items: center;
+  align-items: center;
+  flex-grow: 1;
+  width: 100%; /* Ensure the grid takes full width of container */
+}
+
+#colorOptions button {
+  background: black;
+  border: 2px solid lime;
+  color: lime;
+  font-family: 'Courier New', monospace;
+  font-size: 14px; /* Keep smaller font size */
+  padding: 5px 2px; /* Reduced horizontal padding to maximize text space */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  outline: none;
+  width: 100%; /* Increased from 90% to 100% to use full grid cell width */
+  height: 50px; /* Increased height for text wrapping */
+  white-space: normal; /* Allow text to wrap */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Button hover styles */
+#colorOptions button:hover {
+  background: rgba(0, 255, 0, 0.2);
+  text-shadow: 0 0 5px lime;
+  transform: scale(1.05);
+}
+
+#colorOptions button.selected {
+  background: lime;
+  color: black;
+  font-weight: bold;
+  box-shadow: 0 0 10px lime;
+}
+
+/* Difficulty selection styling */
+#difficultySelection {
+  text-align: center;
+  padding: 15px;
+  border: 1px dotted lime;
+  border-radius: 10px;
+  background-color: rgba(0, 128, 0, 0.1);
+  margin-bottom: 20px;
+  width: 90%;
+}
+
+#difficultySelection h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 18px;
+}
+
+#difficultyOptions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+#difficultyOptions button {
+  background: black;
+  border: 2px solid lime;
+  color: lime;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+#difficultyOptions button:hover {
+  background: rgba(0, 255, 0, 0.2);
+  text-shadow: 0 0 5px lime;
+  transform: scale(1.02);
+}
+
+#difficultyOptions button.selected {
+  background: lime;
+  color: black;
+  box-shadow: 0 0 10px lime;
+}
+
+#difficultyDescription {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 5px;
+  border: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+#difficultyDescription p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* Preview styling - centered version */
+#colorPreview {
+  width: 48%;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center horizontally */
+  justify-content: space-between; /* Distribute space between heading and canvas */
+  border: 1px dotted lime;
+  border-radius: 10px;
+  background-color: rgba(0, 128, 0, 0.1);
+  padding: 10px;
+  box-sizing: border-box; /* Include padding in width calculation */
+  min-height: 110px; /* Ensure consistent height */
+}
+
+#previewCanvas {
+  border: 1px solid rgba(0, 255, 0, 0.5);
+  margin: 5px auto; /* Added margin to ensure vertical spacing */
+  display: block;
+  background: rgba(0, 0, 0, 0.5);
+  width: 160px; 
+  height: 60px; 
+  max-width: 100%;
+  box-sizing: border-box; /* Ensures border is included in width calculation */
+}
+
+#gameContainer {
+  position: relative;
+  display: none;
+  margin: 0 auto;
+  justify-content: center;
+  align-items: center;
+}
+
+#gameLayout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  margin: 0 auto;
+}
+
+#sidePanel {
+  margin-left: 20px;
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 80px;
+  color: lime;
+  z-index: 10;
+  text-shadow: 0 0 10px lime;
+}
+
+#statusMessage {
+  font-size: 18px;
+  color: lime;
+  text-align: left;
+  padding: 15px;
+  margin-top: 20px;
+  background-color: rgba(0, 0, 0, 0.9);
+  border-radius: 5px;
+  display: none;
+  border: 2px solid lime;
+  word-wrap: break-word; /* Ensures text wraps instead of overflowing */
+  width: 100%;
+  box-sizing: border-box;
+  line-height: 1.4;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+  white-space: pre-line; /* Preserves line breaks */
+}
+
+#gameControls {
+  margin-top: 10px;
+  text-align: left;
+  display: none;
+  width: 100%;
+}
+
+#options {
+  text-align: center;
+  padding: 15px;
+  border: 1px dotted lime;
+  border-radius: 10px;
+  background-color: rgba(0, 128, 0, 0.1);
+  margin: 20px 0;
+  width: 90%;
+}
+
+#options h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 18px;
+}
+
+.option-item {
+  margin: 10px 0;
+}
+
+/* Game Info styles */
+#gameInfo {
+  text-align: left;
+  padding: 15px;
+  border: 1px dotted lime;
+  border-radius: 10px;
+  background-color: rgba(0, 128, 0, 0.1);
+  margin-bottom: 20px;
+  font-size: 14px;
+  height: 70%; /* Take up most of the height */
+}
+
+#gameInfo h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 18px;
+  text-align: center;
+}
+
+#gameInfo h4 {
+  margin: 15px 0 10px 0;
+  font-size: 16px;
+  text-align: center;
+  text-decoration: underline;
+}
+
+#gameInfo p {
+  margin: 5px 0;
+  line-height: 1.4;
+}
+
+.foodInfo {
+  margin-top: 15px;
+}
+
+.foodItem {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.foodIcon {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  border-radius: 50%; /* Keep food icons circular */
+  border: 1px solid lime; /* Simple border that matches the retro theme */
+}
+
+.foodIcon.red {
+  background: red;
+}
+
+.foodIcon.orange {
+  background: orange;
+}
+
+.foodIcon.yellow {
+  background: yellow;
+}
+
+.foodDesc {
+  color: lime;
+}
+
+.foodName {
+  font-weight: bold;
+}
+
+.btn {
+  background: black;
+  border: 2px solid lime;
+  color: lime;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  padding: 10px 20px;
+  margin: 5px 0;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  background: lime;
+  color: black;
+  text-shadow: none;
+}
+
+#startGameBtn {
+  margin-top: 20px;
+  font-size: 22px;
+  padding: 12px;
+  text-transform: uppercase;
+  font-weight: bold;
+  letter-spacing: 2px;
+  background: black;
+  color: lime;
+  border: 3px solid lime;
+  cursor: pointer;
+  transition: all 0.3s;
+  width: 80%;
+  max-width: 300px;
+}
+
+#startGameBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #666;
+  color: #666;
+}
+
+#startGameBtn:not(:disabled):hover {
+  background: lime;
+  color: black;
+  box-shadow: 0 0 15px lime;
+}
+
+#restartButton, #mainMenuButton {
+  background: black;
+  border: 2px solid lime;
+  color: lime;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  padding: 10px 20px;
+  margin: 5px 0;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+#restartButton:hover, #mainMenuButton:hover {
+  background: lime;
+  color: black;
+}
+
+#useSameColorCheckbox {
+  margin-right: 8px;
+}
+
+.scoreboard-item {
+  border-bottom: 1px dotted lime;
+  padding-bottom: 5px;
+  word-wrap: break-word; /* Ensures long content wraps */
+}
+
+/* AI Snake score styling */
+.ai-score-item {
+  border-bottom: 1px dotted rgba(0, 255, 0, 0.3);
+  padding-bottom: 3px;
+  font-size: 14px;
+  opacity: 0.9;
+  word-wrap: break-word;
+}
+
+.ai-score-item.dead {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+/* Main action buttons container */
+.main-actions-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+/* Main action buttons styling - increased size for text fit */
+.main-actions-container .btn {
+  background: black;
+  border: 3px solid lime;
+  color: lime;
+  font-family: 'Courier New', monospace;
+  font-size: 22px;
+  font-weight: bold;
+  padding: 15px 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  border-radius: 5px;
+  margin: 5px 0;
+  width: 80%;
+  max-width: 300px;
+  min-width: 200px;
+}
+
+.main-actions-container .btn:hover {
+  background: lime;
+  color: black;
+  box-shadow: 0 0 15px lime;
+}
+
+.main-actions-container .btn:disabled {
+  background: rgba(50, 50, 50, 0.5);
+  border-color: #666;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* Settings menu button styling */
+.settings-buttons-container {
+  justify-content: center !important;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.settings-button {
+  width: 180px !important;
+  max-width: 180px !important;
+  min-width: 180px !important;
+  font-size: 16px;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+/* Level Selection Menu Styles */
+#levelMenu {
+  color: lime;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 12px;
+  border: 2px solid lime;
+  border-radius: 10px;
+  width: 1000px;
+  margin: 16px auto;
+  box-sizing: border-box;
+}
+
+#levelMenu h2 {
+  margin-top: 0;
+  text-shadow: 0 0 5px lime;
+  margin-bottom: 18px;
+}
+
+/* Level grid container styling */
+.level-grid-container {
+  text-align: center;
+  padding: 8px;
+  border: 1px dotted lime;
+  border-radius: 7px;
+  background-color: rgba(0, 128, 0, 0.1);
+  margin-bottom: 10px;
+}
+
+.level-grid-container h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 5px;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 4px;
+}
+
+.level-button {
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid lime;
+  border-radius: 6px;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+}
+
+.level-button:hover:not(.locked):not(.coming-soon) {
+  background: rgba(0, 255, 0, 0.1);
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+  transform: translateY(-1px);
+}
+
+.level-button.selected {
+  background: rgba(0, 255, 0, 0.2);
+  box-shadow: 0 0 12px lime;
+  border-color: #00ff00;
+}
+
+.level-button.completed {
+  border-color: #00aa00;
+  background: rgba(0, 170, 0, 0.1);
+}
+
+.level-button.locked {
+  border-color: #666;
+  background: rgba(50, 50, 50, 0.5);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.level-button.coming-soon {
+  border-color: #888;
+  background: rgba(80, 80, 80, 0.3);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.level-number {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 2px;
+  color: lime;
+}
+
+.level-name {
+  font-size: 10px;
+  margin-bottom: 2px;
+  word-wrap: break-word;
+  line-height: 1.1;
+  color: #ccffcc;
+}
+
+.level-difficulty {
+  font-size: 12px;
+  margin-bottom: 2px;
+  color: #ffff99;
+}
+
+.level-score {
+  font-size: 8px;
+  color: #aaffaa;
+  margin-top: 2px;
+}
+
+.level-lock {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+.level-checkmark {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 12px;
+  color: #00aa00;
+  font-weight: bold;
+}
+
+/* Quick Play section */
+.quick-play-section {
+  text-align: center;
+  padding: 8px;
+  border-radius: 7px;
+  border: 1px dotted lime;
+  background-color: rgba(0, 128, 0, 0.1);
+}
+
+.quick-play-section h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 18px;
+}
+
+.quick-play-desc {
+  font-size: 12px;
+  color: #ccffcc;
+  margin: 10px 0 0 0;
+  line-height: 1.3;
+}
+
+/* Level info and actions in right column */
+#levelInfo {
+  text-align: left;
+  padding: 8px;
+  border-radius: 7px;
+  border: 1px dotted lime;
+  background-color: rgba(0, 128, 0, 0.1);
+  margin-bottom: 10px;
+  font-size: 14px;
+  height: 70%;
+}
+
+#levelInfo h3 {
+  margin-top: 0;
+  margin-bottom: 6px;
+  font-size: 18px;
+  text-align: center;
+}
+
+#levelDescription {
+  margin-bottom: 7px;
+  padding: 6px;
+  background: rgba(0, 0, 100, 0.2);
+  border-radius: 5px;
+  border-left: 4px solid #3399ff;
+  line-height: 1.4;
+}
+
+#levelObjective {
+  margin-bottom: 7px;
+  padding: 6px;
+  background: rgba(0, 100, 0, 0.2);
+  border-radius: 5px;
+  border-left: 4px solid lime;
+}
+
+#levelProgress {
+  margin-bottom: 7px;
+  padding: 6px;
+  background: rgba(50, 50, 0, 0.2);
+  border-radius: 5px;
+  border-left: 4px solid yellow;
+  text-align: center;
+}
+
+.level-actions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#playLevelBtn {
+  background: rgba(0, 100, 0, 0.8);
+  border: 2px solid lime;
+  color: lime;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 7px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-radius: 5px;
+}
+
+#playLevelBtn:not(:disabled):hover {
+  background: lime;
+  color: black;
+  box-shadow: 0 0 15px lime;
+}
+
+#playLevelBtn:disabled {
+  background: rgba(50, 50, 50, 0.5);
+  border-color: #666;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.completed-text {
+  color: #00aa00;
+  font-weight: bold;
+}
+
+.not-completed-text {
+  color: #ffaa66;
+}
+
+#backToMainBtn {
+  background: rgba(100, 0, 0, 0.8);
+  border: 2px solid #ff6666;
+  color: #ff6666;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  padding: 7px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 5px;
+}
+
+#backToMainBtn:hover {
+  background: #ff6666;
+  color: black;
+  box-shadow: 0 0 15px #ff6666;
+}
+
+/* Scrollbar styling for level grid */
+.level-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.level-grid::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.level-grid::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 0, 0.3);
+  border-radius: 4px;
+}
+
+.level-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 0, 0.5);
+}
+
+.difficulty-options-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.difficulty-options-row .btn {
+  min-width: 80px;
+  max-width: 200px;
+  display: inline-block;
+  font-size: 18px;
+  font-weight: bold;
+  text-transform: uppercase;
+  border-radius: 5px;
+  transition: all 0.2s;
+  background: black;
+  border: 2px solid lime;
+  color: lime;
+  padding: 10px 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.difficulty-options-row .btn.selected {
+  background: lime;
+  color: black;
+  box-shadow: 0 0 10px lime;
+}
+
+.difficulty-options-row .btn:hover:not(.selected) {
+  background: rgba(0,255,0,0.2);
+  color: lime;
+  box-shadow: 0 0 5px lime;
+}

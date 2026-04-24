@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cellvive - Cell Survival Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="1200" height="800"></canvas>
+        <div id="game-hud">
+            <div class="hud-left">
+                <div class="score">Score: <span id="score">0</span></div>
+                <div class="size">Size: <span id="size">10</span></div>
+            </div>
+            <div class="hud-center">
+                <div class="instructions">Use WASD or Arrow Keys to move</div>
+            </div>
+            <div class="hud-right">
+                <div class="health">Health: <span id="health">100</span></div>
+                <div class="cells">Cells: <span id="cell-count">0</span></div>
+                <div class="zone">Zone: <span id="zone">🟢 Safe Zone</span></div>
+                <div class="talent-points">Talent Points: <span id="talent-points">0</span></div>
+            </div>
+        </div>
+        
+        <!-- Pause/Unpause Button -->
+        <button id="pause-btn" class="pause-button" title="Pause/Resume (P)">
+            <span class="pause-icon">⏸️</span>
+            <span class="play-icon hidden">▶️</span>
+        </button>
+        
+        <!-- Talent Tree Button -->
+        <button id="talent-tree-btn" class="talent-tree-button">
+            <div class="talent-tree-icon">🌳</div>
+        </button>
+        </div>
+        <div id="game-over" class="hidden">
+            <h2>Game Over!</h2>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <p>Final Size: <span id="final-size">0</span></p>
+            <p>Survival Time: <span id="survival-time">0</span> seconds</p>
+            <p id="death-cause">You died!</p>
+            <button id="restart-btn">Play Again</button>
+        </div>
+        
+        <!-- Enhanced Talent System Popup -->
+        <div id="talent-popup" class="hidden">
+            <div class="talent-popup-content">
+                <h2>🧬 Evolution Available</h2>
+                <p class="talent-description">Choose your evolutionary path to unlock new abilities:</p>
+                
+                <div class="talent-grid" id="talent-grid">
+                    <!-- Talent boxes will be populated here -->
+                </div>
+                
+                <div class="talent-info-panel" id="talent-info-panel" style="display: none;">
+                    <div class="selected-talent-info">
+                        <h3 id="selected-talent-name"></h3>
+                        <p id="selected-talent-description"></p>
+                        <div class="talent-cost">
+                            <span id="selected-talent-cost"></span> Orange Spore(s)
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="talent-popup-actions">
+                    <button id="talent-select-btn" class="talent-select-btn primary" disabled>Select Talent</button>
+                    <button id="talent-cancel-btn" class="talent-select-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Testing Panel -->
+        <div id="testing-panel" class="hidden">
+            <h3>🔧 Debug Panel</h3>
+            
+            <!-- Essential Controls -->
+            <div class="testing-controls">
+                <label class="debug-toggle">
+                    <input type="checkbox" id="godmode-toggle">
+                    <span>🛡️ God Mode</span>
+                </label>
+                <label class="debug-toggle">
+                    <input type="checkbox" id="fast-growth-toggle">
+                    <span>⚡ Fast Growth (5x)</span>
+                </label>
+                <label class="debug-toggle">
+                    <input type="checkbox" id="no-tutorial-toggle">
+                    <span>📚 Skip Tutorial</span>
+                </label>
+                <label class="debug-toggle">
+                    <input type="checkbox" id="debug-logging-toggle">
+                    <span>🐛 Debug Logs</span>
+                </label>
+            </div>
+            
+            <!-- Spawn Density Controls -->
+            <details class="debug-section">
+                <summary>⚙️ Spawn Settings</summary>
+                <div class="testing-controls">
+                    <label class="debug-toggle">
+                        <input type="checkbox" id="spawn-cells-toggle">
+                        <span>🔬 More Food (3x)</span>
+                    </label>
+                    <label class="debug-toggle">
+                        <input type="checkbox" id="spawn-enemies-toggle">
+                        <span>👾 More Enemies (2x)</span>
+                    </label>
+                </div>
+            </details>
+            
+            <!-- Quick Spawn Section -->
+            <details class="debug-section">
+                <summary>🎯 Quick Spawn</summary>
+                <div class="spawn-grid">
+                    <button id="spawn-food-cell" class="spawn-btn">🍎 Food</button>
+                    <button id="spawn-powerup" class="spawn-btn">💎 PowerUp</button>
+                    <button id="spawn-amoeba" class="spawn-btn">🦠 Amoeba</button>
+                    <button id="spawn-virus" class="spawn-btn">🦠 Virus</button>
+                </div>
+                <div class="biome-spawn-section">
+                    <label for="biome-type-select">🌍 Biome Type:</label>
+                    <select id="biome-type-select" class="biome-select">
+                        <option value="toxic">Toxic Zone (Red)</option>
+                        <option value="aggressive">Aggressive Zone (Orange)</option>
+                        <option value="nutrient">Nutrient Rich Zone (Green)</option>
+                        <option value="slow">Slow Zone (Blue)</option>
+                        <option value="energy">Energy Zone (Gold)</option>
+                        <option value="neutral">Neutral Zone (Light Blue)</option>
+                    </select>
+                    <button id="spawn-biome-btn" class="spawn-btn">Spawn Biome</button>
+                </div>
+            </details>
+            
+            <!-- Advanced Testing Section -->
+            <details class="debug-section">
+                <summary>🧪 Advanced Testing</summary>
+                <div class="spawn-grid">
+                    <button id="spawn-giant-cell" class="spawn-btn">⭕ Giant Cell</button>
+                    <button id="spawn-enemy-swarm" class="spawn-btn">👾 Enemy Swarm</button>
+                    <button id="spawn-random-spore" class="spawn-btn">🌟 Random Spore</button>
+                    <button id="test-talent-popup" class="spawn-btn">🧬 Talent UI</button>
+                </div>
+                <div class="spawn-grid">
+                    <button id="clear-all-cells" class="spawn-btn danger">🗑️ Clear Food</button>
+                    <button id="clear-all-enemies" class="spawn-btn danger">🗑️ Clear Enemies</button>
+                </div>
+            </details>
+            <div class="testing-actions">
+                <button id="reset-testing">Reset All</button>
+                <button id="toggle-panel">Hide Panel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/Constants.js"></script>
+    <script src="js/DebugLogger.js"></script>
+    <script src="js/CollisionDetector.js"></script>
+    <script src="js/InputHandler.js"></script>
+    <script src="js/Player.js"></script>
+    <script src="js/Cell.js"></script>
+    <script src="js/Enemy.js"></script>
+    <script src="js/AmoebaEnemy.js"></script>
+    <script src="js/VirusEnemy.js"></script>
+    <script src="js/VirusGroupManager.js"></script>
+    <script src="js/Biome.js"></script>
+    <script src="js/Obstacle.js"></script>
+    <script src="js/Hazard.js"></script>
+    <script src="js/Current.js"></script>
+    <script src="js/EnvironmentManager.js"></script>
+    <script src="js/ParticleSystem.js"></script>
+    <script src="js/Logger.js"></script>
+        <script src="js/PowerUp.js"></script>
+        <script src="js/TalentSystem.js"></script>
+        <script src="js/EnhancedUI.js"></script>
+        <script src="js/TutorialManager.js"></script>
+        <script src="js/TestingManager.js"></script>
+        <script src="js/Renderer.js"></script>
+    <script src="js/Game.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>

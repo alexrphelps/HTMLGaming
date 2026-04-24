@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Snake!</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="startMenu">
+  <h2>Snake!</h2>
+  
+  <div class="main-menu-container">
+    <!-- Left Column: Color selection only (AI Difficulty removed) -->
+    <div class="menu-left-column">
+      <!-- Snake color selection and preview in side-by-side layout -->
+      <div class="color-selection-container">
+        <!-- Color selection with 2x2 grid -->
+        <div class="color-selection">
+          <h3>Select Your Snake Color</h3>
+          <div id="colorOptions">
+            <button data-color="lime">Lime</button>
+            <button data-color="lightblue">Blue</button>
+            <button data-color="purple">Purple</button>
+            <button data-color="pink">Pink</button>
+          </div>
+        </div>
+        
+        <!-- Snake preview -->
+        <div id="colorPreview">
+          <h3>Snake Preview</h3>
+          <canvas id="previewCanvas" width="160" height="60"></canvas>
+        </div>
+      </div>      
+    </div>
+    
+    <!-- Right Column: How To Play and Main Actions -->
+    <div class="menu-right-column">
+      <!-- Game description and food info section -->
+      <div id="gameInfo">
+        <h3>How To Play</h3>
+        <p>Eat food, grow longer, easy win.</p>
+        <p>Use arrow keys or WASD to control your snake. Holding the opposite direction and turning left or right, will turn 180 instantly.</p>
+        
+        <div class="foodInfo">
+          <h4>Food Types</h4>
+          <div class="foodItem">
+            <div class="foodIcon red"></div>
+            <div class="foodDesc">
+              <span class="foodName">Red Food</span>
+              <span class="foodEffect">Grow by 2</span>
+            </div>
+          </div>
+          <div class="foodItem">
+            <div class="foodIcon orange"></div>
+            <div class="foodDesc">
+              <span class="foodName">Orange Food</span>
+              <span class="foodEffect">Grow by 1 + permanent speed increase</span>
+            </div>
+          </div>
+          <div class="foodItem">
+            <div class="foodIcon yellow"></div>
+            <div class="foodDesc">
+              <span class="foodName">Yellow Food</span>
+              <span class="foodEffect">Grow by 1 + temporary speed boost</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Main action buttons centered -->
+      <div class="main-actions-container">
+        <button id="playLevelsBtn" class="btn">LET'S GO!</button>
+        <button id="openSettingsBtn" class="btn">Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Menu -->
+<div id="settingsMenu" style="display:none; color: lime; text-align: left; background-color: rgba(0,0,0,0.8); padding: 20px; border: 2px solid lime; border-radius: 15px; width: 1000px; margin: 30px auto; box-sizing: border-box;">
+  <h2 style="text-align:center;">Settings</h2>
+  <div class="menu-row">
+    <div class="menu-col" style="max-width: 480px;">
+      <h3>Gameplay</h3>
+      <div class="option-item">
+        <label>Initial Snake Length
+          <select id="initialLengthSelect" class="btn" style="width: auto; display: inline-block;">
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </label>
+      </div>
+      <div class="option-item">
+        <label>Number of Obstacles
+          <input id="numObstaclesInput" type="number" min="0" max="20" step="1" class="btn" style="width:100px;" />
+        </label>
+      </div>
+    </div>
+    <div class="menu-col" style="max-width: 480px;">
+      <h3>Game Options</h3>
+      <div class="option-item">
+        <label>
+          <input type="checkbox" id="useSameColorCheckbox" checked>
+          Use same color for head and body
+        </label>
+      </div>
+      <h3>Food Tweaks</h3>
+      <div class="option-item">
+        <label>Red: Growth
+          <input id="redGrowInput" type="number" min="0" max="10" step="1" class="btn" style="width:100px;" />
+        </label>
+      </div>
+      <div class="option-item">
+        <label>Orange: Base Speed + (moves/sec)
+          <input id="orangeSpeedInput" type="number" min="0" max="3" step="0.25" class="btn" style="width:100px;" />
+        </label>
+      </div>
+      <div class="option-item">
+        <label>Yellow: Temp Speed + (moves/sec)
+          <input id="yellowBoostInput" type="number" min="0" max="3" step="0.25" class="btn" style="width:100px;" />
+        </label>
+      </div>
+      <div class="option-item">
+        <label>Yellow: Boost Duration (ms)
+          <input id="yellowDurationInput" type="number" min="500" max="10000" step="250" class="btn" style="width:120px;" />
+        </label>
+      </div>
+    </div>
+  </div>
+  <div class="menu-row settings-buttons-container">
+    <button id="settingsDefaultsBtn" class="btn settings-button">Restore Defaults</button>
+    <button id="settingsCancelBtn" class="btn settings-button">Cancel</button>
+    <button id="settingsSaveBtn" class="btn settings-button">Save</button>
+  </div>
+</div>
+
+<div id="gameContainer">
+  <div id="countdown">3</div>
+  <div id="gameLayout">
+    <canvas id="game" width="1000" height="1000"></canvas>
+    <div id="sidePanel">
+      <div id="scoreboard" style="display:none;">
+        <div class="scoreboard-item">Score: <span id="score">0</span></div>
+        <div class="scoreboard-item">Speed: <span id="speed">0</span> moves/sec</div>       
+        <div class="scoreboard-item">Status: <span id="playerStatus">Alive</span></div>
+        <div class="scoreboard-item">Enemies Left: <span id="enemiesLeft">4</span></div>
+        <div id="aiScores"></div>
+      </div>
+      <div id="statusMessage"></div>
+      <div id="gameControls">
+        <button id="restartButton" class="btn">Restart Game</button>
+        <button id="returnToLevelsBtn" class="btn" style="display:none;">Return to Levels</button>
+        <button id="mainMenuButton" class="btn">Main Menu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Level Selection Menu (hidden by default) -->
+<div id="levelMenu" style="display:none;">
+  <h2>Select Level</h2>
+  <div class="main-menu-container">
+    <!-- Left Column: Level Grid -->
+    <div class="menu-left-column">
+      <div class="level-grid-container">
+        <h3>Choose Your Challenge</h3>
+        <div class="level-grid" id="levelGrid">
+          <!-- Level buttons will be generated here -->
+        </div>
+      </div>
+      <!-- Quick Play section -->
+      <div class="quick-play-section">
+        <h3>Quick Play</h3>
+        <button id="quickPlayBtn" class="btn">Quick Play (Battle Royale)</button>
+        <div id="difficultySelectionLevel" style="margin-top: 10px;">
+          <div id="difficultyOptionsLevel" class="difficulty-options-row">
+            <button class="btn" data-difficulty="easy">Easy</button>
+            <button class="btn selected" data-difficulty="medium">Medium</button>
+            <button class="btn" data-difficulty="hard">Hard</button>
+          </div>
+          <div id="difficultyDescriptionLevel">
+            <p id="difficultyTextLevel">Medium: Balanced AI with good pathfinding and moderate aggression. A fair challenge for most players.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Right Column: Level Info -->
+    <div class="menu-right-column">
+      <div id="levelInfo">
+        <h3 id="levelTitle">Select a Level</h3>
+        <div id="levelDescription">Choose a level from the left to see its details.</div>
+        <div id="levelObjective"></div>
+        <div id="levelInstructions"></div>
+        <div id="levelProgress"></div>
+      </div>
+      <div class="level-actions-container">
+        <button id="playLevelBtn" class="btn" disabled>Play Level</button>
+        <button id="backToMainBtn" class="btn">Back to Main Menu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript files - Order matters for dependencies -->
+<!-- Core modules first -->
+<script src="js/utils.js"></script>
+<script src="js/eventSystem.js"></script>
+<script src="js/config.js"></script>
+<script src="js/configManager.js"></script>
+<script src="js/gameObjects.js"></script>
+<script src="js/collisions.js"></script>
+
+<!-- Level system -->
+<script src="js/levelConfigs.js"></script>
+<script src="js/levelManagerUtil.js"></script>
+<script src="js/levelManager.js"></script>
+<script src="js/levelUI.js"></script>
+
+<!-- Game Manager needs to be loaded before gameState.js -->
+<script src="js/gameManager.js"></script>
+
+<!-- Game systems -->
+<script src="js/foodManager.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/gameState.js"></script>
+<script src="js/controls.js"></script>
+
+<!-- Initialization -->
+<script src="js/main.js"></script>
+
+</body>
+</html>

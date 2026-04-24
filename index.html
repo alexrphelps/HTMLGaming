@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameHub - Multi-Game Platform</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Emoji and symbol font support -->
+    <style>
+        * {
+            font-family: 'Inter', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+        }
+        .game-card-icon {
+            font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+            font-size: 2.5rem;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="logo">🎮 GameHub</div>
+            <div class="loading-bar">
+                <div class="loading-progress" id="loading-progress"></div>
+            </div>
+            <div class="loading-text" id="loading-text">Initializing platform...</div>
+        </div>
+    </div>
+
+    <!-- Main Game Container -->
+    <div id="app" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">🎮 GameHub</h1>
+                <nav class="nav">
+                    <button id="home-btn" class="nav-btn active">Home</button>
+                    <button id="settings-btn" class="nav-btn">Settings</button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Game Selection Screen -->
+            <div id="game-selector" class="screen active">
+                <div class="screen-header">
+                    <h2>Select a Game</h2>
+                    <p>Choose from our collection of games</p>
+                </div>
+                <div id="games-grid" class="games-grid">
+                    <!-- Games will be populated here by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Game Play Screen -->
+            <div id="game-screen" class="screen">
+                <div class="game-header">
+                    <button id="back-to-menu" class="back-btn">← Back to Menu</button>
+                    <span id="current-game-title" class="game-title"></span>
+                    <div class="game-controls">
+                        <button id="pause-btn" class="control-btn">⏸️</button>
+                        <button id="restart-btn" class="control-btn">🔄</button>
+                        <button id="fullscreen-btn" class="control-btn">⛶</button>
+                    </div>
+                </div>
+                <div class="game-container">
+                    <canvas id="game-canvas" class="game-canvas" tabindex="0"></canvas>
+                    <div id="game-hud" class="game-hud">
+                        <!-- HUD elements will be added here by games -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Screen -->
+            <div id="settings-screen" class="screen">
+                <div class="screen-header">
+                    <h2>Settings</h2>
+                    <p>Configure your gaming experience</p>
+                </div>
+                <div class="settings-grid">
+                    <div class="setting-group">
+                        <label for="master-volume">Master Volume</label>
+                        <input type="range" id="master-volume" min="0" max="100" value="80">
+                        <span id="volume-display">80%</span>
+                    </div>
+                    <div class="setting-group">
+                        <label for="graphics-quality">Graphics Quality</label>
+                        <select id="graphics-quality">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="enable-sound" checked>
+                            Enable Sound Effects
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="show-fps" checked>
+                            Show FPS Counter
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- FPS Counter -->
+        <div id="fps-counter" class="fps-counter">FPS: 60</div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <!-- UI Scripts -->
+    <script src="ui/GameSelector.js"></script>
+    <script src="ui/HUD.js"></script>
+    
+    <!-- Utility Scripts -->
+    <script src="utils/MathUtils.js"></script>
+    <script src="utils/AssetLoader.js"></script>
+    <script src="utils/EventEmitter.js"></script>
+    
+    <!-- Game Scripts -->
+    <script src="games/snake/SnakeGame.js"></script>
+    <script src="games/miniinvaders/MiniInvadersGame.js"></script>
+    <script src="games/Cellvive/CellviveGame.js"></script>
+    <script src="games/cosmicdrifter/CosmicDrifterGame.js"></script>
+    <script src="games/stickperson/StickpersonGame.js"></script>
+    <script src="games/blockdodge/BlockDodgeGame.js"></script>
+    <script src="games/nebularunner/NebulaRunnerGame.js"></script>
+    <script src="games/colonybreach/ColonyBreachGame.js"></script>
+    
+    
+    <!-- Main Application -->
+    <script src="app.js"></script>
+</body>
+</html>
