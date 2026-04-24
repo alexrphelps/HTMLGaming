@@ -1,10 +1,22 @@
 // This file re-exports MathUtils and Vector2 for testing without modifying the
 // original library usage in the app. It avoids changing global assignments.
-const original = require('./MathUtils');
+// Re-export selected classes for tests. Some files set globals on window and do not
+// export via module.exports; this adapter imports the files directly and exports
+// their classes for test use without changing runtime behavior.
 
-// If MathUtils and Vector2 are defined as globals on window in the runtime,
-// Node tests won't have window. So import from the file directly.
-const MathUtils = original.MathUtils || original;
-const Vector2 = original.Vector2 || original.Vector2;
+const math = require('./MathUtils');
+// Some modules attach to window and do not export; require() will execute them
+// but return {}. Fallback to global/window where necessary.
+require('./AssetLoader');
+require('./EventEmitter');
 
-module.exports = { MathUtils, Vector2 };
+const MathUtils = math.MathUtils || math;
+const Vector2 = math.Vector2 || math.Vector2;
+const AssetLoader = (typeof global.AssetLoader !== 'undefined' && global.AssetLoader) ||
+                   (typeof window !== 'undefined' && window.AssetLoader) ||
+                   null;
+const EventEmitter = (typeof global.EventEmitter !== 'undefined' && global.EventEmitter) ||
+                     (typeof window !== 'undefined' && window.EventEmitter) ||
+                     null;
+
+module.exports = { MathUtils, Vector2, AssetLoader, EventEmitter };
