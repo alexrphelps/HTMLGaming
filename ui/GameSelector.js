@@ -332,9 +332,8 @@ class GameSelector {
     
     renderGames() {
         if (!this.gamesGrid) return;
-        
-        // Clear existing games
-        this.gamesGrid.innerHTML = '';
+        // Clear existing games without using innerHTML
+        while (this.gamesGrid.firstChild) this.gamesGrid.removeChild(this.gamesGrid.firstChild);
         
         if (this.filteredGames.length === 0) {
             this.renderNoGamesMessage();
@@ -355,17 +354,47 @@ class GameSelector {
         
         const isAvailable = game.gameClass !== null;
         
-        card.innerHTML = `
-            <div class="game-card-icon">${game.metadata.icon}</div>
-            <h3>${game.metadata.name}</h3>
-            <p>${game.metadata.description}</p>
-            <div class="game-card-meta">
-                <span class="game-card-category">${game.metadata.category}</span>
-                <span class="game-card-difficulty difficulty-${game.metadata.difficulty.toLowerCase()}">${game.metadata.difficulty}</span>
-                <span class="game-card-playtime">~${game.metadata.estimatedPlayTime}min</span>
-            </div>
-            ${!isAvailable ? '<div class="game-card-overlay">Coming Soon</div>' : ''}
-        `;
+        // Build card DOM explicitly (avoid innerHTML)
+        const icon = document.createElement('div');
+        icon.className = 'game-card-icon';
+        icon.textContent = game.metadata.icon;
+
+        const title = document.createElement('h3');
+        title.textContent = game.metadata.name;
+
+        const desc = document.createElement('p');
+        desc.textContent = game.metadata.description;
+
+        const meta = document.createElement('div');
+        meta.className = 'game-card-meta';
+
+        const cat = document.createElement('span');
+        cat.className = 'game-card-category';
+        cat.textContent = game.metadata.category;
+
+        const diff = document.createElement('span');
+        diff.className = `game-card-difficulty difficulty-${game.metadata.difficulty.toLowerCase()}`;
+        diff.textContent = game.metadata.difficulty;
+
+        const playtime = document.createElement('span');
+        playtime.className = 'game-card-playtime';
+        playtime.textContent = `~${game.metadata.estimatedPlayTime}min`;
+
+        meta.appendChild(cat);
+        meta.appendChild(diff);
+        meta.appendChild(playtime);
+
+        card.appendChild(icon);
+        card.appendChild(title);
+        card.appendChild(desc);
+        card.appendChild(meta);
+
+        if (!isAvailable) {
+            const overlay = document.createElement('div');
+            overlay.className = 'game-card-overlay';
+            overlay.textContent = 'Coming Soon';
+            card.appendChild(overlay);
+        }
         
         // Add click handler
         if (isAvailable) {
@@ -381,13 +410,26 @@ class GameSelector {
     }
     
     renderNoGamesMessage() {
-        this.gamesGrid.innerHTML = `
-            <div class="no-games-message">
-                <div class="no-games-icon">🎮</div>
-                <h3>No games found</h3>
-                <p>Try adjusting your search or filter criteria</p>
-            </div>
-        `;
+        while (this.gamesGrid.firstChild) this.gamesGrid.removeChild(this.gamesGrid.firstChild);
+
+        const container = document.createElement('div');
+        container.className = 'no-games-message';
+
+        const icon = document.createElement('div');
+        icon.className = 'no-games-icon';
+        icon.textContent = '🎮';
+
+        const title = document.createElement('h3');
+        title.textContent = 'No games found';
+
+        const p = document.createElement('p');
+        p.textContent = 'Try adjusting your search or filter criteria';
+
+        container.appendChild(icon);
+        container.appendChild(title);
+        container.appendChild(p);
+
+        this.gamesGrid.appendChild(container);
     }
     
     selectGame(game) {

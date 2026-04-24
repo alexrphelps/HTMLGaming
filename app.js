@@ -268,15 +268,40 @@ class GameHubApp {
     
     showErrorScreen(error) {
         const loadingContent = this.loadingScreen.querySelector('.loading-content');
-        loadingContent.innerHTML = `
-            <div class="error-content">
-                <div class="error-icon">❌</div>
-                <h2>Oops! Something went wrong</h2>
-                <p>Failed to initialize GameHub</p>
-                <div class="error-details">${error.message}</div>
-                <button onclick="location.reload()" class="retry-btn">Try Again</button>
-            </div>
-        `;
+        if (!loadingContent) return;
+
+        // Build error content using DOM methods (avoid innerHTML)
+        loadingContent.textContent = '';
+
+        const container = document.createElement('div');
+        container.className = 'error-content';
+
+        const icon = document.createElement('div');
+        icon.className = 'error-icon';
+        icon.textContent = '❌';
+
+        const title = document.createElement('h2');
+        title.textContent = 'Oops! Something went wrong';
+
+        const msg = document.createElement('p');
+        msg.textContent = 'Failed to initialize GameHub';
+
+        const details = document.createElement('div');
+        details.className = 'error-details';
+        details.textContent = error?.message || 'Unknown error';
+
+        const retry = document.createElement('button');
+        retry.className = 'retry-btn';
+        retry.textContent = 'Try Again';
+        retry.addEventListener('click', () => location.reload());
+
+        container.appendChild(icon);
+        container.appendChild(title);
+        container.appendChild(msg);
+        container.appendChild(details);
+        container.appendChild(retry);
+
+        loadingContent.appendChild(container);
     }
     
     /**
@@ -660,25 +685,65 @@ class GameHubApp {
     clearGameScreen() {
         const gameScreen = document.getElementById('game-screen');
         if (gameScreen) {
-            // Clear any existing content in the game screen
-            gameScreen.innerHTML = `
-                <div class="game-header">
-                    <button id="back-to-menu" class="back-btn">← Back to Menu</button>
-                    <span id="current-game-title" class="game-title"></span>
-                    <div class="game-controls">
-                        <button id="pause-btn" class="control-btn">⏸️</button>
-                        <button id="restart-btn" class="control-btn">🔄</button>
-                        <button id="fullscreen-btn" class="control-btn">⛶</button>
-                    </div>
-                </div>
-                <div class="game-container">
-                    <canvas id="game-canvas" class="game-canvas" tabindex="0"></canvas>
-                    <div id="game-hud" class="game-hud">
-                        <!-- HUD elements will be added here by games -->
-                    </div>
-                </div>
-            `;
-            
+            // Build game screen DOM (avoid innerHTML to reduce XSS risk)
+            while (gameScreen.firstChild) gameScreen.removeChild(gameScreen.firstChild);
+
+            const header = document.createElement('div');
+            header.className = 'game-header';
+
+            const backBtn = document.createElement('button');
+            backBtn.id = 'back-to-menu';
+            backBtn.className = 'back-btn';
+            backBtn.textContent = '← Back to Menu';
+
+            const titleSpan = document.createElement('span');
+            titleSpan.id = 'current-game-title';
+            titleSpan.className = 'game-title';
+
+            const controls = document.createElement('div');
+            controls.className = 'game-controls';
+
+            const pauseBtn = document.createElement('button');
+            pauseBtn.id = 'pause-btn';
+            pauseBtn.className = 'control-btn';
+            pauseBtn.textContent = '⏸️';
+
+            const restartBtn = document.createElement('button');
+            restartBtn.id = 'restart-btn';
+            restartBtn.className = 'control-btn';
+            restartBtn.textContent = '🔄';
+
+            const fsBtn = document.createElement('button');
+            fsBtn.id = 'fullscreen-btn';
+            fsBtn.className = 'control-btn';
+            fsBtn.textContent = '⛶';
+
+            controls.appendChild(pauseBtn);
+            controls.appendChild(restartBtn);
+            controls.appendChild(fsBtn);
+
+            header.appendChild(backBtn);
+            header.appendChild(titleSpan);
+            header.appendChild(controls);
+
+            const container = document.createElement('div');
+            container.className = 'game-container';
+
+            const canvas = document.createElement('canvas');
+            canvas.id = 'game-canvas';
+            canvas.className = 'game-canvas';
+            canvas.setAttribute('tabindex', '0');
+
+            const hud = document.createElement('div');
+            hud.id = 'game-hud';
+            hud.className = 'game-hud';
+
+            container.appendChild(canvas);
+            container.appendChild(hud);
+
+            gameScreen.appendChild(header);
+            gameScreen.appendChild(container);
+
             // Re-setup navigation event listeners
             this.setupGameScreenNavigation();
         }
@@ -975,23 +1040,31 @@ class GameHubApp {
     showNotification(message, type = 'info') {
         const toastContainer = document.getElementById('toast-container');
         if (!toastContainer) return;
-        
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        
-        const icon = type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️';
-        
-        toast.innerHTML = `
-            <div class="toast-icon">${icon}</div>
-            <div class="toast-message">${message}</div>
-            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
-        `;
-        
+
+        const icon = document.createElement('div');
+        icon.className = 'toast-icon';
+        icon.textContent = type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️';
+
+        const msg = document.createElement('div');
+        msg.className = 'toast-message';
+        msg.textContent = message;
+
+        const close = document.createElement('button');
+        close.className = 'toast-close';
+        close.textContent = '×';
+        close.addEventListener('click', () => toast.remove());
+
+        toast.appendChild(icon);
+        toast.appendChild(msg);
+        toast.appendChild(close);
+
         toastContainer.appendChild(toast);
-        
+
         // Animate in
         setTimeout(() => toast.classList.add('show'), 100);
-        
+
         // Auto remove
         setTimeout(() => {
             toast.classList.remove('show');
