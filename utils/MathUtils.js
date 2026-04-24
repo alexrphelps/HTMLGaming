@@ -416,3 +416,8 @@ class Vector2 {
 // Make utilities available globally
 window.MathUtils = MathUtils;
 window.Vector2 = Vector2;
+
+// Export for Node/Jest tests without changing runtime behavior in browser
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { MathUtils, Vector2 };
+}
