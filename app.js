@@ -4,6 +4,20 @@
  */
 class GameHubApp {
     constructor() {
+        // Suppress console.log by default to reduce noisy output in non-dev environments.
+        // Enable verbose logs by setting localStorage.GH_DEBUG = 'true' or running on localhost.
+        (function() {
+            try {
+                const dev = (typeof location !== 'undefined' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')) || (typeof localStorage !== 'undefined' && localStorage.getItem('GH_DEBUG') === 'true');
+                if (!dev && typeof console !== 'undefined') {
+                    // Keep console.warn/error intact; only mute console.log
+                    console.log = function() {};
+                }
+            } catch (e) {
+                // Ignore — keep logging if anything goes wrong
+            }
+        })();
+
         this.gameSelector = null;
         this.currentScreen = 'loading';
         this.loadingProgress = 0;
