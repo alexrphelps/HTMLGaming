@@ -3341,7 +3341,9 @@
 
         /* ==================== AUDIO SYSTEM ==================== */
         function startMusic() {
-            backgroundMusic.volume = (volumeSlider.value / 100) * 0.1; // Reduce max volume to 10%
+            // Use full-range volume (0.0 - 1.0). Browsers will typically allow play
+            // when triggered from a user gesture (like clicking a mode button).
+            backgroundMusic.volume = (volumeSlider.value / 100);
             console.log('🎵 Attempting to start music... Volume:', backgroundMusic.volume);
             backgroundMusic.play().then(() => {
                 console.log('✅ Music playing successfully!');
@@ -3356,6 +3358,8 @@
         }
 
         function resumeMusic() {
+            // Ensure volume matches slider before resuming
+            backgroundMusic.volume = (volumeSlider.value / 100);
             backgroundMusic.play().then(() => {
                 console.log('▶️ Music resumed');
             }).catch(error => {
@@ -3378,9 +3382,9 @@
         });
 
         // Volume slider control
-        volumeSlider.addEventListener('input', (e) => {
+            volumeSlider.addEventListener('input', (e) => {
             const volume = e.target.value;
-            backgroundMusic.volume = (volume / 100) * 0.1; // Reduce max volume to 10%
+            backgroundMusic.volume = (volume / 100);
             volumeValue.textContent = `${volume}%`;
             
             // Save volume preference
@@ -3393,7 +3397,7 @@
             if (savedVolume !== null) {
                 volumeSlider.value = savedVolume;
                 volumeValue.textContent = `${savedVolume}%`;
-                backgroundMusic.volume = (savedVolume / 100) * 0.1; // Reduce max volume to 10%
+                backgroundMusic.volume = (savedVolume / 100);
             }
         }
 
@@ -3665,6 +3669,9 @@
             }
             
             initGame();
+            // Attempt to start music on game start; this is triggered by a user
+            // gesture (click on menu), which avoids autoplay blocking in browsers.
+            try { startMusic(); } catch (e) { console.warn('startMusic failed on startGame', e); }
             requestAnimationFrame(gameLoop);
             
             console.log(`🎮 Starting ${mode} mode!`);
