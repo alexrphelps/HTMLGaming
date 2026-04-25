@@ -3367,10 +3367,11 @@
             });
         }
 
-        // Audio error handling
+        // Audio error handling and MemoryManager registration
         backgroundMusic.addEventListener('error', (e) => {
             console.error('❌ Audio error:', e);
             console.error('Failed to load:', backgroundMusic.src);
+            showMusicBlockedHint();
         });
 
         backgroundMusic.addEventListener('loadeddata', () => {
@@ -3380,6 +3381,16 @@
         backgroundMusic.addEventListener('canplaythrough', () => {
             console.log('✅ Audio ready to play!');
         });
+
+        // Register background music audio element with MemoryManager if available
+        try {
+            if (typeof MemoryManager !== 'undefined') {
+                if (!window.memoryManager) window.memoryManager = new MemoryManager();
+                window.memoryManager.registerAudioElement(backgroundMusic);
+            }
+        } catch (e) {
+            console.warn('MemoryManager not available to register audio element', e);
+        }
 
         // Volume slider control
             volumeSlider.addEventListener('input', (e) => {
@@ -3617,6 +3628,31 @@
                 }
             }
         });
+
+        // UI hint shown when music is blocked or unavailable. It includes a small
+        // button the user can click to explicitly enable audio playback.
+        function showMusicBlockedHint() {
+            // Create hint only once
+            if (document.getElementById('musicHint')) return;
+            const hint = document.createElement('div');
+            hint.id = 'musicHint';
+            hint.style.position = 'absolute';
+            hint.style.bottom = '12px';
+            hint.style.right = '12px';
+            hint.style.background = 'rgba(0,0,0,0.7)';
+            hint.style.color = '#fff';
+            hint.style.padding = '8px 12px';
+            hint.style.borderRadius = '8px';
+            hint.style.zIndex = 10000;
+            hint.style.fontFamily = "'Courier New', monospace";
+            hint.innerHTML = 'Audio blocked — <button id="enableAudioBtn">Enable Audio</button>';
+            document.getElementById('gameContainer').appendChild(hint);
+
+            document.getElementById('enableAudioBtn').addEventListener('click', () => {
+                startMusic();
+                hint.remove();
+            });
+        }
 
         gameOverOverlay.addEventListener('click', () => {
             if (gameState.gameOver) {
