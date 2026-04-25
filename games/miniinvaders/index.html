@@ -582,6 +582,7 @@
             </div>
         </div>
     </div>
+    <script src="SmartInputManager.js"></script>
 
     <!-- Game Container (Hidden initially) -->
     <div id="gameContainer" style="display: none;">
@@ -3416,206 +3417,9 @@
         loadVolumePreference();
 
         /* ==================== INPUT HANDLING ==================== */
-        document.addEventListener('keydown', (e) => {
-            gameState.keys[e.key] = true;
-            
-            if (gameState.gameOver && e.key === ' ') {
-                restartGame();
-            }
-            
-            // Tactical Nuke activation (Shift key)
-            if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-                console.log('💣 Shift key detected! Nuke count:', gameState.nukeCount, 'Game over:', gameState.gameOver, 'Paused:', gameState.paused, 'Talent menu:', gameState.showTalentMenu);
-            }
-            if ((e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') && gameState.nukeCount > 0 && !gameState.gameOver && !gameState.paused && !gameState.showTalentMenu) {
-                console.log('💣 Conditions met! Launching nuke...');
-                // Reset all keys to prevent stuck actions when nuking
-                gameState.keys['ArrowLeft'] = false;
-                gameState.keys['ArrowRight'] = false;
-                gameState.keys['a'] = false;
-                gameState.keys['A'] = false;
-                gameState.keys['d'] = false;
-                gameState.keys['D'] = false;
-                gameState.keys[' '] = false; // Spacebar
-                gameState.keys['ArrowUp'] = false; // Up arrow
-                gameState.keys['w'] = false; // W key
-                gameState.keys['W'] = false; // W key (uppercase)
-                
-                const playerX = gameState.player.x + gameState.player.width / 2;
-                const playerY = gameState.player.y + gameState.player.height / 2;
-                
-                // Create target position (slightly in front of player)
-                const targetX = playerX;
-                const targetY = playerY - 100; // 100 pixels in front
-                
-                // Create nuke animation from main ship
-                gameState.nukeAnimation = new NukeAnimation(playerX, playerY, targetX, targetY);
-                
-                // If duplicate ship exists, create second nuke animation
-                if (gameState.duplicatePlayer) {
-                    const duplicateX = gameState.duplicatePlayer.x + gameState.duplicatePlayer.width / 2;
-                    const duplicateY = gameState.duplicatePlayer.y + gameState.duplicatePlayer.height / 2;
-                    const duplicateTargetX = duplicateX;
-                    const duplicateTargetY = duplicateY - 100; // 100 pixels in front
-                    
-                    // Create second nuke animation from duplicate ship
-                    gameState.duplicateNukeAnimation = new NukeAnimation(duplicateX, duplicateY, duplicateTargetX, duplicateTargetY);
-                }
-                
-                // Consume the nuke (can be repurchased)
-                gameState.nukeCount--;
-                gameState.talents.tacticalNuke = gameState.nukeCount;
-                // Remove the spent points for the consumed nuke
-                gameState.spentTalentPoints -= 3;
-                console.log('💣 TACTICAL NUKE LAUNCHED! (Animation started)');
-                
-                // Update talent menu in case it's open
-                if (gameState.showTalentMenu) {
-                    updateTalentMenu();
-                }
-            }
-            
-            // Gun Power is now a passive ability - no keybind needed
-            
-            // Track key press timing to detect stuck keys - IMPROVED VERSION
-            if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D', ' ', 'ArrowUp', 'w', 'W'].includes(e.key)) {
-                gameState.keys[e.key] = true;
-                // Use individual key timestamps instead of global timestamp
-                if (!gameState.keyTimestamps) {
-                    gameState.keyTimestamps = {};
-                }
-                gameState.keyTimestamps[e.key] = Date.now();
-            }
-            
-            if (e.key === 'p' || e.key === 'P') {
-                if (!gameState.gameOver) {
-                    if (gameState.paused) {
-                        // Unpausing - add pause time to total
-                        if (gameState.pauseStartTime > 0) {
-                            const pauseDuration = Math.floor((Date.now() - gameState.pauseStartTime) / 1000);
-                            gameState.totalPausedTime += pauseDuration;
-                            gameState.pauseStartTime = 0;
-                        }
-                        gameState.paused = false;
-                    } else {
-                        // Pausing - start tracking pause time
-                        gameState.pauseStartTime = Date.now();
-                        gameState.paused = true;
-                    }
-                    // Music continues playing when game is paused
-                }
-            }
-            
-            // Handle talent menu keybinds when talent menu is open
-            if (talentMenu.classList.contains('active')) {
-                // Number keys 1-9 for talent purchases
-                if (talentKeyMapping[e.key]) {
-                    const talent = talentKeyMapping[e.key];
-                    const button = document.querySelector(`[data-talent="${talent}"]`);
-                    if (button && !button.classList.contains('disabled')) {
-                        const cost = parseInt(button.dataset.cost);
-                        purchaseTalent(talent, cost);
-                        e.preventDefault();
-                        return;
-                    }
-                }
-                
-                // Q key for reset talents
-                if (e.key === 'q' || e.key === 'Q') {
-                    resetTalents();
-                    e.preventDefault();
-                    return;
-                }
-                
-                // E key for next wave
-                if (e.key === 'e' || e.key === 'E') {
-                    hideTalentMenu();
-                    nextWave();
-                    e.preventDefault();
-                    return;
-                }
-            }
-
-            if ([' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'w', 'W', 'Shift', 'p', 'P'].includes(e.key)) {
-                e.preventDefault();
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            gameState.keys[e.key] = false;
-            
-            // Clear individual key timestamp when key is released
-            if (gameState.keyTimestamps && gameState.keyTimestamps[e.key]) {
-                delete gameState.keyTimestamps[e.key];
-            }
-            
-            // Specifically handle movement keys to prevent stuck state
-            if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(e.key)) {
-                console.log(`🔧 Movement key ${e.key} released via keyup`);
-            }
-        });
-
-        // Fix for stuck movement keys - reset all movement keys when window loses focus
-        window.addEventListener('blur', () => {
-            gameState.keys['ArrowLeft'] = false;
-            gameState.keys['ArrowRight'] = false;
-            gameState.keys['a'] = false;
-            gameState.keys['A'] = false;
-            gameState.keys['d'] = false;
-            gameState.keys['D'] = false;
-            gameState.keys[' '] = false; // Spacebar
-            gameState.keys['ArrowUp'] = false; // Up arrow
-            gameState.keys['w'] = false; // W key
-            gameState.keys['W'] = false; // W key (uppercase)
-            
-            // Clear all key timestamps
-            if (gameState.keyTimestamps) {
-                gameState.keyTimestamps = {};
-            }
-            
-            console.log('🔧 All keys reset due to window blur');
-        });
-
-        // IMPROVED stuck key detection - won't interfere with intentional key holding
-        if (!gameState.keyTimestamps) {
-            gameState.keyTimestamps = {};
-        }
-        
-        setInterval(() => {
-            const allKeys = ['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D', ' ', 'ArrowUp', 'w', 'W'];
-            const currentTime = Date.now();
-            
-            allKeys.forEach(key => {
-                if (gameState.keys[key]) {
-                    // Get individual key timestamp (create if doesn't exist)
-                    if (!gameState.keyTimestamps[key]) {
-                        gameState.keyTimestamps[key] = currentTime;
-                    }
-                    
-                    // Different timeouts for different key types
-                    let timeout = 5000; // Default 5 seconds
-                    
-                    // Movement keys can be held longer (players often hold these)
-                    if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(key)) {
-                        timeout = 8000; // 8 seconds for movement keys
-                    }
-                    // Action keys have shorter timeout
-                    else if ([' ', 'ArrowUp', 'w', 'W'].includes(key)) {
-                        timeout = 4000; // 4 seconds for action keys
-                    }
-                    
-                    // Check if key is actually stuck
-                    const timeHeld = currentTime - gameState.keyTimestamps[key];
-                    
-                    // Only release if held for too long
-                    if (timeHeld > timeout) {
-                        gameState.keys[key] = false;
-                        delete gameState.keyTimestamps[key];
-                        console.log(`🔧 Stuck key ${key} automatically released (held for ${timeHeld}ms)`);
-                    }
-                }
-            });
-        }, 1000); // Check every second (less aggressive)
+        // Use SmartInputManager for robust input handling and stuck-key prevention
+        const inputManager = new SmartInputManager();
+        inputManager.setGameState(gameState);
 
 
         canvas.addEventListener('click', () => {
@@ -3789,6 +3593,11 @@
         // Don't auto-start game - wait for menu selection
         console.log('👾 Mini Invaders Ultimate Edition loaded!');
         console.log('Features: Progressive difficulty, shields, permanent upgrades!');
+
+        // Expose inputManager for compatibility
+        if (typeof inputManager !== 'undefined') {
+            window.inputManager = inputManager;
+        }
     </script>
 
     <!-- Game Over Screen (Hidden initially) -->
