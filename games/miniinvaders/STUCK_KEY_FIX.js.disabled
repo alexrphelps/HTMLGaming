@@ -1,0 +1,9 @@
+/**
+ * Disabled duplicate stuck key fix
+ *
+ * This file has been disabled because SmartInputManager now provides
+ * comprehensive stuck-key detection and proper cleanup. Keeping the
+ * old script present risks duplicate listeners and timers.
+ */
+
+// Disabled to avoid duplicate event listeners

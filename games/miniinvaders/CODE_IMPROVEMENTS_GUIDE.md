@@ -29,7 +29,7 @@
 
 ### 1. Advanced Input Management System
 
-**File:** `InputManager.js`
+**File:** `SmartInputManager.js` (recommended) / `InputManager.js` (legacy)
 
 **Key Improvements:**
 - Proper key state tracking with timestamps
@@ -153,8 +153,8 @@ setInterval(() => {
 
 **Improved Code:**
 ```javascript
-// Initialize input manager
-const inputManager = new InputManager();
+// Initialize input manager (use SmartInputManager where possible)
+const inputManager = new SmartInputManager();
 inputManager.setGameState(gameState);
 
 // Use improved input handling in player update
@@ -234,13 +234,14 @@ memoryManager.addCleanupCallback(() => {
 ## 🔧 Integration Steps
 
 1. **Add the new files** to your project:
-   - `InputManager.js`
+   - `SmartInputManager.js` (recommended)
+   - `InputManager.js` (optional legacy)
    - `GameLoop.js`
    - `MemoryManager.js`
 
 2. **Include them in your HTML:**
    ```html
-   <script src="InputManager.js"></script>
+   <script src="SmartInputManager.js"></script>
    <script src="GameLoop.js"></script>
    <script src="MemoryManager.js"></script>
    ```
