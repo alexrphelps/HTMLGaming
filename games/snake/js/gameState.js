@@ -1,5 +1,25 @@
 // Game state variables
 
+// Game loop abstraction (rAF) - migrated from setInterval
+let snakeGameLoop = null;
+try {
+  const GameLoop = require('../../../utils/GameLoop');
+  function startSnakeGameLoop() {
+    if (snakeGameLoop) return;
+    snakeGameLoop = new GameLoop({ tick: () => { try { gameLoop(); } catch (e) { console.error(e); } }, maxDelta: 200 });
+    snakeGameLoop.start();
+  }
+
+  function stopSnakeGameLoop() {
+    if (!snakeGameLoop) return;
+    try { snakeGameLoop.stop(); } catch (e) {}
+    snakeGameLoop = null;
+  }
+} catch (e) {
+  // If GameLoop is not available in environment, leave fallback to setInterval
+  snakeGameLoop = null;
+}
+
 // DOM elements
 const canvas = document.getElementById('game');
 const ctx = canvas && canvas.getContext('2d');
@@ -407,20 +427,24 @@ function startCountdown() {
       lastGameUpdateTime = Date.now();
       animationProgress = 0; // Start animation from beginning
       
-      // Start the game loop - use safe reference
-      if (typeof gameLoop === 'function') {
-        gameInterval = setInterval(gameLoop, baseInterval);
-      } else {
-        console.error("gameLoop function not defined - waiting for gameState.js to load");
-        // Retry after a short delay
-        setTimeout(() => {
-          if (typeof gameLoop === 'function') {
-            gameInterval = setInterval(gameLoop, baseInterval);
-          } else {
-            console.error("gameLoop function still not available after delay");
-          }
-        }, 100);
-      }
+       // Start the game loop - prefer rAF-based GameLoop when available
+       if (typeof startSnakeGameLoop === 'function') {
+         startSnakeGameLoop();
+       } else if (typeof gameLoop === 'function') {
+         gameInterval = setInterval(gameLoop, baseInterval);
+       } else {
+         console.error("gameLoop function not defined - waiting for gameState.js to load");
+         // Retry after a short delay
+         setTimeout(() => {
+           if (typeof startSnakeGameLoop === 'function') {
+             startSnakeGameLoop();
+           } else if (typeof gameLoop === 'function') {
+             gameInterval = setInterval(gameLoop, baseInterval);
+           } else {
+             console.error("gameLoop function still not available after delay");
+           }
+         }, 100);
+       }
     }
   };
   setTimeout(countDown, 1000); // Start first countdown after 1 second
@@ -878,6 +902,10 @@ function showWinOverlay(objective) {
   }
   
   // Pause the game
+  // Stop loop (rAF or interval)
+  if (typeof stopSnakeGameLoop === 'function') {
+    stopSnakeGameLoop();
+  }
   if (gameInterval) {
     clearInterval(gameInterval);
   }
@@ -1220,8 +1248,10 @@ function handleContinueLevel() {
   // Set flag to prevent win condition from triggering again this round
   winConditionMetThisRound = true;
   
-  // Restart the game loop
-  if (typeof baseInterval !== 'undefined') {
+  // Restart the game loop (prefer rAF GameLoop)
+  if (typeof startSnakeGameLoop === 'function') {
+    startSnakeGameLoop();
+  } else if (typeof baseInterval !== 'undefined') {
     gameInterval = setInterval(gameLoop, baseInterval);
     animationInterval = requestAnimationFrame(animationLoop);
   }

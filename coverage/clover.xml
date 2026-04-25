@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1777082970039" clover="3.2.0">
-  <project timestamp="1777082970039" name="All files">
-    <metrics statements="568" coveredstatements="192" conditionals="328" coveredconditionals="73" methods="172" coveredmethods="44" elements="1068" coveredelements="309" complexity="0" loc="568" ncloc="568" packages="1" files="7" classes="7"/>
+<coverage generated="1777083124950" clover="3.2.0">
+  <project timestamp="1777083124950" name="All files">
+    <metrics statements="607" coveredstatements="226" conditionals="343" coveredconditionals="81" methods="182" coveredmethods="50" elements="1132" coveredelements="357" complexity="0" loc="607" ncloc="607" packages="1" files="8" classes="8"/>
     <file name="AssetLoader.js" path="C:\Users\alexr\source\repos\HTMLGaming\utils\AssetLoader.js">
       <metrics statements="172" coveredstatements="36" conditionals="103" coveredconditionals="5" methods="37" coveredmethods="8"/>
       <line num="7" count="7" type="stmt"/>
@@ -314,6 +314,48 @@
       <line num="311" count="0" type="stmt"/>
       <line num="316" count="0" type="stmt"/>
       <line num="321" count="3" type="stmt"/>
+    </file>
+    <file name="GameLoop.js" path="C:\Users\alexr\source\repos\HTMLGaming\utils\GameLoop.js">
+      <metrics statements="39" coveredstatements="34" conditionals="15" coveredconditionals="8" methods="10" coveredmethods="6"/>
+      <line num="4" count="3" type="cond" truecount="1" falsecount="1"/>
+      <line num="5" count="3" type="stmt"/>
+      <line num="6" count="3" type="stmt"/>
+      <line num="7" count="3" type="stmt"/>
+      <line num="8" count="3" type="stmt"/>
+      <line num="11" count="3" type="stmt"/>
+      <line num="12" count="3" type="stmt"/>
+      <line num="15" count="3" type="stmt"/>
+      <line num="16" count="1" type="cond" truecount="1" falsecount="1"/>
+      <line num="17" count="1" type="cond" truecount="1" falsecount="1"/>
+      <line num="18" count="1" type="stmt"/>
+      <line num="19" count="1" type="cond" truecount="1" falsecount="1"/>
+      <line num="20" count="1" type="stmt"/>
+      <line num="21" count="1" type="stmt"/>
+      <line num="22" count="1" type="stmt"/>
+      <line num="26" count="3" type="cond" truecount="1" falsecount="1"/>
+      <line num="27" count="3" type="stmt"/>
+      <line num="28" count="3" type="stmt"/>
+      <line num="29" count="3" type="stmt"/>
+      <line num="33" count="3" type="stmt"/>
+      <line num="34" count="3" type="cond" truecount="1" falsecount="1"/>
+      <line num="35" count="3" type="stmt"/>
+      <line num="36" count="3" type="stmt"/>
+      <line num="38" count="3" type="stmt"/>
+      <line num="39" count="3" type="stmt"/>
+      <line num="40" count="3" type="stmt"/>
+      <line num="41" count="3" type="stmt"/>
+      <line num="44" count="0" type="stmt"/>
+      <line num="48" count="1" type="stmt"/>
+      <line num="49" count="1" type="stmt"/>
+      <line num="50" count="1" type="stmt"/>
+      <line num="54" count="0" type="stmt"/>
+      <line num="55" count="0" type="stmt"/>
+      <line num="59" count="1" type="stmt"/>
+      <line num="60" count="1" type="stmt"/>
+      <line num="61" count="1" type="stmt"/>
+      <line num="65" count="0" type="stmt"/>
+      <line num="66" count="0" type="stmt"/>
+      <line num="70" count="1" type="stmt"/>
     </file>
     <file name="Logger.js" path="C:\Users\alexr\source\repos\HTMLGaming\utils\Logger.js">
       <metrics statements="23" coveredstatements="14" conditionals="21" coveredconditionals="6" methods="10" coveredmethods="6"/>

@@ -493,8 +493,10 @@ const LevelManager = {
     if (typeof GameManager !== 'undefined' && GameManager.resumeGame) {
       GameManager.resumeGame();
     } else {
-      // Fallback: restart the game loop
-      if (typeof baseInterval !== 'undefined') {
+      // Fallback: restart the game loop (prefer rAF GameLoop)
+      if (typeof startSnakeGameLoop === 'function') {
+        startSnakeGameLoop();
+      } else if (typeof baseInterval !== 'undefined') {
         gameInterval = setInterval(gameLoop, baseInterval);
         animationInterval = requestAnimationFrame(animationLoop);
       }

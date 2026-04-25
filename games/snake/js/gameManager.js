@@ -292,7 +292,10 @@ const GameManager = {
     console.log('Resuming game after level completion');
     
     // Restart the game loop
-    if (typeof baseInterval !== 'undefined') {
+    // Restart the game loop (prefer rAF GameLoop)
+    if (typeof startSnakeGameLoop === 'function') {
+      startSnakeGameLoop();
+    } else if (typeof baseInterval !== 'undefined') {
       gameInterval = setInterval(gameLoop, baseInterval);
       animationInterval = requestAnimationFrame(animationLoop);
     }
@@ -305,6 +308,7 @@ const GameManager = {
    * Return to level selection
    */
   returnToLevelSelection() {
+    if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
     if (gameInterval) clearInterval(gameInterval);
     if (animationInterval) clearInterval(animationInterval);
     gameOver = false;
