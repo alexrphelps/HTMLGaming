@@ -3,7 +3,7 @@ Mini Invaders - Dev Notes
 
 Summary
 -------
-- Consolidated input handling to SmartInputManager for ImprovedMiniInvaders.html.
+ - Consolidated input handling to SmartInputManager and integrated it into the main index.html.
 - Disabled the legacy STUCK_KEY_FIX.js (moved to STUCK_KEY_FIX.js.disabled) to avoid duplicate listeners and intervals.
 - Updated CODE_IMPROVEMENTS_GUIDE.md to recommend SmartInputManager and to update script include instructions.
 
@@ -16,7 +16,7 @@ Files of Interest
 - SmartInputManager.js - recommended input system (contains stuck-key detection and cleanup)
 - InputManager.js - legacy alternative kept for reference or fallback
 - STUCK_KEY_FIX.js.disabled - disabled to avoid duplication
-- ImprovedMiniInvaders.html - now uses SmartInputManager
+ - ImprovedMiniInvaders.html was removed; main index.html now uses SmartInputManager
 - CODE_IMPROVEMENTS_GUIDE.md - documentation updated
 
 Recommended Next Steps
