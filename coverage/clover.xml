@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1777082791843" clover="3.2.0">
-  <project timestamp="1777082791843" name="All files">
-    <metrics statements="522" coveredstatements="159" conditionals="312" coveredconditionals="67" methods="158" coveredmethods="36" elements="992" coveredelements="262" complexity="0" loc="522" ncloc="522" packages="1" files="6" classes="6"/>
+<coverage generated="1777082970039" clover="3.2.0">
+  <project timestamp="1777082970039" name="All files">
+    <metrics statements="568" coveredstatements="192" conditionals="328" coveredconditionals="73" methods="172" coveredmethods="44" elements="1068" coveredelements="309" complexity="0" loc="568" ncloc="568" packages="1" files="7" classes="7"/>
     <file name="AssetLoader.js" path="C:\Users\alexr\source\repos\HTMLGaming\utils\AssetLoader.js">
       <metrics statements="172" coveredstatements="36" conditionals="103" coveredconditionals="5" methods="37" coveredmethods="8"/>
       <line num="7" count="7" type="stmt"/>
@@ -340,6 +340,55 @@
       <line num="59" count="0" type="cond" truecount="0" falsecount="6"/>
       <line num="61" count="0" type="cond" truecount="0" falsecount="2"/>
       <line num="68" count="1" type="stmt"/>
+    </file>
+    <file name="ManagedResource.js" path="C:\Users\alexr\source\repos\HTMLGaming\utils\ManagedResource.js">
+      <metrics statements="46" coveredstatements="33" conditionals="16" coveredconditionals="6" methods="14" coveredmethods="8"/>
+      <line num="4" count="4" type="stmt"/>
+      <line num="5" count="4" type="stmt"/>
+      <line num="6" count="4" type="stmt"/>
+      <line num="7" count="4" type="stmt"/>
+      <line num="8" count="4" type="stmt"/>
+      <line num="13" count="1" type="cond" truecount="3" falsecount="1"/>
+      <line num="14" count="1" type="stmt"/>
+      <line num="15" count="1" type="stmt"/>
+      <line num="16" count="1" type="stmt"/>
+      <line num="17" count="1" type="stmt"/>
+      <line num="21" count="1" type="cond" truecount="3" falsecount="1"/>
+      <line num="22" count="1" type="stmt"/>
+      <line num="23" count="1" type="stmt"/>
+      <line num="27" count="1" type="stmt"/>
+      <line num="28" count="1" type="stmt"/>
+      <line num="29" count="1" type="stmt"/>
+      <line num="33" count="0" type="stmt"/>
+      <line num="34" count="0" type="stmt"/>
+      <line num="38" count="1" type="stmt"/>
+      <line num="39" count="1" type="stmt"/>
+      <line num="40" count="1" type="stmt"/>
+      <line num="44" count="0" type="stmt"/>
+      <line num="45" count="0" type="stmt"/>
+      <line num="49" count="1" type="stmt"/>
+      <line num="50" count="1" type="stmt"/>
+      <line num="51" count="1" type="stmt"/>
+      <line num="55" count="0" type="stmt"/>
+      <line num="56" count="0" type="stmt"/>
+      <line num="60" count="0" type="cond" truecount="0" falsecount="4"/>
+      <line num="61" count="0" type="stmt"/>
+      <line num="65" count="0" type="cond" truecount="0" falsecount="4"/>
+      <line num="66" count="0" type="stmt"/>
+      <line num="67" count="0" type="stmt"/>
+      <line num="72" count="3" type="stmt"/>
+      <line num="73" count="0" type="stmt"/>
+      <line num="75" count="3" type="stmt"/>
+      <line num="78" count="3" type="stmt"/>
+      <line num="79" count="3" type="stmt"/>
+      <line num="82" count="3" type="stmt"/>
+      <line num="83" count="3" type="stmt"/>
+      <line num="86" count="3" type="stmt"/>
+      <line num="87" count="3" type="stmt"/>
+      <line num="90" count="3" type="stmt"/>
+      <line num="91" count="0" type="stmt"/>
+      <line num="93" count="3" type="stmt"/>
+      <line num="97" count="1" type="stmt"/>
     </file>
     <file name="MathUtils.js" path="C:\Users\alexr\source\repos\HTMLGaming\utils\MathUtils.js">
       <metrics statements="161" coveredstatements="17" conditionals="85" coveredconditionals="7" methods="72" coveredmethods="8"/>

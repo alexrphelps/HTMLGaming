@@ -14,6 +14,14 @@ class GameHubApp {
             this.Logger = console;
         }
 
+        // Managed resources for app-level listeners and timers
+        try {
+            const ManagedResource = require('./utils/ManagedResource');
+            this._resources = new ManagedResource();
+        } catch (e) {
+            this._resources = null;
+        }
+
         this.gameSelector = null;
         this.currentScreen = 'loading';
         this.loadingProgress = 0;
@@ -113,7 +121,7 @@ class GameHubApp {
         }
         
         // Log progress for debugging
-        console.log(`📊 Loading: ${this.loadingProgress}% - ${message}`);
+        try { this.Logger.debug && this.Logger.debug(`📊 Loading: ${this.loadingProgress}% - ${message}`); } catch (e) {}
     }
     
     /**
@@ -361,9 +369,13 @@ class GameHubApp {
         }
         
         // Enhanced global key bindings with navigation shortcuts
-        document.addEventListener('keydown', (e) => {
-            this.handleGlobalKeydown(e);
-        });
+        if (this._resources) {
+            this._resources.addListener(document, 'keydown', (e) => this.handleGlobalKeydown(e));
+        } else {
+            document.addEventListener('keydown', (e) => {
+                this.handleGlobalKeydown(e);
+            });
+        }
         
         // Update navigation state
         this.updateNavigationState();
@@ -771,21 +783,17 @@ class GameHubApp {
      */
     setupGameScreenNavigation() {
         // Game screen controls
-        document.getElementById('back-to-menu')?.addEventListener('click', () => {
-            this.exitCurrentGame();
-        });
-        
-        document.getElementById('pause-btn')?.addEventListener('click', () => {
-            this.toggleGamePause();
-        });
-        
-        document.getElementById('restart-btn')?.addEventListener('click', () => {
-            this.restartCurrentGame();
-        });
-        
-        document.getElementById('fullscreen-btn')?.addEventListener('click', () => {
-            this.toggleFullscreen();
-        });
+        const addBtnListener = (id, evt, handler) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (this._resources) this._resources.addListener(el, evt, handler);
+            else el.addEventListener(evt, handler);
+        };
+
+        addBtnListener('back-to-menu', 'click', () => this.exitCurrentGame());
+        addBtnListener('pause-btn', 'click', () => this.toggleGamePause());
+        addBtnListener('restart-btn', 'click', () => this.restartCurrentGame());
+        addBtnListener('fullscreen-btn', 'click', () => this.toggleFullscreen());
     }
     
     async exitCurrentGame() {
@@ -1021,16 +1029,28 @@ class GameHubApp {
     
     setupErrorHandling() {
         // Global error handler
-        window.addEventListener('error', (event) => {
-            try { this.Logger.error && this.Logger.error('Global error:', event.error); } catch (e) { console.error('Global error:', event.error); }
-            this.showNotification('An unexpected error occurred', 'error');
-        });
-        
-        // Unhandled promise rejection handler
-        window.addEventListener('unhandledrejection', (event) => {
-            try { this.Logger.error && this.Logger.error('Unhandled promise rejection:', event.reason); } catch (e) { console.error('Unhandled promise rejection:', event.reason); }
-            this.showNotification('An unexpected error occurred', 'error');
-        });
+        if (this._resources) {
+            this._resources.addListener(window, 'error', (event) => {
+                try { this.Logger.error && this.Logger.error('Global error:', event.error); } catch (e) { console.error('Global error:', event.error); }
+                this.showNotification('An unexpected error occurred', 'error');
+            });
+
+            // Unhandled promise rejection handler
+            this._resources.addListener(window, 'unhandledrejection', (event) => {
+                try { this.Logger.error && this.Logger.error('Unhandled promise rejection:', event.reason); } catch (e) { console.error('Unhandled promise rejection:', event.reason); }
+                this.showNotification('An unexpected error occurred', 'error');
+            });
+        } else {
+            window.addEventListener('error', (event) => {
+                try { this.Logger.error && this.Logger.error('Global error:', event.error); } catch (e) { console.error('Global error:', event.error); }
+                this.showNotification('An unexpected error occurred', 'error');
+            });
+
+            window.addEventListener('unhandledrejection', (event) => {
+                try { this.Logger.error && this.Logger.error('Unhandled promise rejection:', event.reason); } catch (e) { console.error('Unhandled promise rejection:', event.reason); }
+                this.showNotification('An unexpected error occurred', 'error');
+            });
+        }
     }
     
     showNotification(message, type = 'info') {
@@ -1075,6 +1095,10 @@ class GameHubApp {
         
         if (this.gameSelector) {
             this.gameSelector.cleanup();
+        }
+
+        if (this._resources) {
+            try { this._resources.cleanup(); } catch (e) {}
         }
         
         try { this.Logger.info && this.Logger.info('🎮 GameHub App cleaned up'); } catch (e) {}
