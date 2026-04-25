@@ -4,19 +4,15 @@
  */
 class GameHubApp {
     constructor() {
-        // Suppress console.log by default to reduce noisy output in non-dev environments.
-        // Enable verbose logs by setting localStorage.GH_DEBUG = 'true' or running on localhost.
-        (function() {
-            try {
-                const dev = (typeof location !== 'undefined' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')) || (typeof localStorage !== 'undefined' && localStorage.getItem('GH_DEBUG') === 'true');
-                if (!dev && typeof console !== 'undefined') {
-                    // Keep console.warn/error intact; only mute console.log
-                    console.log = function() {};
-                }
-            } catch (e) {
-                // Ignore — keep logging if anything goes wrong
-            }
-        })();
+        // Initialize logger from environment instead of muting global console
+        try {
+            const Logger = require('./utils/Logger');
+            Logger.initFromEnvironment({ storage: typeof localStorage !== 'undefined' ? localStorage : null, hostname: typeof location !== 'undefined' ? location.hostname : null });
+            this.Logger = Logger;
+        } catch (e) {
+            // If Logger can't be loaded (e.g., node env), fall back to console
+            this.Logger = console;
+        }
 
         this.gameSelector = null;
         this.currentScreen = 'loading';
@@ -46,7 +42,7 @@ class GameHubApp {
         this.loadingStartTime = null;
         this.isLoading = false;
         
-        console.log('🎮 GameHub App starting...');
+        try { this.Logger.info && this.Logger.info('🎮 GameHub App starting...'); } catch (e) { }
     }
     
     async init() {
@@ -860,7 +856,7 @@ class GameHubApp {
         };
         
         try {
-            const savedSettings = localStorage.getItem('gamehub-settings');
+            const savedSettings = (typeof localStorage !== 'undefined') ? localStorage.getItem('gamehub-settings') : null;
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                 // Validate and merge with defaults
@@ -888,9 +884,9 @@ class GameHubApp {
     saveSettings() {
         try {
             localStorage.setItem('gamehub-settings', JSON.stringify(this.settings));
-            console.log('✅ Settings saved successfully');
+            try { this.Logger.info && this.Logger.info('✅ Settings saved successfully'); } catch (e) {}
         } catch (error) {
-            console.error('Failed to save settings:', error);
+            try { this.Logger.error && this.Logger.error('Failed to save settings:', error); } catch (e) { console.error('Failed to save settings:', error); }
         }
     }
     
@@ -905,7 +901,7 @@ class GameHubApp {
             // Emit setting change event for other components
             this.onSettingChanged(key, value);
             
-            console.log(`🔧 Setting updated: ${key} = ${value}`);
+            try { this.Logger.debug && this.Logger.debug(`🔧 Setting updated: ${key} = ${value}`); } catch (e) {}
         }
     }
     
@@ -1026,13 +1022,13 @@ class GameHubApp {
     setupErrorHandling() {
         // Global error handler
         window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
+            try { this.Logger.error && this.Logger.error('Global error:', event.error); } catch (e) { console.error('Global error:', event.error); }
             this.showNotification('An unexpected error occurred', 'error');
         });
         
         // Unhandled promise rejection handler
         window.addEventListener('unhandledrejection', (event) => {
-            console.error('Unhandled promise rejection:', event.reason);
+            try { this.Logger.error && this.Logger.error('Unhandled promise rejection:', event.reason); } catch (e) { console.error('Unhandled promise rejection:', event.reason); }
             this.showNotification('An unexpected error occurred', 'error');
         });
     }
@@ -1081,7 +1077,7 @@ class GameHubApp {
             this.gameSelector.cleanup();
         }
         
-        console.log('🎮 GameHub App cleaned up');
+        try { this.Logger.info && this.Logger.info('🎮 GameHub App cleaned up'); } catch (e) {}
     }
 }
 
