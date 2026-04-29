@@ -11,9 +11,10 @@ class GameEngine {
 
         // Map Gen parameters
         this.tileSize = 64;
-        this.mapCols = 100;
-        this.mapRows = 100;
-        this.mapGen = new MapGen(this.mapCols, this.mapRows, this.tileSize);
+        this.currentMapConfig = MapConfigs.default;
+        this.mapCols = this.currentMapConfig.cols;
+        this.mapRows = this.currentMapConfig.rows;
+        this.mapGen = new MapGen(this.currentMapConfig, this.tileSize);
 
         // Entities
         this.player = null; // initialized in start()

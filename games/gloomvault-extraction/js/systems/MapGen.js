@@ -1,7 +1,8 @@
 class MapGen {
-    constructor(cols, rows, tileSize) {
-        this.cols = cols;
-        this.rows = rows;
+    constructor(config, tileSize) {
+        this.config = config;
+        this.cols = config.cols;
+        this.rows = config.rows;
         this.tileSize = tileSize;
         this.grid = []; // 0 = wall, 1 = floor, 2 = door, 3 = hazard
         this.rooms = [];
@@ -11,14 +12,14 @@ class MapGen {
         this.grid = new Array(this.cols * this.rows).fill(0);
         this.rooms = [];
 
-        const numRooms = 15;
-        const minRoomSize = 5;
-        const maxRoomSize = 12;
+        const numRooms = this.config.numRooms;
+        const minRoomSize = this.config.minRoomSize;
+        const maxRoomSize = this.config.maxRoomSize;
 
         for (let i = 0; i < numRooms; i++) {
-            // Determine if this is a rare perfect square room (10% chance) or an organic cluster (90%)
-            const isPerfectSquare = Math.random() < 0.1;
-            const numRects = isPerfectSquare ? 1 : Math.floor(Math.random() * 3) + 2; // 1 to 3 rects
+            // Determine if this is a rare perfect square room or an organic cluster
+            const isPerfectSquare = Math.random() < this.config.perfectSquareChance;
+            const numRects = isPerfectSquare ? 1 : Math.floor(Math.random() * (this.config.blobMaxRects - this.config.blobMinRects + 1)) + this.config.blobMinRects;
             
             let roomBounds = null;
             let rects = [];
@@ -77,7 +78,9 @@ class MapGen {
         }
 
         // Apply a single pass of cellular automata to smooth out some sharp edges while keeping others
-        this.applyCellularAutomata(1);
+        if (this.config.smoothingPasses > 0) {
+            this.applyCellularAutomata(this.config.smoothingPasses);
+        }
     }
 
     carveRoom(room) {
@@ -97,8 +100,8 @@ class MapGen {
         let x = start.x;
         let y = start.y;
 
-        // 2-wide brush size
-        const brushSize = 2;
+        // brush size from config
+        const brushSize = this.config.corridorWidth;
 
         // Safety counter to prevent infinite loops
         let maxSteps = 1000; 
@@ -106,7 +109,7 @@ class MapGen {
         while ((x !== end.x || y !== end.y) && maxSteps > 0) {
             maxSteps--;
 
-            // Paint 2x2 brush
+            // Paint brush
             for (let by = 0; by < brushSize; by++) {
                 for (let bx = 0; bx < brushSize; bx++) {
                     const px = x + bx;
@@ -120,8 +123,8 @@ class MapGen {
             let dx = end.x - x;
             let dy = end.y - y;
 
-            // Wobble chance (30%) - drift perpendicular or random
-            if (Math.random() < 0.30 && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+            // Wobble chance - drift perpendicular or random
+            if (Math.random() < this.config.wobbleChance && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
                 if (Math.random() < 0.5) {
                     x += (Math.random() < 0.5 ? 1 : -1);
                 } else {
