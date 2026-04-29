@@ -1,9 +1,6 @@
-class Player {
+class Player extends Entity {
     constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 30;
-        this.height = 30;
+        super(x, y, 30, 30, 100);
         this.speed = 200; // pixels per second
         this.color = '#8a2be2';
         this.angle = 0; // facing direction
