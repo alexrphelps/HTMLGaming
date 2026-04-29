@@ -16,6 +16,11 @@ class GameEngine {
         this.mapRows = this.currentMapConfig.rows;
         this.mapGen = new MapGen(this.currentMapConfig, this.tileSize);
         this.pathfinder = new Pathfinder();
+        this.spawnManager = new SpawnManager();
+
+        // Game Context
+        this.currentFloor = 1;
+        this.playerGearScore = 10;
 
         // Entities
         this.player = null; // initialized in start()
@@ -60,35 +65,19 @@ class GameEngine {
         this.enemies = []; // Reset enemies
         this.combatFeedback = new CombatFeedback(); // Reset combat feedback
 
-        // Spawn some test enemies
-        this.spawnEnemy('grunt', 3, startPos);
-        this.spawnEnemy('ranged', 1, startPos);
-        this.spawnEnemy('brute', 1, startPos);
+        // Pre-populate entire map with enemies
+        this.spawnManager.populateMap(
+            this.mapGen, 
+            this.enemies, 
+            startPos, 
+            this.currentFloor, 
+            this.playerGearScore
+        );
 
         this.state = 'PLAYING';
         this.isRunning = true;
         this.lastTime = performance.now();
         requestAnimationFrame((time) => this.loop(time));
-    }
-
-    spawnEnemy(type, count, startPos) {
-        let spawned = 0;
-        while (spawned < count) {
-            // Find a random walkable tile within a reasonable distance
-            const rx = Math.floor(Math.random() * this.mapCols);
-            const ry = Math.floor(Math.random() * this.mapRows);
-            
-            if (this.mapGen.getTile(rx, ry) === 1) {
-                const worldX = rx * this.tileSize + this.tileSize / 2;
-                const worldY = ry * this.tileSize + this.tileSize / 2;
-                const dist = Math.hypot(worldX - startPos.x, worldY - startPos.y);
-                
-                if (dist > 300 && dist < 1200) {
-                    this.enemies.push(new Enemy(worldX, worldY, type));
-                    spawned++;
-                }
-            }
-        }
     }
 
     stop() {
