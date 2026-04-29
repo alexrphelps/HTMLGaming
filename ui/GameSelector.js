@@ -255,6 +255,21 @@ class GameSelector {
                     author: 'GameHub Team',
                     estimatedPlayTime: 15
                 }
+            },
+            {
+                name: 'Gloomvault Extraction',
+                gameClass: typeof GloomvaultExtraction !== 'undefined' ? GloomvaultExtraction : null,
+                metadata: {
+                    name: 'Gloomvault Extraction',
+                    description: 'Isometric roguelite dungeon crawler with extraction mechanics and loot progression.',
+                    category: 'Action RPG',
+                    difficulty: 'Hard',
+                    icon: '💎',
+                    tags: ['roguelite', 'action', 'loot', 'dungeon-crawler'],
+                    version: '0.1.0',
+                    author: 'GameHub',
+                    estimatedPlayTime: 15
+                }
             }
         ];
         

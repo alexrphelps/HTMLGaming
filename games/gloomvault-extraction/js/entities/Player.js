@@ -1,0 +1,94 @@
+class Player {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 30;
+        this.height = 30;
+        this.speed = 200; // pixels per second
+        this.color = '#8a2be2';
+        this.angle = 0; // facing direction
+
+        // Dodge Mechanics
+        this.isDodging = false;
+        this.dodgeSpeed = 600;
+        this.dodgeTime = 0.2; // seconds
+        this.dodgeTimer = 0;
+        this.dodgeCooldown = 1.0; // seconds
+        this.dodgeCooldownTimer = 0;
+    }
+
+    update(dt, input, camera) {
+        // Handle dodge input
+        if (input.isKeyDown('ShiftLeft') && !this.isDodging && this.dodgeCooldownTimer <= 0) {
+            this.isDodging = true;
+            this.dodgeTimer = this.dodgeTime;
+            this.dodgeCooldownTimer = this.dodgeCooldown;
+        }
+
+        let vx = 0;
+        let vy = 0;
+
+        if (this.isDodging) {
+            // Dash in facing direction
+            vx = Math.cos(this.angle) * this.dodgeSpeed;
+            vy = Math.sin(this.angle) * this.dodgeSpeed;
+
+            this.dodgeTimer -= dt;
+            if (this.dodgeTimer <= 0) {
+                this.isDodging = false;
+            }
+        } else {
+            // Normal movement
+            if (input.isKeyDown('KeyW')) vy -= this.speed;
+            if (input.isKeyDown('KeyS')) vy += this.speed;
+            if (input.isKeyDown('KeyA')) vx -= this.speed;
+            if (input.isKeyDown('KeyD')) vx += this.speed;
+
+            // Normalize diagonal movement
+            if (vx !== 0 && vy !== 0) {
+                const length = Math.sqrt(vx * vx + vy * vy);
+                vx = (vx / length) * this.speed;
+                vy = (vy / length) * this.speed;
+            }
+        }
+
+        // Apply movement
+        this.x += vx * dt;
+        this.y += vy * dt;
+
+        // Update dodge cooldown
+        if (this.dodgeCooldownTimer > 0) {
+            this.dodgeCooldownTimer -= dt;
+        }
+
+        // Update facing angle based on mouse
+        if (camera && input.mouse) {
+            const screenX = input.mouse.x;
+            const screenY = input.mouse.y;
+            const worldMouse = camera.screenToWorld(screenX, screenY);
+            
+            this.angle = Math.atan2(worldMouse.y - this.y, worldMouse.x - this.x);
+        }
+    }
+
+    render(ctx, renderer) {
+        // Draw the player (placeholder circle with direction indicator)
+        const screenPos = renderer.camera.worldToScreen(this.x, this.y);
+        
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, this.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw facing direction
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.lineTo(
+            screenPos.x + Math.cos(this.angle) * this.width,
+            screenPos.y + Math.sin(this.angle) * this.height
+        );
+        ctx.stroke();
+    }
+}

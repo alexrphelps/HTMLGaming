@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gloomvault Extraction</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Main Menu -->
+        <div id="main-menu" class="screen active">
+            <h1 class="game-title">GLOOMVAULT<br><span class="subtitle">EXTRACTION</span></h1>
+            
+            <div class="menu-options">
+                <button id="btn-start" class="menu-btn">Enter the Vault</button>
+                <button id="btn-stash" class="menu-btn">View Stash</button>
+            </div>
+            
+            <div class="version-info">v0.1.0 Prototype</div>
+        </div>
+
+        <!-- Stash Screen Placeholder -->
+        <div id="stash-screen" class="screen">
+            <h2>Player Stash</h2>
+            <div class="stash-grid-placeholder">
+                <p>No items yet.</p>
+            </div>
+            <button id="btn-stash-back" class="menu-btn secondary">Back</button>
+        </div>
+
+        <!-- Game Screen Placeholder -->
+        <div id="play-screen" class="screen">
+            <canvas id="game-canvas"></canvas>
+            <div id="ui-layer">
+                <div class="health-bar">HP: 100/100</div>
+                <button id="btn-extract-temp" class="menu-btn temp-action">Force Extract</button>
+                <button id="btn-die-temp" class="menu-btn temp-action danger">Force Death</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/core/Input.js"></script>
+    <script src="js/core/Camera.js"></script>
+    <script src="js/core/Renderer.js"></script>
+    <script src="js/systems/MapGen.js"></script>
+    <script src="js/entities/Player.js"></script>
+    <script src="js/core/GameEngine.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
