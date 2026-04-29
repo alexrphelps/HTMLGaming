@@ -1,5 +1,5 @@
 class Enemy extends Entity {
-    constructor(x, y, type) {
+    constructor(x, y, type, levelMultiplier = 1.0) {
         // Base stats based on type
         let width = 30, height = 30, hp = 50, speed = 100, color = '#ff0000';
         
@@ -8,6 +8,9 @@ class Enemy extends Entity {
         } else if (type === 'brute') {
             hp = 150; speed = 60; width = 40; height = 40; color = '#880000';
         }
+
+        // Apply level multiplier to health
+        hp = Math.floor(hp * levelMultiplier);
 
         super(x, y, width, height, hp);
 
@@ -25,7 +28,7 @@ class Enemy extends Entity {
         if (this.type === 'ranged') {
             this.weapon = new Weapon(false);
             this.weapon.attackSpeed = 1.5; // Slower attack rate
-            this.weapon.damage = 15;
+            this.weapon.damage = Math.floor(15 * levelMultiplier);
             this.weapon.projectileSpeed = 300;
         }
 
