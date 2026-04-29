@@ -15,9 +15,11 @@ class GameEngine {
         this.mapCols = this.currentMapConfig.cols;
         this.mapRows = this.currentMapConfig.rows;
         this.mapGen = new MapGen(this.currentMapConfig, this.tileSize);
+        this.pathfinder = new Pathfinder();
 
         // Entities
         this.player = null; // initialized in start()
+        this.enemies = [];
         this.projectiles = [];
         this.combatFeedback = new CombatFeedback();
 
@@ -55,12 +57,38 @@ class GameEngine {
         this.player = new Player(startPos.x, startPos.y);
 
         this.projectiles = []; // Reset projectiles
+        this.enemies = []; // Reset enemies
         this.combatFeedback = new CombatFeedback(); // Reset combat feedback
+
+        // Spawn some test enemies
+        this.spawnEnemy('grunt', 3, startPos);
+        this.spawnEnemy('ranged', 1, startPos);
+        this.spawnEnemy('brute', 1, startPos);
 
         this.state = 'PLAYING';
         this.isRunning = true;
         this.lastTime = performance.now();
         requestAnimationFrame((time) => this.loop(time));
+    }
+
+    spawnEnemy(type, count, startPos) {
+        let spawned = 0;
+        while (spawned < count) {
+            // Find a random walkable tile within a reasonable distance
+            const rx = Math.floor(Math.random() * this.mapCols);
+            const ry = Math.floor(Math.random() * this.mapRows);
+            
+            if (this.mapGen.getTile(rx, ry) === 1) {
+                const worldX = rx * this.tileSize + this.tileSize / 2;
+                const worldY = ry * this.tileSize + this.tileSize / 2;
+                const dist = Math.hypot(worldX - startPos.x, worldY - startPos.y);
+                
+                if (dist > 300 && dist < 1200) {
+                    this.enemies.push(new Enemy(worldX, worldY, type));
+                    spawned++;
+                }
+            }
+        }
     }
 
     stop() {
@@ -97,13 +125,49 @@ class GameEngine {
             this.camera.follow(this.player);
         }
 
-        // Update Projectiles
+        // Update enemies
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            let enemy = this.enemies[i];
+            const newEnemyProjectiles = enemy.update(dt, this.player, this.mapGen, this.pathfinder);
+            if (newEnemyProjectiles && newEnemyProjectiles.length > 0) {
+                this.projectiles.push(...newEnemyProjectiles);
+            }
+
+            // Check if enemy died
+            if (enemy.hp <= 0) {
+                this.combatFeedback.addText('Dead', enemy.x, enemy.y, '#888888', 14, 2.0);
+                this.enemies.splice(i, 1);
+            }
+        }
+
+        // Update Projectiles and Handle Collisions
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             let proj = this.projectiles[i];
             proj.update(dt, this.mapGen);
-            if (proj.markedForDeletion) {
-                // If it died hitting a wall, show feedback
-                if (proj.timer < proj.lifetime) {
+
+            let hit = false;
+
+            if (proj.isPlayerOwned) {
+                // Check collision with enemies
+                for (let e of this.enemies) {
+                    if (Math.hypot(e.x - proj.x, e.y - proj.y) < (e.width/2 + proj.width/2)) {
+                        e.takeDamage(proj.damage);
+                        this.combatFeedback.addText(`-${proj.damage}`, e.x, e.y, '#ffffff', 14, 0.8);
+                        hit = true;
+                        break;
+                    }
+                }
+            } else {
+                // Check collision with player
+                if (Math.hypot(this.player.x - proj.x, this.player.y - proj.y) < (this.player.width/2 + proj.width/2)) {
+                    this.player.takeDamage(proj.damage);
+                    this.combatFeedback.addText(`-${proj.damage}`, this.player.x, this.player.y, '#ff0000', 16, 1.0);
+                    hit = true;
+                }
+            }
+
+            if (hit || proj.markedForDeletion) {
+                if (!hit && proj.timer < proj.lifetime) {
                     this.combatFeedback.addText('Block', proj.x, proj.y, '#aaaaaa', 12, 0.5);
                 }
                 this.projectiles.splice(i, 1);
@@ -149,15 +213,20 @@ class GameEngine {
             this.player.render(this.ctx, this.renderer);
         }
 
-        // 3. Draw Projectiles
+        // 3. Draw Enemies
+        for (let e of this.enemies) {
+            e.render(this.ctx, this.renderer);
+        }
+
+        // 4. Draw Projectiles
         for (let p of this.projectiles) {
             p.render(this.ctx, this.renderer);
         }
 
-        // 4. Draw Combat Feedback
+        // 5. Draw Combat Feedback
         this.combatFeedback.render(this.ctx, this.renderer);
 
-        // 5. Draw UI Overlay
+        // 6. Draw UI Overlay
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '16px monospace';
         this.ctx.fillText(`FPS: ${Math.round(1 / (performance.now() - this.lastTime) * 1000)}`, 10, 20);
