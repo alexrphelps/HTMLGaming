@@ -13,22 +13,18 @@ A real-time top-down 3/4 perspective dungeon crawler with extraction mechanics a
 *   **World:** Procedurally generated continuous grid (Cluster Blob rooms, 2-tile wide wobbling cave corridors, and cellular automata smoothing) via `js/systems/MapGen.js`. Configurations are externalized in `js/config/MapConfig.js`.
 *   **Input:** WASD movement, Mouse aiming (relative to camera), Shift to dodge. Handled by `js/core/Input.js`.
 
-## 🟢 Current State (Phase 2 Completed)
+## 🟢 Current State (Phase 3 Completed)
 *   **Menu Shell:** `index.html` and `style.css` implemented for screen switching.
 *   **Core Engine:** Active. Delta time, update/render loops, and AABB separated-axis wall collision are working perfectly.
 *   **Camera:** Follows the player and culls off-screen rendering.
-*   **Player:** Can move, dodge (with cooldown), and aim towards the mouse cursor.
+*   **Player:** Can move, dodge (with cooldown), and aim towards the mouse cursor. Base Entity class implemented for health.
+*   **Combat:** Primary attack (Left Click) spawns projectiles with cooldowns. Projectiles collide with walls and disappear, spawning floating text feedback.
 *   **Map:** Dynamically generates organic cave/dungeon hybrids based on `MapConfig.js`.
 
 ---
 
 ## 🚀 Execution Roadmap for AI Agents
 When starting a new session, pick the lowest incomplete phase and execute it entirely.
-
-### ⚔️ Phase 3: Combat System (Player Offensive)
-1.  **Weapon Architecture:** Create `js/systems/Weapon.js` defining attack speed, damage, and range. Implement Left/Right click logic in `Player.js`.
-2.  **Hitboxes & Projectiles:** Create `js/entities/Projectile.js`. Implement a collision system in `GameEngine.js` (AABB/Circle) for attack resolution.
-3.  **Health & Feedback:** Implement a base `Entity` class with `hp`, `maxHp`, and `takeDamage(amount)`. Add floating damage numbers via Canvas text.
 
 ### 👹 Phase 4: Advanced Enemy AI & Spawning
 1.  **A* Pathfinding:** Create `js/systems/Pathfinder.js` implementing the A* algorithm mapped to the `MapGen` grid to navigate organic corridors perfectly.
