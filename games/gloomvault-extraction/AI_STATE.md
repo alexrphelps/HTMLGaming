@@ -21,6 +21,7 @@ A real-time top-down 3/4 perspective dungeon crawler with extraction mechanics a
 *   **Combat:** Primary attack (Left Click) spawns projectiles with cooldowns. Projectiles collide with walls and disappear, spawning floating text feedback.
 *   **Map:** Dynamically generates organic cave/dungeon hybrids based on `MapConfig.js`.
 *   **Pathfinding & AI:** A* Pathfinding system active. Enemy base class implemented with Grunt (chase/flee), Ranged (kite/shoot), and Brute (telegraph/dash) behaviors. Support for elite modifiers (fast/vampiric).
+*   **Enemy Spawning:** Global Pre-population via `SpawnManager.js` (Option A). Entire map is populated with enemies based on floor size and difficulty level, keeping a strict 800-pixel safe zone around the player's spawn.
 *   **Combat Resolution:** Projectiles correctly filter collisions based on ownership (Player vs Enemy). Damage numbers pop up on hit, and dead enemies are removed.
 
 ---
