@@ -1,0 +1,224 @@
+# 🎮 Gloomvault Extraction - Dungeon Roguelite – Design Document
+
+## 🧠 Core Concept
+
+A real-time isometric dungeon crawler with extraction mechanics and randomized loot progression. Players enter procedurally generated dungeons, gather gear, and choose when to extract. Death results in losing all items collected during the run.
+
+---
+
+## 🔁 Core Gameplay Loop
+
+1. Equip starting gear from stash
+2. Enter dungeon 
+3. Explore, fight enemies, collect loot
+4. Manage inventory and risk
+5. Find extraction portal
+6. Extract (keep loot) OR die (lose loot)
+
+---
+
+## 🎮 Controls
+
+* WASD → Movement
+* Mouse → Attack direction/Aim
+* Left Click → Primary attack
+* Right Click → Secondary ability
+* Q / E → Trinket abilities
+* Shift → dodge
+
+---
+
+## ⚔️ Combat System
+
+* Real-time, isometric
+* Directional attacks (aim-based)
+* Medium-paced combat with cooldowns
+* No auto-targeting
+
+---
+
+## 🗺️ Dungeon Design
+
+* Procedurally generated continuous maps
+* Rooms + corridors
+* Features:
+  * Doors
+  * Hazards (holes)
+* Infinite floors per run
+* Increasing difficulty with depth
+
+---
+
+## 🌀 Extraction System
+
+* Random portals spawn mid-run
+* Not guaranteed each floor
+* Player decides when to extract vs continue
+
+---
+
+## 🎒 Inventory & Gear
+
+### Equipment Slots
+
+* Helm
+* Chest
+* Pants
+* Boots
+* Weapon Slot 1
+* Weapon Slot 2
+* Trinket Slot 1
+* Trinket Slot 2
+
+### Inventory
+
+* 5x5 grid
+* 1 item per slot
+
+---
+
+## 🗡️ Weapon System
+
+Weapons define:
+
+* Damage
+* Attack speed
+* Attack type (melee, ranged, AoE)
+* Secondary ability
+
+---
+
+## 💎 Loot System
+
+### Rarity Tiers
+
+* Common
+* Epic
+* Legendary
+
+### Item Structure
+
+Each item contains:
+
+* ID
+* Name
+* Type (weapon, armor, trinket)
+* Rarity
+* Gear Score
+* Base Stats
+* Modifiers
+* Optional Special Effect
+
+### Scaling
+
+* Gear score scales with dungeon depth
+* Formula:
+
+  * Min: Floor × 10
+  * Max: Floor × 15
+
+### Rarity Multipliers
+
+* Common: ×1.0
+* Epic: ×1.5
+* Legendary: ×2.2
+
+### Modifiers
+
+* Common: 0–1
+* Epic: 1–3
+* Legendary: 2–4 + special effect chance
+
+### Modifier Pool (v1)
+
+* % Damage
+* % Attack Speed
+* Flat Damage
+* Lifesteal
+* Movement Speed
+* Cooldown Reduction
+
+---
+
+## 👹 Enemy Design
+
+### Common Enemies
+
+* Basic AI (move toward player, attack)
+
+### Rare Enemies
+
+* Stronger stats
+* 1 modifier
+
+### Bosses
+
+* High HP
+* Special abilities:
+  * AoE attacks
+  * Charges
+  * Projectile bursts
+
+---
+
+## ⚖️ Difficulty Scaling
+
+* Enemy HP: Base × (1 + 0.2 × Floor)
+* Enemy Damage: Base × (1 + 0.15 × Floor)
+* Optional soft scaling based on player gear score
+
+---
+
+## 💀 Death System
+
+* Lose all items collected during run
+* Stash remains intact
+
+---
+
+## 🎨 Visual Style
+
+* Dark dungeon aesthetic
+* Minimalistic visuals
+* Placeholder assets (easy to replace)
+
+---
+
+## 🧱 Technical Architecture
+
+### Systems
+
+* Game loop
+* Player system
+* Enemy system
+* Loot system
+* Inventory system
+* Map generation
+
+### Design Goals
+
+* Modular code
+* Easily extendable
+* Clean separation of logic and rendering
+* Testable with unit tests.
+
+---
+
+## 💾 Persistence
+
+* Use browser storage (localStorage)
+* Store:
+
+  * Player stash
+  * Equipped gear
+
+---
+
+## 🚀 Future Expansion Ideas
+
+* Advanced loot generation (prefix/suffix system)
+* Unique legendary effects
+* Additional enemy types
+* Boss mechanics
+* Sound and visual polish
+* Save/load system improvements
