@@ -9,24 +9,47 @@ A real-time top-down 3/4 perspective dungeon crawler with extraction mechanics a
 *   **Integration:** Runs in an iframe wrapper (`GloomvaultExtraction.js`) via GameHub.
 *   **Perspective:** Top-down 3/4 view (not true isometric).
 *   **Engine:** Custom `requestAnimationFrame` loop in `js/core/GameEngine.js`.
-*   **Rendering:** Canvas 2D. Currently using placeholder geometric shapes, but `js/core/Renderer.js` is structured to support sprite sheets with 5-10 frames per animation in the future.
-*   **World:** Procedurally generated continuous grid (Cluster Blob rooms, 2-tile wide wobbling cave corridors, and cellular automata smoothing) via `js/systems/MapGen.js`.
+*   **Rendering:** Canvas 2D (`js/core/Renderer.js`), currently using geometric shapes, structured to support sprite sheets with 5-10 frames per animation in the future.
+*   **World:** Procedurally generated continuous grid (Cluster Blob rooms, 2-tile wide wobbling cave corridors, and cellular automata smoothing) via `js/systems/MapGen.js`. Configurations are externalized in `js/config/MapConfig.js`.
 *   **Input:** WASD movement, Mouse aiming (relative to camera), Shift to dodge. Handled by `js/core/Input.js`.
 
 ## 🟢 Current State (Phase 2 Completed)
 *   **Menu Shell:** `index.html` and `style.css` implemented for screen switching.
-*   **Core Engine:** Active. Delta time, update/render loops, and basic AABB/Circle tile collision are working.
+*   **Core Engine:** Active. Delta time, update/render loops, and AABB separated-axis wall collision are working perfectly.
 *   **Camera:** Follows the player and culls off-screen rendering.
 *   **Player:** Can move, dodge (with cooldown), and aim towards the mouse cursor.
-*   **Map:** Generates a 100x100 tilemap with interconnected rooms.
+*   **Map:** Dynamically generates organic cave/dungeon hybrids based on `MapConfig.js`.
 
-## 🚧 Next Immediate Steps (Phase 3: Combat)
-1.  **Weapon System:** Create a base `Weapon` class defining attack speed, damage, and hitbox geometry (arcs for melee, lines/circles for projectiles).
-2.  **Combat Controller:** Integrate primary (Left Click) and secondary (Right Click) attacks into `js/entities/Player.js`.
-3.  **Hitboxes & Collision:** Implement Entity-to-Entity collision detection in `GameEngine.js` for combat resolution.
+---
 
-## 🔮 Future Roadmap
-*   **Phase 4 - Loot & Inventory:** Implement `js/systems/Loot.js` (Gear Score, Rarity, Modifiers) and `js/systems/Inventory.js` (5x5 grid, Stash persistence via localStorage).
-*   **Phase 5 - Enemies:** Implement basic AI (Chase, Attack) and rare modifier scaling in `js/entities/Enemy.js`.
-*   **Phase 6 - Extraction:** Add spawnable extraction portals, run completion logic (save to stash), and death logic (wipe inventory).
-*   **Phase 7 - Polish:** Replace colored rects with actual sprite sheets and add basic sound effects.
+## 🚀 Execution Roadmap for AI Agents
+When starting a new session, pick the lowest incomplete phase and execute it entirely.
+
+### ⚔️ Phase 3: Combat System (Player Offensive)
+1.  **Weapon Architecture:** Create `js/systems/Weapon.js` defining attack speed, damage, and range. Implement Left/Right click logic in `Player.js`.
+2.  **Hitboxes & Projectiles:** Create `js/entities/Projectile.js`. Implement a collision system in `GameEngine.js` (AABB/Circle) for attack resolution.
+3.  **Health & Feedback:** Implement a base `Entity` class with `hp`, `maxHp`, and `takeDamage(amount)`. Add floating damage numbers via Canvas text.
+
+### 👹 Phase 4: Advanced Enemy AI & Spawning
+1.  **A* Pathfinding:** Create `js/systems/Pathfinder.js` implementing the A* algorithm mapped to the `MapGen` grid to navigate organic corridors perfectly.
+2.  **Complex Behaviors:** Create `js/entities/Enemy.js` with distinct state-machine behaviors:
+    *   *Grunt:* Chases directly. Flees briefly when HP < 20%.
+    *   *Ranged:* Uses A* to maintain a specific distance (kites the player) while shooting projectiles.
+    *   *Brute:* Slow, high HP, telegraphs a straight-line dash attack.
+3.  **Elite Modifiers:** Implement logic to randomly assign affixes to enemies (e.g., "Fast", "Vampiric") that alter their base stats and rendering color.
+
+### 🎒 Phase 5: Loot & HTML DOM Inventory
+1.  **Loot Generation:** Create `js/systems/LootGen.js` to roll Gear Score (depth-based), Rarity (Common/Epic/Legendary), and modifiers.
+2.  **World Drops:** Create a `DroppedItem` entity. Add a pickup interaction radius (Press 'E').
+3.  **DOM Overlay UI:** Implement the Inventory (5x5 grid) and Equipment slots using HTML `<div>`s in `index.html` and `style.css`.
+    *   *Critical:* Hook the Inventory key (Tab/I) to pause the `GameEngine.js` loop and display the HTML overlay. Implement drag-and-drop logic for items.
+4.  **Stat Hookup:** Ensure the Player's combat stats dynamically recalculate based on equipped DOM inventory items.
+
+### 🌀 Phase 6: Extraction & Persistence
+1.  **The Portal:** Implement `ExtractionPortal` entity. Spawns randomly in rooms. Interacting triggers Extraction Success.
+2.  **Stash Persistence:** Use `localStorage`. Move Inventory to Stash on success. Load Stash on game boot.
+3.  **Death Penalty:** Wipe the current run's inventory on Player death, but preserve the Stash. Switch to `GAME_OVER` screen.
+
+### 🎨 Phase 7: Polish & Game Feel
+1.  **Sprite Integration:** Update `js/core/Renderer.js` to replace rectangles with actual sprite sheets (Idle, Run, Attack).
+2.  **Juice:** Add camera screenshake on heavy hits, particle emitters for impacts, and dash trails.
