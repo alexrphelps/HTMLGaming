@@ -11,22 +11,56 @@ class MapGen {
         this.grid = new Array(this.cols * this.rows).fill(0);
         this.rooms = [];
 
-        // Basic BSP or Random Room placement:
         const numRooms = 15;
         const minRoomSize = 5;
         const maxRoomSize = 12;
 
         for (let i = 0; i < numRooms; i++) {
-            let width = Math.floor(Math.random() * (maxRoomSize - minRoomSize + 1)) + minRoomSize;
-            let height = Math.floor(Math.random() * (maxRoomSize - minRoomSize + 1)) + minRoomSize;
-            let x = Math.floor(Math.random() * (this.cols - width - 2)) + 1;
-            let y = Math.floor(Math.random() * (this.rows - height - 2)) + 1;
+            // Determine if this is a rare perfect square room (10% chance) or an organic cluster (90%)
+            const isPerfectSquare = Math.random() < 0.1;
+            const numRects = isPerfectSquare ? 1 : Math.floor(Math.random() * 3) + 2; // 1 to 3 rects
+            
+            let roomBounds = null;
+            let rects = [];
 
-            let newRoom = { x, y, width, height, center: { x: Math.floor(x + width / 2), y: Math.floor(y + height / 2) } };
+            // Try to place the cluster around a center point
+            let cx = Math.floor(Math.random() * (this.cols - maxRoomSize * 2 - 4)) + maxRoomSize + 2;
+            let cy = Math.floor(Math.random() * (this.rows - maxRoomSize * 2 - 4)) + maxRoomSize + 2;
 
+            for(let r = 0; r < numRects; r++) {
+                let width = Math.floor(Math.random() * (maxRoomSize - minRoomSize + 1)) + minRoomSize;
+                let height = Math.floor(Math.random() * (maxRoomSize - minRoomSize + 1)) + minRoomSize;
+                
+                // Offset subsequent rects slightly from the center to create organic blobs
+                let rx = cx + Math.floor(Math.random() * (width / 2)) - Math.floor(width / 4);
+                let ry = cy + Math.floor(Math.random() * (height / 2)) - Math.floor(height / 4);
+
+                rects.push({x: rx, y: ry, width, height});
+
+                if (!roomBounds) {
+                    roomBounds = { x: rx, y: ry, right: rx + width, bottom: ry + height };
+                } else {
+                    roomBounds.x = Math.min(roomBounds.x, rx);
+                    roomBounds.y = Math.min(roomBounds.y, ry);
+                    roomBounds.right = Math.max(roomBounds.right, rx + width);
+                    roomBounds.bottom = Math.max(roomBounds.bottom, ry + height);
+                }
+            }
+
+            let newRoom = { 
+                rects: rects,
+                x: roomBounds.x, 
+                y: roomBounds.y, 
+                width: roomBounds.right - roomBounds.x, 
+                height: roomBounds.bottom - roomBounds.y,
+                center: { x: cx, y: cy } 
+            };
+
+            // Collision check against other room bounding boxes (with 2 tiles padding)
             let failed = false;
             for (let room of this.rooms) {
-                if (this.intersects(newRoom, room)) {
+                if (newRoom.x <= room.x + room.width + 2 && newRoom.x + newRoom.width + 2 >= room.x &&
+                    newRoom.y <= room.y + room.height + 2 && newRoom.y + newRoom.height + 2 >= room.y) {
                     failed = true;
                     break;
                 }
@@ -35,40 +69,109 @@ class MapGen {
             if (!failed) {
                 this.carveRoom(newRoom);
                 if (this.rooms.length > 0) {
-                    this.carveCorridor(this.rooms[this.rooms.length - 1].center, newRoom.center);
+                    // Connect to the previous room
+                    this.carveWobblyCorridor(this.rooms[this.rooms.length - 1].center, newRoom.center);
                 }
                 this.rooms.push(newRoom);
             }
         }
-    }
 
-    intersects(r1, r2) {
-        return (r1.x <= r2.x + r2.width + 1 && r1.x + r1.width + 1 >= r2.x &&
-            r1.y <= r2.y + r2.height + 1 && r1.y + r1.height + 1 >= r2.y);
+        // Apply a single pass of cellular automata to smooth out some sharp edges while keeping others
+        this.applyCellularAutomata(1);
     }
 
     carveRoom(room) {
-        for (let y = room.y; y < room.y + room.height; y++) {
-            for (let x = room.x; x < room.x + room.width; x++) {
-                this.grid[y * this.cols + x] = 1;
+        for (let rect of room.rects) {
+            for (let y = rect.y; y < rect.y + rect.height; y++) {
+                for (let x = rect.x; x < rect.x + rect.width; x++) {
+                    // Leave a 1-tile border of walls around the map edge
+                    if (x > 0 && x < this.cols - 1 && y > 0 && y < this.rows - 1) {
+                        this.grid[y * this.cols + x] = 1;
+                    }
+                }
             }
         }
     }
 
-    carveCorridor(start, end) {
+    carveWobblyCorridor(start, end) {
         let x = start.x;
         let y = start.y;
 
-        while (x !== end.x || y !== end.y) {
-            if (Math.random() > 0.5) {
-                if (x < end.x) x++;
-                else if (x > end.x) x--;
-            } else {
-                if (y < end.y) y++;
-                else if (y > end.y) y--;
+        // 2-wide brush size
+        const brushSize = 2;
+
+        // Safety counter to prevent infinite loops
+        let maxSteps = 1000; 
+
+        while ((x !== end.x || y !== end.y) && maxSteps > 0) {
+            maxSteps--;
+
+            // Paint 2x2 brush
+            for (let by = 0; by < brushSize; by++) {
+                for (let bx = 0; bx < brushSize; bx++) {
+                    const px = x + bx;
+                    const py = y + by;
+                    if (px > 0 && px < this.cols - 1 && py > 0 && py < this.rows - 1) {
+                        this.grid[py * this.cols + px] = 1;
+                    }
+                }
             }
-            this.grid[y * this.cols + x] = 1;
+
+            let dx = end.x - x;
+            let dy = end.y - y;
+
+            // Wobble chance (30%) - drift perpendicular or random
+            if (Math.random() < 0.30 && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+                if (Math.random() < 0.5) {
+                    x += (Math.random() < 0.5 ? 1 : -1);
+                } else {
+                    y += (Math.random() < 0.5 ? 1 : -1);
+                }
+            } else {
+                // Move towards target
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    x += Math.sign(dx);
+                } else {
+                    y += Math.sign(dy);
+                }
+            }
         }
+    }
+
+    applyCellularAutomata(passes) {
+        for (let p = 0; p < passes; p++) {
+            let newGrid = [...this.grid];
+            for (let y = 1; y < this.rows - 1; y++) {
+                for (let x = 1; x < this.cols - 1; x++) {
+                    let walls = this.countAdjacentWalls(x, y);
+                    
+                    if (this.grid[y * this.cols + x] === 0) {
+                        // Wall -> Floor if surrounded by mostly floors (smooths sharp outer corners)
+                        if (walls < 3) newGrid[y * this.cols + x] = 1;
+                    } else {
+                        // Floor -> Wall if surrounded by mostly walls (fills in tight 1-tile gaps)
+                        if (walls >= 5) newGrid[y * this.cols + x] = 0;
+                    }
+                }
+            }
+            this.grid = newGrid;
+        }
+    }
+
+    countAdjacentWalls(x, y) {
+        let count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                // Treat out of bounds as walls
+                if (x + dx < 0 || x + dx >= this.cols || y + dy < 0 || y + dy >= this.rows) {
+                    count++;
+                } else if (this.grid[(y + dy) * this.cols + (x + dx)] === 0) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     getTile(x, y) {
@@ -77,7 +180,7 @@ class MapGen {
     }
 
     getStartPos() {
-        if (this.rooms.length === 0) return { x: 0, y: 0 };
+        if (this.rooms.length === 0) return { x: 50, y: 50 }; // Fallback
         return {
             x: this.rooms[0].center.x * this.tileSize + this.tileSize / 2,
             y: this.rooms[0].center.y * this.tileSize + this.tileSize / 2

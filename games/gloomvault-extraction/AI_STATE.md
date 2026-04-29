@@ -10,7 +10,7 @@ A real-time top-down 3/4 perspective dungeon crawler with extraction mechanics a
 *   **Perspective:** Top-down 3/4 view (not true isometric).
 *   **Engine:** Custom `requestAnimationFrame` loop in `js/core/GameEngine.js`.
 *   **Rendering:** Canvas 2D. Currently using placeholder geometric shapes, but `js/core/Renderer.js` is structured to support sprite sheets with 5-10 frames per animation in the future.
-*   **World:** Procedurally generated continuous grid (rooms and 1-tile wide corridors) via `js/systems/MapGen.js`.
+*   **World:** Procedurally generated continuous grid (Cluster Blob rooms, 2-tile wide wobbling cave corridors, and cellular automata smoothing) via `js/systems/MapGen.js`.
 *   **Input:** WASD movement, Mouse aiming (relative to camera), Shift to dodge. Handled by `js/core/Input.js`.
 
 ## 🟢 Current State (Phase 2 Completed)
