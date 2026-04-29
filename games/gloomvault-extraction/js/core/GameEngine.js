@@ -78,54 +78,8 @@ class GameEngine {
 
         // Update player
         if (this.player) {
-            // Predict next position
-            const oldX = this.player.x;
-            const oldY = this.player.y;
+            this.player.update(dt, this.input, this.camera, this.mapGen);
             
-            this.player.update(dt, this.input, this.camera);
-            
-            // Tile-based Collision Detection (Circle vs Rect)
-            const checkRadius = this.player.width / 2;
-            const leftTile = Math.floor((this.player.x - checkRadius) / this.tileSize);
-            const rightTile = Math.floor((this.player.x + checkRadius) / this.tileSize);
-            const topTile = Math.floor((this.player.y - checkRadius) / this.tileSize);
-            const bottomTile = Math.floor((this.player.y + checkRadius) / this.tileSize);
-            
-            // Check the 4 corners of the bounding box
-            let collision = false;
-            for (let y = topTile; y <= bottomTile; y++) {
-                for (let x = leftTile; x <= rightTile; x++) {
-                    if (this.mapGen.getTile(x, y) === 0) { // Wall
-                        collision = true;
-                        break;
-                    }
-                }
-            }
-
-            if (collision) {
-                // Determine slide vector by checking X and Y individually
-                let collideX = false;
-                let collisionY = false;
-
-                // Revert to old and test X
-                this.player.x = oldX;
-                for (let y = Math.floor((this.player.y - checkRadius)/this.tileSize); y <= Math.floor((this.player.y + checkRadius)/this.tileSize); y++) {
-                    for (let x = Math.floor((this.player.x + (this.player.x > oldX ? checkRadius : -checkRadius))/this.tileSize); x <= Math.floor((this.player.x + (this.player.x > oldX ? checkRadius : -checkRadius))/this.tileSize); x++) {
-                        if (this.mapGen.getTile(x, y) === 0) collideX = true;
-                    }
-                }
-                
-                // Test Y
-                this.player.x = oldX + (collideX ? 0 : (this.player.x - oldX));
-                this.player.y = oldY;
-                for (let y = Math.floor((this.player.y + (this.player.y > oldY ? checkRadius : -checkRadius))/this.tileSize); y <= Math.floor((this.player.y + (this.player.y > oldY ? checkRadius : -checkRadius))/this.tileSize); y++) {
-                    for (let x = Math.floor((this.player.x - checkRadius)/this.tileSize); x <= Math.floor((this.player.x + checkRadius)/this.tileSize); x++) {
-                        if (this.mapGen.getTile(x, y) === 0) collisionY = true;
-                    }
-                }
-                this.player.y = oldY + (collisionY ? 0 : (this.player.y - oldY));
-            }
-
             // Update camera to follow player
             this.camera.follow(this.player);
         }

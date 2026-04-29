@@ -17,7 +17,7 @@ class Player {
         this.dodgeCooldownTimer = 0;
     }
 
-    update(dt, input, camera) {
+    update(dt, input, camera, mapGen) {
         // Handle dodge input
         if (input.isKeyDown('ShiftLeft') && !this.isDodging && this.dodgeCooldownTimer <= 0) {
             this.isDodging = true;
@@ -52,9 +52,18 @@ class Player {
             }
         }
 
-        // Apply movement
+        // Apply movement with separated axis collision for sliding
+        const oldX = this.x;
         this.x += vx * dt;
+        if (this.checkCollision(mapGen)) {
+            this.x = oldX;
+        }
+
+        const oldY = this.y;
         this.y += vy * dt;
+        if (this.checkCollision(mapGen)) {
+            this.y = oldY;
+        }
 
         // Update dodge cooldown
         if (this.dodgeCooldownTimer > 0) {
@@ -69,6 +78,33 @@ class Player {
             
             this.angle = Math.atan2(worldMouse.y - this.y, worldMouse.x - this.x);
         }
+    }
+
+    checkCollision(mapGen) {
+        if (!mapGen) return false;
+
+        const checkRadius = this.width / 2;
+        const leftTile = Math.floor((this.x - checkRadius) / mapGen.tileSize);
+        const rightTile = Math.floor((this.x + checkRadius) / mapGen.tileSize);
+        const topTile = Math.floor((this.y - checkRadius) / mapGen.tileSize);
+        const bottomTile = Math.floor((this.y + checkRadius) / mapGen.tileSize);
+
+        // Map bounds check
+        if (this.x - checkRadius < 0 || this.x + checkRadius > mapGen.cols * mapGen.tileSize ||
+            this.y - checkRadius < 0 || this.y + checkRadius > mapGen.rows * mapGen.tileSize) {
+            return true;
+        }
+
+        // Tile collision check
+        for (let y = topTile; y <= bottomTile; y++) {
+            for (let x = leftTile; x <= rightTile; x++) {
+                if (mapGen.getTile(x, y) === 0) { // 0 is wall
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     render(ctx, renderer) {
