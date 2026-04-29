@@ -13,26 +13,20 @@ A real-time top-down 3/4 perspective dungeon crawler with extraction mechanics a
 *   **World:** Procedurally generated continuous grid (Cluster Blob rooms, 2-tile wide wobbling cave corridors, and cellular automata smoothing) via `js/systems/MapGen.js`. Configurations are externalized in `js/config/MapConfig.js`.
 *   **Input:** WASD movement, Mouse aiming (relative to camera), Shift to dodge. Handled by `js/core/Input.js`.
 
-## 🟢 Current State (Phase 3 Completed)
+## 🟢 Current State (Phase 4 Completed)
 *   **Menu Shell:** `index.html` and `style.css` implemented for screen switching.
 *   **Core Engine:** Active. Delta time, update/render loops, and AABB separated-axis wall collision are working perfectly.
 *   **Camera:** Follows the player and culls off-screen rendering.
 *   **Player:** Can move, dodge (with cooldown), and aim towards the mouse cursor. Base Entity class implemented for health.
 *   **Combat:** Primary attack (Left Click) spawns projectiles with cooldowns. Projectiles collide with walls and disappear, spawning floating text feedback.
 *   **Map:** Dynamically generates organic cave/dungeon hybrids based on `MapConfig.js`.
+*   **Pathfinding & AI:** A* Pathfinding system active. Enemy base class implemented with Grunt (chase/flee), Ranged (kite/shoot), and Brute (telegraph/dash) behaviors. Support for elite modifiers (fast/vampiric).
+*   **Combat Resolution:** Projectiles correctly filter collisions based on ownership (Player vs Enemy). Damage numbers pop up on hit, and dead enemies are removed.
 
 ---
 
 ## 🚀 Execution Roadmap for AI Agents
 When starting a new session, pick the lowest incomplete phase and execute it entirely.
-
-### 👹 Phase 4: Advanced Enemy AI & Spawning
-1.  **A* Pathfinding:** Create `js/systems/Pathfinder.js` implementing the A* algorithm mapped to the `MapGen` grid to navigate organic corridors perfectly.
-2.  **Complex Behaviors:** Create `js/entities/Enemy.js` with distinct state-machine behaviors:
-    *   *Grunt:* Chases directly. Flees briefly when HP < 20%.
-    *   *Ranged:* Uses A* to maintain a specific distance (kites the player) while shooting projectiles.
-    *   *Brute:* Slow, high HP, telegraphs a straight-line dash attack.
-3.  **Elite Modifiers:** Implement logic to randomly assign affixes to enemies (e.g., "Fast", "Vampiric") that alter their base stats and rendering color.
 
 ### 🎒 Phase 5: Loot & HTML DOM Inventory
 1.  **Loot Generation:** Create `js/systems/LootGen.js` to roll Gear Score (depth-based), Rarity (Common/Epic/Legendary), and modifiers.
