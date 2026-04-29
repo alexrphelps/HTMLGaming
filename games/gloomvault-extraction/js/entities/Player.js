@@ -5,6 +5,9 @@ class Player extends Entity {
         this.color = '#8a2be2';
         this.angle = 0; // facing direction
 
+        // Equip a default weapon
+        this.weapon = new Weapon();
+
         // Dodge Mechanics
         this.isDodging = false;
         this.dodgeSpeed = 600;
@@ -67,6 +70,11 @@ class Player extends Entity {
             this.dodgeCooldownTimer -= dt;
         }
 
+        // Update weapon cooldowns
+        if (this.weapon) {
+            this.weapon.update(dt);
+        }
+
         // Update facing angle based on mouse
         if (camera && input.mouse) {
             const screenX = input.mouse.x;
@@ -75,6 +83,16 @@ class Player extends Entity {
             
             this.angle = Math.atan2(worldMouse.y - this.y, worldMouse.x - this.x);
         }
+
+        // Handle primary attack input
+        const newProjectiles = [];
+        if (input.mouse.down && this.weapon) {
+            const proj = this.weapon.primaryAttack(this.x, this.y, this.angle);
+            if (proj) {
+                newProjectiles.push(proj);
+            }
+        }
+        return newProjectiles; // Return any new projectiles to the GameEngine
     }
 
     checkCollision(mapGen) {
