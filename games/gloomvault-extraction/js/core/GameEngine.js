@@ -18,6 +18,8 @@ class GameEngine {
 
         // Entities
         this.player = null; // initialized in start()
+        this.projectiles = [];
+        this.combatFeedback = new CombatFeedback();
 
         // Game State
         this.lastTime = 0;
@@ -52,6 +54,9 @@ class GameEngine {
         const startPos = this.mapGen.getStartPos();
         this.player = new Player(startPos.x, startPos.y);
 
+        this.projectiles = []; // Reset projectiles
+        this.combatFeedback = new CombatFeedback(); // Reset combat feedback
+
         this.state = 'PLAYING';
         this.isRunning = true;
         this.lastTime = performance.now();
@@ -83,11 +88,30 @@ class GameEngine {
 
         // Update player
         if (this.player) {
-            this.player.update(dt, this.input, this.camera, this.mapGen);
+            const newProjectiles = this.player.update(dt, this.input, this.camera, this.mapGen);
+            if (newProjectiles && newProjectiles.length > 0) {
+                this.projectiles.push(...newProjectiles);
+            }
             
             // Update camera to follow player
             this.camera.follow(this.player);
         }
+
+        // Update Projectiles
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            let proj = this.projectiles[i];
+            proj.update(dt, this.mapGen);
+            if (proj.markedForDeletion) {
+                // If it died hitting a wall, show feedback
+                if (proj.timer < proj.lifetime) {
+                    this.combatFeedback.addText('Block', proj.x, proj.y, '#aaaaaa', 12, 0.5);
+                }
+                this.projectiles.splice(i, 1);
+            }
+        }
+
+        // Update Combat Feedback
+        this.combatFeedback.update(dt);
     }
 
     render(dt) {
@@ -125,7 +149,15 @@ class GameEngine {
             this.player.render(this.ctx, this.renderer);
         }
 
-        // 3. Draw UI Overlay
+        // 3. Draw Projectiles
+        for (let p of this.projectiles) {
+            p.render(this.ctx, this.renderer);
+        }
+
+        // 4. Draw Combat Feedback
+        this.combatFeedback.render(this.ctx, this.renderer);
+
+        // 5. Draw UI Overlay
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '16px monospace';
         this.ctx.fillText(`FPS: ${Math.round(1 / (performance.now() - this.lastTime) * 1000)}`, 10, 20);
