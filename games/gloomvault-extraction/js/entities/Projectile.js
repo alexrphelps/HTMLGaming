@@ -1,10 +1,11 @@
 class Projectile extends Entity {
-    constructor(x, y, angle, speed, damage, lifetime) {
+    constructor(x, y, angle, speed, damage, lifetime, isPlayerOwned = true) {
         super(x, y, 10, 10, 1);
         this.angle = angle;
         this.speed = speed;
         this.damage = damage;
         this.lifetime = lifetime;
+        this.isPlayerOwned = isPlayerOwned;
         this.timer = 0;
         this.markedForDeletion = false;
     }
@@ -57,7 +58,7 @@ class Projectile extends Entity {
     render(ctx, renderer) {
         const screenPos = renderer.camera.worldToScreen(this.x, this.y);
         
-        ctx.fillStyle = '#ffff00'; // Glowing yellow/white
+        ctx.fillStyle = this.isPlayerOwned ? '#ffff00' : '#ff0000'; // Glowing yellow/white or red
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, this.width / 2, 0, Math.PI * 2);
         ctx.fill();

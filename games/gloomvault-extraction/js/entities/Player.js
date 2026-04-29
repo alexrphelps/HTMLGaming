@@ -6,7 +6,7 @@ class Player extends Entity {
         this.angle = 0; // facing direction
 
         // Equip a default weapon
-        this.weapon = new Weapon();
+        this.weapon = new Weapon(true);
 
         // Dodge Mechanics
         this.isDodging = false;
