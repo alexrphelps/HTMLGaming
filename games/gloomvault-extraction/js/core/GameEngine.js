@@ -37,6 +37,10 @@ class GameEngine {
 
     start() {
         console.log('🎮 Starting Game Engine Loop');
+        
+        // Ensure canvas is properly sized now that it's visible
+        this.resizeCanvas();
+        
         this.input.attach(this.canvas);
         
         // Generate new level
