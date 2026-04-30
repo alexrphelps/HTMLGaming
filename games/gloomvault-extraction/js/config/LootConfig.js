@@ -105,7 +105,15 @@ const LootConfig = {
             text: '+50 Armor, Cannot Dodge',
             modifiers: [
                 { name: 'Armor', type: 'flat', stat: 'armor', value: 50 },
-                { name: 'Dodge Disabled', type: 'percent_penalty', stat: 'dodgeCooldownMultiplier', value: -1000 } // Essentially disables it
+                { name: 'Dodge Disabled', type: 'flat', stat: 'canDodge', value: -1 } // Disables dodge
+            ]
+        },
+        {
+            name: 'Vampire Lord',
+            text: '+15% Max Lifesteal Cap, -20% Max HP',
+            modifiers: [
+                { name: 'Max Lifesteal Cap', type: 'percent', stat: 'lifestealCapBonus', value: 15 },
+                { name: 'Max HP Penalty', type: 'percent_penalty', stat: 'maxHpMultiplier', value: -20 }
             ]
         }
     ]

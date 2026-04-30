@@ -36,6 +36,8 @@ class Player extends Entity {
             trinket2: 0
         };
 
+        this.activeHoTs = [];
+
         // Base Stats (Unmodified)
         this.baseStats = {
             maxHp: 100,
@@ -45,11 +47,13 @@ class Player extends Entity {
             movementSpeedMultiplier: 1.0,
             flatDamage: 0,
             lifesteal: 0,
+            lifestealCapBonus: 0,
             cooldownReduction: 0,
             armor: 0,
             damageReduction: 0,
             thorns: 0,
             dodgeCooldownMultiplier: 1.0,
+            canDodge: 1,
             maxHpMultiplier: 1.0,
             armorMultiplier: 1.0
         };
@@ -114,7 +118,7 @@ class Player extends Entity {
         }
 
         // Apply derived stats
-        this.stats.maxHp = this.baseStats.maxHp * this.stats.maxHpMultiplier;
+        this.stats.maxHp = this.stats.maxHp * this.stats.maxHpMultiplier;
         this.maxHp = this.stats.maxHp;
         
         this.stats.armor = this.stats.armor * this.stats.armorMultiplier;
@@ -179,6 +183,15 @@ class Player extends Entity {
                     this.abilityCooldowns[slot] = 0; 
                 }
                 break;
+            case 'hot':
+                this.activeHoTs.push({
+                    amountPerSecond: ability.value / ability.duration,
+                    durationLeft: ability.duration
+                });
+                if (particleSystem) {
+                    particleSystem.emitImpact(this.x, this.y, '#00ff00', 10);
+                }
+                break;
         }
         return projectiles;
     }
@@ -187,7 +200,7 @@ class Player extends Entity {
         // Handle dodge input
         const currentDodgeCooldown = this.dodgeCooldown * Math.max(0.2, this.stats.dodgeCooldownMultiplier);
         
-        if (input.isKeyDown('ShiftLeft') && !this.isDodging && this.dodgeCooldownTimer <= 0) {
+        if (input.isKeyDown('ShiftLeft') && !this.isDodging && this.dodgeCooldownTimer <= 0 && this.stats.canDodge > 0) {
             this.isDodging = true;
             this.dodgeTimer = this.dodgeTime;
             this.dodgeCooldownTimer = currentDodgeCooldown;
@@ -251,6 +264,17 @@ class Player extends Entity {
         // Update trinket cooldowns
         if (this.abilityCooldowns.trinket1 > 0) this.abilityCooldowns.trinket1 -= dt;
         if (this.abilityCooldowns.trinket2 > 0) this.abilityCooldowns.trinket2 -= dt;
+
+        // Process active HoTs
+        for (let i = this.activeHoTs.length - 1; i >= 0; i--) {
+            const hot = this.activeHoTs[i];
+            const healAmount = hot.amountPerSecond * dt;
+            this.hp = Math.min(this.maxHp, this.hp + healAmount);
+            hot.durationLeft -= dt;
+            if (hot.durationLeft <= 0) {
+                this.activeHoTs.splice(i, 1);
+            }
+        }
 
         // Update facing angle based on mouse
         if (camera && input.mouse) {

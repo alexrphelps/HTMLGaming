@@ -43,6 +43,7 @@ class GameEngine {
         this.enemies = [];
         this.projectiles = [];
         this.droppedItems = [];
+        this.lootChests = [];
         this.combatFeedback = new CombatFeedback();
         this.particleSystem = new ParticleSystem();
         this.lootGen = new LootGen();
@@ -98,6 +99,7 @@ class GameEngine {
         this.projectiles = []; // Reset projectiles
         this.enemies = []; // Reset enemies
         this.droppedItems = []; // Reset dropped items
+        this.lootChests = []; // Reset loot chests
         this.combatFeedback = new CombatFeedback(); // Reset combat feedback
         this.particleSystem = new ParticleSystem(); // Reset particles
 
@@ -118,6 +120,18 @@ class GameEngine {
             this.portal = new ExtractionPortal(validPortalPos.x, validPortalPos.y);
         } else {
             this.portal = null;
+        }
+
+        // Spawn Loot Chest (low chance, 5%)
+        if (Math.random() < 0.05) {
+            const validRooms = rooms.slice(1); // Exclude starting room
+            if (validRooms.length > 0) {
+                const targetRoom = validRooms[Math.floor(Math.random() * validRooms.length)];
+                const chestPos = this.mapGen.getValidFloorPosNear(targetRoom.center.x, targetRoom.center.y);
+                if (chestPos) {
+                    this.lootChests.push(new LootChest(chestPos.x, chestPos.y));
+                }
+            }
         }
 
         this.state = 'PLAYING';
@@ -234,10 +248,24 @@ class GameEngine {
                 // Check collision with enemies
                 for (let e of this.enemies) {
                     if (Math.hypot(e.x - proj.x, e.y - proj.y) < (e.width/2 + proj.width/2)) {
+                        let actualDamage = Math.max(0, Math.min(e.hp, proj.damage));
                         e.takeDamage(proj.damage);
                         this.camera.shake(3, 0.1); // Small shake for enemy hits
                         this.combatFeedback.addText(`-${proj.damage}`, e.x, e.y, '#ffffff', 14, 0.8);
                         this.particleSystem.emitImpact(e.x, e.y, '#ffffff');
+
+                        let lsCap = (typeof CombatConfig !== 'undefined' ? CombatConfig.caps.lifesteal : 0.35) + (this.player.stats.lifestealCapBonus || 0);
+                        let effectiveLifesteal = Math.min(this.player.stats.lifesteal || 0, lsCap);
+                        if (effectiveLifesteal > 0) {
+                            let healAmount = actualDamage * effectiveLifesteal;
+                            if (healAmount > 0 && this.player.hp < this.player.maxHp) {
+                                this.player.hp = Math.min(this.player.maxHp, this.player.hp + healAmount);
+                                if (healAmount >= 1) {
+                                    this.combatFeedback.addText(`+${Math.round(healAmount)}`, this.player.x, this.player.y - 20, '#00ff00', 14, 0.8);
+                                }
+                            }
+                        }
+
                         hit = true;
                         break;
                     }
@@ -286,6 +314,21 @@ class GameEngine {
             }
         }
 
+        // Update Loot Chests
+        let closestChest = null;
+        let chestDistance = Infinity;
+        for (let i = this.lootChests.length - 1; i >= 0; i--) {
+            let chest = this.lootChests[i];
+            chest.update(dt);
+            if (this.player && !chest.opened) {
+                const dist = Math.hypot(this.player.x - chest.x, this.player.y - chest.y);
+                if (dist <= chest.interactionRadius && dist < chestDistance) {
+                    closestChest = chest;
+                    chestDistance = dist;
+                }
+            }
+        }
+
         const interactionHint = document.getElementById('interaction-hint');
         if (nearPortal) {
             interactionHint.textContent = 'Press [F] to Extract';
@@ -294,6 +337,14 @@ class GameEngine {
             if (this.input.isKeyDown('KeyF')) {
                 this.input.keys['KeyF'] = false;
                 this.extract();
+            }
+        } else if (closestChest) {
+            interactionHint.textContent = 'Press [F] to Open Chest';
+            interactionHint.classList.remove('hidden');
+
+            if (this.input.isKeyDown('KeyF')) {
+                this.input.keys['KeyF'] = false;
+                closestChest.interact(this.player, this);
             }
         } else if (closestItem) {
             interactionHint.textContent = 'Press [F] to Pick Up';
@@ -333,7 +384,7 @@ class GameEngine {
             if (hpBarFill && hpBarText) {
                 const hpPercent = Math.max(0, (this.player.hp / this.player.maxHp) * 100);
                 hpBarFill.style.width = `${hpPercent}%`;
-                hpBarText.textContent = `${Math.ceil(this.player.hp)} / ${this.player.maxHp}`;
+                hpBarText.textContent = `${Math.ceil(this.player.hp)} / ${Math.ceil(this.player.maxHp)}`;
                 
                 // Color fading logic
                 if (hpPercent < 10) {
@@ -466,6 +517,11 @@ class GameEngine {
         // 4. Draw Projectiles
         for (let p of this.projectiles) {
             p.render(this.ctx, this.renderer);
+        }
+
+        // Draw Loot Chests
+        for (let chest of this.lootChests) {
+            chest.render(this.ctx, this.renderer);
         }
 
         // 5. Draw Dropped Items

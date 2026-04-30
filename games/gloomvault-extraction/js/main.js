@@ -453,6 +453,28 @@ function loadStashData() {
         });
     }
 
+    // Salvage All Common button
+    const btnSalvageAllCommon = document.getElementById('btn-salvage-all-common');
+    if (btnSalvageAllCommon) {
+        btnSalvageAllCommon.addEventListener('click', () => {
+            let salvagedAny = false;
+            for (let i = 0; i < currentLoot.length; i++) {
+                const item = currentLoot[i];
+                if (item && item.rarity === 'Common') {
+                    const value = UpgradeSystem.getSalvageValue(item);
+                    scraps += value;
+                    currentLoot[i] = null; // Remove item
+                    salvagedAny = true;
+                }
+            }
+            if (salvagedAny) {
+                saveStashData();
+                updateExtractionUI();
+                hideTooltip();
+            }
+        });
+    }
+
     // Finish button
     const btnFinishExtraction = document.getElementById('btn-finish-extraction');
     if(btnFinishExtraction) {
@@ -855,5 +877,15 @@ function loadStashData() {
         const dodgeCd = engine.player.dodgeCooldown * Math.max(0.2, engine.player.stats.dodgeCooldownMultiplier || 1.0);
         document.getElementById('stat-dodge').textContent = dodgeCd.toFixed(2) + 's';
         document.getElementById('stat-thorns').textContent = Math.round(engine.player.stats.thorns || 0);
+
+        let baseLsCap = typeof CombatConfig !== 'undefined' ? CombatConfig.caps.lifesteal : 0.35;
+        let currentLsCap = baseLsCap + (engine.player.stats.lifestealCapBonus || 0);
+        let totalLs = engine.player.stats.lifesteal || 0;
+        let effectiveLs = Math.min(totalLs, currentLsCap);
+        let lsText = `${Math.round(effectiveLs * 100)}%`;
+        if (Math.round(totalLs * 100) > Math.round(currentLsCap * 100)) {
+            lsText += ` (${Math.round(totalLs * 100)}%)`;
+        }
+        document.getElementById('stat-ls').textContent = lsText;
     }
 });

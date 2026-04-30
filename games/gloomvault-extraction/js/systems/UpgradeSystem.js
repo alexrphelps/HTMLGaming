@@ -61,6 +61,10 @@ class UpgradeSystem {
                 ability.speed += 50;
                 ability.text = `A swift directional dash at ${ability.speed} speed (${ability.cooldown}s CD)`;
                 break;
+            case 'hot':
+                ability.duration = Math.max(5, ability.duration - 2);
+                ability.text = `Restores ${ability.value} HP over ${ability.duration} seconds (${ability.cooldown}s CD)`;
+                break;
         }
     }
 

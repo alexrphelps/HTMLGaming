@@ -82,8 +82,9 @@
                     <h3>Loot (Click/Drag to Stash)</h3>
                     <div class="inventory-grid" id="extract-loot-grid" style="display: grid; grid-template-columns: repeat(5, 1fr);"></div>
                 </div>
-                <div style="display: flex; align-items: center;">
+                <div style="display: flex; flex-direction: column; gap: 10px; justify-content: center; align-items: center;">
                     <button id="btn-stash-all" class="menu-btn" style="padding: 10px 20px; font-size: 1.2rem; min-width: 150px;">Stash All &raquo;</button>
+                    <button id="btn-salvage-all-common" class="menu-btn" style="padding: 10px 20px; font-size: 1rem; min-width: 150px; border-color: var(--color-danger); color: var(--color-danger);">Salvage All Common</button>
                 </div>
                 <div class="backpack-panel" style="flex: 0 1 400px; min-width: 0;">
                     <h3>Stash</h3>
@@ -166,6 +167,7 @@
                                 <li>Damage Red.: <span id="stat-dr">0%</span></li>
                                 <li>Dodge CD: <span id="stat-dodge">1.0s</span></li>
                                 <li>Thorns: <span id="stat-thorns">0</span></li>
+                                <li>Lifesteal: <span id="stat-ls">0% (0%)</span></li>
                             </ul>
                         </div>
                     </div>
@@ -192,6 +194,7 @@
     <script src="js/entities/Entity.js"></script>
     <script src="js/entities/DroppedItem.js"></script>
     <script src="js/entities/ExtractionPortal.js"></script>
+    <script src="js/entities/LootChest.js"></script>
     <script src="js/systems/MapGen.js"></script>
     <script src="js/systems/UpgradeSystem.js"></script>
     <script src="js/systems/Weapon.js"></script>

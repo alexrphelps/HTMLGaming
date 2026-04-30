@@ -29,7 +29,8 @@ class LootGen {
         this.trinketAbilities = [
             { type: 'heal', value: 50, cooldown: 15, name: 'Healing Surge', text: 'Use to heal 50 HP (15s CD)' },
             { type: 'nova', damage: 40, projectiles: 8, cooldown: 8, name: 'Arcane Nova', text: 'Fires 8 projectiles around you (8s CD)' },
-            { type: 'dash', speed: 800, time: 0.3, cooldown: 5, name: 'Phase Shift', text: 'A swift directional dash at 800 speed (5s CD)' }
+            { type: 'dash', speed: 800, time: 0.3, cooldown: 5, name: 'Phase Shift', text: 'A swift directional dash at 800 speed (5s CD)' },
+            { type: 'hot', value: 25, duration: 15, cooldown: 20, name: 'Regeneration Potion', text: 'Restores 25 HP over 15 seconds (20s CD)' }
         ];
     }
 
@@ -150,6 +151,13 @@ class LootGen {
         if (type.slot === 'trinket') {
             const baseAbility = this.trinketAbilities[Math.floor(Math.random() * this.trinketAbilities.length)];
             activeAbility = JSON.parse(JSON.stringify(baseAbility));
+
+            if (activeAbility.type === 'hot') {
+                if (rarity.name === 'Common') activeAbility.value = 25;
+                if (rarity.name === 'Epic') activeAbility.value = 50;
+                if (rarity.name === 'Legendary') activeAbility.value = 75;
+                activeAbility.text = `Restores ${activeAbility.value} HP over ${activeAbility.duration} seconds (${activeAbility.cooldown}s CD)`;
+            }
         }
 
         // 7. Roll Boons/Curses (Traits) for Epic and Legendary

@@ -7,7 +7,7 @@ const CombatConfig = {
     caps: {
         damageReduction: 0.75, // 75% max damage reduction
         dodgeCooldownReduction: 0.60, // 60% max dodge cooldown reduction
-        lifesteal: 0.20 // 20% max lifesteal
+        lifesteal: 0.35 // 35% max lifesteal
     },
 
     // Calculate final damage taken
