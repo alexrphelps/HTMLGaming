@@ -7,7 +7,7 @@ class FloorTransition extends Entity {
         this.pulse = 0;
         this.activated = false;
         this.enemiesNearby = false;
-        this.enemyCheckRadius = 150;
+        this.enemyCheckRadius = 300;
     }
 
     update(dt, enemies = []) {

@@ -6,7 +6,7 @@ class ExtractionPortal extends Entity {
         this.closedRadius = 40;
         this.pulse = 0;
         this.enemiesNearby = false;
-        this.enemyCheckRadius = 150;
+        this.enemyCheckRadius = 300;
     }
 
     update(dt, enemies = []) {
