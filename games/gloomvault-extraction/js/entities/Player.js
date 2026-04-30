@@ -18,6 +18,13 @@ class Player extends Entity {
         this.dodgeCooldown = 1.0; // seconds
         this.dodgeCooldownTimer = 0;
 
+        // Melee lunge
+        this.isLunging = false;
+        this.lungeTimer = 0;
+        this.lungeDuration = 0.1;
+        this.lungeSpeed = 500;
+        this.lungeAngle = 0;
+
         // Inventory & Equipment
         this.inventory = new Array(25).fill(null); // 5x5 grid
         this.equipment = {
@@ -112,14 +119,33 @@ class Player extends Entity {
             super.takeDamage(damageToHp);
         }
         
+        // Degrade armor durability on damage taken
+        if (typeof DurabilityConfig !== 'undefined' && finalDamage > 0) {
+            let anyBroke = false;
+            const armorSlots = ['helm', 'chest', 'pants', 'boots'];
+            for (const slot of armorSlots) {
+                const item = this.equipment[slot];
+                if (!item || item.isStarter || !item.maxDurability || item.durability <= 0) continue;
+                const baseDeg = 1 + Math.floor(finalDamage / DurabilityConfig.armor.damagePerDegPoint);
+                const armorReduction = (item.baseArmor || 0) * DurabilityConfig.armor.armorReductionFactor;
+                const rarityReduction = DurabilityConfig.armor.rarityDegradeReduction[item.rarity] || 0;
+                const finalDeg = Math.max(1, Math.floor(baseDeg * (1 - armorReduction - rarityReduction)));
+                item.durability = Math.max(0, item.durability - finalDeg);
+                if (item.durability <= 0) anyBroke = true;
+            }
+            if (anyBroke) this.recalculateStats();
+        }
+
         return { total: finalDamage, shield: damageToShield, hp: damageToHp };
     }
 
     recalculateStats() {
         
         // Instantiate weapons based on equipment
-        this.weapon1 = this.equipment.weapon ? new Weapon(this.equipment.weapon, true) : null;
-        this.weapon2 = this.equipment.weapon2 ? new Weapon(this.equipment.weapon2, true) : null;
+        const wep1 = this.equipment.weapon;
+        const wep2 = this.equipment.weapon2;
+        this.weapon1 = (wep1 && !(wep1.maxDurability !== undefined && wep1.durability <= 0)) ? new Weapon(wep1, true) : null;
+        this.weapon2 = (wep2 && !(wep2.maxDurability !== undefined && wep2.durability <= 0)) ? new Weapon(wep2, true) : null;
         
         // Reset to base
 
@@ -130,9 +156,10 @@ class Player extends Entity {
         
         for (const slot in this.equipment) {
             const item = this.equipment[slot];
-            if (item && item.modifiers) {
-                activeMods.push(...item.modifiers);
-            }
+            if (!item || !item.modifiers) continue;
+            // Skip broken items (durability 0) - they provide no stats
+            if (item.maxDurability !== undefined && item.durability <= 0) continue;
+            activeMods.push(...item.modifiers);
         }
 
         // Apply modifiers
@@ -174,6 +201,12 @@ class Player extends Entity {
             this.weapon2.cooldown = this.weapon2.baseCooldown / this.stats.attackSpeedMultiplier;
         }
 
+    }
+
+    triggerLunge(angle) {
+        this.isLunging = true;
+        this.lungeTimer = this.lungeDuration;
+        this.lungeAngle = angle;
     }
 
     useTrinketAbility(slot, particleSystem) {
@@ -246,7 +279,22 @@ class Player extends Entity {
         let vx = 0;
         let vy = 0;
 
-        if (this.isDodging) {
+        // Melee lunge movement
+        if (this.isLunging) {
+            this.lungeTimer -= dt;
+            if (this.lungeTimer <= 0) {
+                this.isLunging = false;
+            } else {
+                const lungeVx = Math.cos(this.lungeAngle) * this.lungeSpeed;
+                const lungeVy = Math.sin(this.lungeAngle) * this.lungeSpeed;
+                const oldX = this.x;
+                this.x += lungeVx * dt;
+                if (this.checkCollision(mapGen)) this.x = oldX;
+                const oldY = this.y;
+                this.y += lungeVy * dt;
+                if (this.checkCollision(mapGen)) this.y = oldY;
+            }
+        } else if (this.isDodging) {
             // Dash in facing direction
             vx = Math.cos(this.angle) * this.dodgeSpeed;
             vy = Math.sin(this.angle) * this.dodgeSpeed;
@@ -354,6 +402,17 @@ class Player extends Entity {
             if (projs && projs.length > 0) {
                 newProjectiles.push(...projs);
                 isAttacking = true;
+                
+                if (this.weapon1.weaponType === 'melee_stab') {
+                    this.triggerLunge(this.angle);
+                }
+
+                // Degrade weapon durability
+                const wepItem = this.equipment.weapon;
+                if (wepItem && wepItem.maxDurability && wepItem.durability > 0 && typeof DurabilityConfig !== 'undefined') {
+                    wepItem.durability = Math.max(0, Math.round((wepItem.durability - DurabilityConfig.weapon.degradePerAttack) * 1000) / 1000);
+                    if (wepItem.durability <= 0) this.recalculateStats();
+                }
             }
         }
         
@@ -362,6 +421,17 @@ class Player extends Entity {
             if (projs && projs.length > 0) {
                 newProjectiles.push(...projs);
                 isAttacking = true;
+                
+                if (this.weapon2.weaponType === 'melee_stab') {
+                    this.triggerLunge(this.angle);
+                }
+
+                // Degrade weapon2 durability
+                const wep2Item = this.equipment.weapon2;
+                if (wep2Item && wep2Item.maxDurability && wep2Item.durability > 0 && typeof DurabilityConfig !== 'undefined') {
+                    wep2Item.durability = Math.max(0, Math.round((wep2Item.durability - DurabilityConfig.weapon.degradePerAttack) * 1000) / 1000);
+                    if (wep2Item.durability <= 0) this.recalculateStats();
+                }
             }
         }
 
