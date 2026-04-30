@@ -336,15 +336,27 @@ class GameEngine {
             if (proj.isPlayerOwned) {
                 // Check collision with enemies
                 for (let e of this.enemies) {
+                    if (proj.hitEnemies && proj.hitEnemies.has(e)) continue;
                     if (Math.hypot(e.x - proj.x, e.y - proj.y) < (e.width/2 + proj.width/2)) {
                         let actualDamage = Math.max(0, Math.min(e.hp, proj.damage));
                         e.takeDamage(proj.damage);
-                        this.camera.shake(3, 0.1); // Small shake for enemy hits
+
+                        // Melee gets stronger camera shake + enemy flash
+                        if (proj.isMelee) {
+                            this.camera.shake(5, 0.15);
+                            e.hitFlashTimer = 0.1;
+                        } else {
+                            this.camera.shake(3, 0.1);
+                        }
+
                         this.combatFeedback.addText(`-${proj.damage}`, e.x, e.y, '#ffffff', 14, 0.8);
                         this.particleSystem.emitImpact(e.x, e.y, '#ffffff');
 
+                        // Lifesteal (melee gets bonus)
                         let lsCap = (typeof CombatConfig !== 'undefined' ? CombatConfig.caps.lifesteal : 0.35) + (this.player.stats.lifestealCapBonus || 0);
-                        let effectiveLifesteal = Math.min(this.player.stats.lifesteal || 0, lsCap);
+                        let lifestealRate = this.player.stats.lifesteal || 0;
+                        if (proj.isMelee) lifestealRate += 0.1; // +10% bonus lifesteal for melee
+                        let effectiveLifesteal = Math.min(lifestealRate, lsCap);
                         if (effectiveLifesteal > 0) {
                             let healAmount = actualDamage * effectiveLifesteal;
                             if (healAmount > 0 && this.player.hp < this.player.maxHp) {
@@ -355,8 +367,25 @@ class GameEngine {
                             }
                         }
 
-                        hit = true;
-                        break;
+                        // Knockback (melee only)
+                        if (proj.isMelee && e.applyKnockback) {
+                            const knockAngle = Math.atan2(e.y - this.player.y, e.x - this.player.x);
+                            const knockForce = (proj.weaponType === 'melee_stab') ? 350 : 250;
+                            e.applyKnockback(knockAngle, knockForce);
+                        }
+
+                        // Stagger (melee only)
+                        if (proj.isMelee) {
+                            e.staggerTimer = 0.25;
+                        }
+
+                        if (proj.pierce) {
+                            if (proj.hitEnemies) proj.hitEnemies.add(e);
+                            // Don't set hit=true, projectile continues
+                        } else {
+                            hit = true;
+                            break;
+                        }
                     }
                 }
             } else {
