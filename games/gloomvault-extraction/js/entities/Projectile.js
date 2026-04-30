@@ -3,7 +3,7 @@ class Projectile extends Entity {
         super(x, y, 10, 10, 1);
         this.angle = angle;
         this.speed = speed;
-        this.damage = damage;
+        this.damage = Math.round(damage);
         this.lifetime = lifetime;
         this.isPlayerOwned = isPlayerOwned;
         this.timer = 0;

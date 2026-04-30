@@ -1,3 +1,19 @@
+
+    function ensureStarterEquipment(eq) {
+        if (!eq.weapon) {
+            eq.weapon = { id: 'starter_wep1', name: 'Rusty Glock', type: 'weapon', weaponType: 'pistol', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true };
+        }
+        if (!eq.weapon2) {
+            eq.weapon2 = { id: 'starter_wep2', name: 'Sawed-off Shotgun', type: 'weapon', weaponType: 'shotgun', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true };
+        }
+        const minorHeal = { type: 'heal', value: 25, cooldown: 15, name: 'Minor Heal', text: 'Use to heal 25 HP (15s CD)' };
+        if (!eq.trinket1) {
+            eq.trinket1 = { id: 'starter_tr1', name: 'Health Potion', type: 'trinket', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true, activeAbility: minorHeal };
+        }
+        if (!eq.trinket2) {
+            eq.trinket2 = { id: 'starter_tr2', name: 'Health Potion', type: 'trinket', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true, activeAbility: minorHeal };
+        }
+    }
 class GameEngine {
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
@@ -66,11 +82,15 @@ class GameEngine {
 
         // Load equipment
         try {
-            const savedEq = JSON.parse(localStorage.getItem('gloomvault_equipment'));
-            if (savedEq) {
-                this.player.equipment = savedEq;
-                this.player.recalculateStats();
+            
+            let savedEq = JSON.parse(localStorage.getItem('gloomvault_equipment'));
+            if (!savedEq) {
+                savedEq = { helm: null, chest: null, pants: null, boots: null, weapon: null, weapon2: null, trinket1: null, trinket2: null };
             }
+            ensureStarterEquipment(savedEq);
+            this.player.equipment = savedEq;
+            this.player.recalculateStats();
+
         } catch(e) {
             console.error('Failed to load equipment', e);
         }
@@ -94,9 +114,8 @@ class GameEngine {
         const rooms = this.mapGen.rooms;
         const lastRoom = rooms[rooms.length - 1];
         if (lastRoom) {
-            const portalX = lastRoom.center.x * this.tileSize + this.tileSize / 2;
-            const portalY = lastRoom.center.y * this.tileSize + this.tileSize / 2;
-            this.portal = new ExtractionPortal(portalX, portalY);
+            const validPortalPos = this.mapGen.getValidFloorPosNear(lastRoom.center.x, lastRoom.center.y);
+            this.portal = new ExtractionPortal(validPortalPos.x, validPortalPos.y);
         } else {
             this.portal = null;
         }
@@ -166,6 +185,9 @@ class GameEngine {
             let enemy = this.enemies[i];
             const newEnemyProjectiles = enemy.update(dt, this.player, this.mapGen, this.pathfinder);
             if (newEnemyProjectiles && newEnemyProjectiles.length > 0) {
+                for (const p of newEnemyProjectiles) {
+                    p.owner = enemy;
+                }
                 this.projectiles.push(...newEnemyProjectiles);
             }
 
@@ -205,10 +227,17 @@ class GameEngine {
             } else {
                 // Check collision with player
                 if (Math.hypot(this.player.x - proj.x, this.player.y - proj.y) < (this.player.width/2 + proj.width/2)) {
-                    this.player.takeDamage(proj.damage);
+                    let actualDamage = this.player.takeDamage(proj.damage);
                     this.camera.shake(8, 0.2); // Bigger shake for player taking damage
-                    this.combatFeedback.addText(`-${proj.damage}`, this.player.x, this.player.y, '#ff0000', 16, 1.0);
+                    this.combatFeedback.addText(`-${Math.round(actualDamage)}`, this.player.x, this.player.y, '#ff0000', 16, 1.0);
                     this.particleSystem.emitImpact(this.player.x, this.player.y, '#ff0000');
+                    
+                    // Thorns logic
+                    if (this.player.stats.thorns > 0 && proj.owner) {
+                        proj.owner.takeDamage(this.player.stats.thorns);
+                        this.combatFeedback.addText(`-${Math.round(this.player.stats.thorns)}`, proj.owner.x, proj.owner.y, '#ff00ff', 12, 0.8);
+                    }
+                    
                     hit = true;
                 }
             }
@@ -246,6 +275,7 @@ class GameEngine {
 
             if (this.input.isKeyDown('KeyF')) {
                 this.input.keys['KeyF'] = false;
+                this.extract();
             }
         } else if (closestItem) {
             interactionHint.textContent = 'Press [F] to Pick Up';
@@ -278,13 +308,96 @@ class GameEngine {
         // Update Combat Feedback
         this.combatFeedback.update(dt);
 
-        // Update Health Bar UI
+        // Update UI
         if (this.player) {
-            const hpBar = document.querySelector('.health-bar');
-            if (hpBar) {
-                hpBar.textContent = `HP: ${Math.ceil(this.player.hp)}/${this.player.maxHp}`;
+            const hpBarFill = document.getElementById('player-health-bar-fill');
+            const hpBarText = document.getElementById('player-health-bar-text');
+            if (hpBarFill && hpBarText) {
+                const hpPercent = Math.max(0, (this.player.hp / this.player.maxHp) * 100);
+                hpBarFill.style.width = `${hpPercent}%`;
+                hpBarText.textContent = `${Math.ceil(this.player.hp)} / ${this.player.maxHp}`;
+                
+                // Color fading logic
+                if (hpPercent < 10) {
+                    hpBarFill.style.backgroundColor = '#e74c3c'; // Red
+                } else if (hpPercent < 35) {
+                    hpBarFill.style.backgroundColor = '#e67e22'; // Orange
+                } else {
+                    hpBarFill.style.backgroundColor = '#2ecc71'; // Green
+                }
             }
+
+            this.updateActionBarUI();
         }
+    }
+
+    updateActionBarUI() {
+        if (!this.player) return;
+
+        // Weapon Primary
+        const w1Slot = document.getElementById('slot-weapon1');
+        if (w1Slot && this.player.weapon1) {
+            const icon = w1Slot.querySelector('.action-icon');
+            const cdOverlay = w1Slot.querySelector('.cooldown-overlay');
+            
+            const wepItem = this.player.equipment.weapon;
+            if (wepItem) {
+                icon.style.backgroundColor = wepItem.color;
+                icon.textContent = wepItem.name.split(' ')[0].substring(0, 3);
+            } else {
+                icon.style.backgroundColor = '#555';
+                icon.textContent = 'ATK';
+            }
+
+            const cdPercent = (this.player.weapon1.cooldownTimer / this.player.weapon1.cooldown) * 100;
+            cdOverlay.style.height = `${Math.max(0, Math.min(100, cdPercent))}%`;
+        }
+
+        // Weapon Secondary
+        const w2Slot = document.getElementById('slot-weapon2');
+        if (w2Slot && this.player.weapon2) {
+            const icon = w2Slot.querySelector('.action-icon');
+            const cdOverlay = w2Slot.querySelector('.cooldown-overlay');
+            
+            const wepItem = this.player.equipment.weapon2;
+            if (wepItem) {
+                icon.style.backgroundColor = wepItem.color;
+                icon.textContent = 'SEC';
+            } else {
+                icon.style.backgroundColor = '#555';
+                icon.textContent = 'SEC';
+            }
+
+            const cdPercent = (this.player.weapon2.cooldownTimer / this.player.weapon2.cooldown) * 100;
+            cdOverlay.style.height = `${Math.max(0, Math.min(100, cdPercent))}%`;
+        }
+
+        // Trinkets
+        const cdr = Math.min(0.75, this.player.stats.cooldownReduction || 0);
+        
+        ['trinket1', 'trinket2'].forEach(slotName => {
+            const slot = document.getElementById(`slot-${slotName}`);
+            if (slot) {
+                const icon = slot.querySelector('.action-icon');
+                const cdOverlay = slot.querySelector('.cooldown-overlay');
+                const item = this.player.equipment[slotName];
+
+                if (item && item.activeAbility) {
+                    icon.style.backgroundColor = item.color;
+                    icon.textContent = item.name.split(' ')[0].substring(0, 3);
+                    
+                    const maxCd = item.activeAbility.cooldown * (1 - cdr);
+                    const currentCd = this.player.abilityCooldowns[slotName];
+                    const cdPercent = maxCd > 0 ? (currentCd / maxCd) * 100 : 0;
+                    
+                    cdOverlay.style.height = `${Math.max(0, Math.min(100, cdPercent))}%`;
+                } else {
+                    icon.style.backgroundColor = 'transparent';
+                    icon.textContent = '';
+                    cdOverlay.style.height = '0%';
+                }
+            }
+        });
     }
 
     render(dt) {

@@ -1,18 +1,68 @@
 class Weapon {
-    constructor(isPlayerOwned = true) {
+    constructor(itemData, isPlayerOwned = true) {
         this.isPlayerOwned = isPlayerOwned;
+        this.itemData = itemData;
+        
+        // Default values
         this.baseDamage = 25;
-        this.damage = 25;
-        this.baseCooldown = 0.3; // seconds between attacks
-        this.cooldown = 0.3;
-        
-        // Secondary ability
-        this.baseSecondaryCooldown = 2.0;
-        this.secondaryCooldown = 2.0;
-        this.secondaryCooldownTimer = 0;
-        
-        this.projectileSpeed = 600; // pixels per second
-        this.lifetime = 1.5; // seconds before projectile fizzles
+        this.baseCooldown = 0.3;
+        this.projectileSpeed = 600;
+        this.lifetime = 1.5;
+        this.weaponType = itemData ? (itemData.weaponType || 'pistol') : 'pistol';
+        this.spread = 0;
+        this.projectileCount = 1;
+
+        // Configure based on weaponType
+        switch(this.weaponType) {
+            case 'pistol':
+                this.baseDamage = 20;
+                this.baseCooldown = 0.4;
+                this.projectileSpeed = 700;
+                this.lifetime = 1.0;
+                this.projectileCount = 1;
+                break;
+            case 'shotgun':
+                this.baseDamage = 15; // per pellet
+                this.baseCooldown = 1.0;
+                this.projectileSpeed = 600;
+                this.lifetime = 0.4;
+                this.projectileCount = 5;
+                this.spread = 0.4; // radians total spread
+                break;
+            case 'assault_rifle':
+                this.baseDamage = 12;
+                this.baseCooldown = 0.15;
+                this.projectileSpeed = 800;
+                this.lifetime = 1.0;
+                this.projectileCount = 1;
+                this.spread = 0.1;
+                break;
+            case 'sniper':
+                this.baseDamage = 80;
+                this.baseCooldown = 1.5;
+                this.projectileSpeed = 1500;
+                this.lifetime = 2.0;
+                this.projectileCount = 1;
+                break;
+            case 'melee_stab':
+                this.baseDamage = 35;
+                this.baseCooldown = 0.5;
+                this.projectileSpeed = 400;
+                this.lifetime = 0.15; // very short range
+                this.projectileCount = 1;
+                break;
+            case 'melee_cleave':
+                this.baseDamage = 30;
+                this.baseCooldown = 0.8;
+                this.projectileSpeed = 300;
+                this.lifetime = 0.2;
+                this.projectileCount = 3;
+                this.spread = 0.8;
+                break;
+        }
+
+        this.damage = this.baseDamage;
+        this.cooldown = this.baseCooldown;
         this.cooldownTimer = 0;
     }
 
@@ -20,36 +70,29 @@ class Weapon {
         if (this.cooldownTimer > 0) {
             this.cooldownTimer -= dt;
         }
-        if (this.secondaryCooldownTimer > 0) {
-            this.secondaryCooldownTimer -= dt;
-        }
     }
 
-    primaryAttack(x, y, angle) {
+    attack(x, y, angle) {
         if (this.cooldownTimer <= 0) {
             this.cooldownTimer = this.cooldown;
-            // Spawn a new projectile slightly in front of the player
-            const spawnX = x + Math.cos(angle) * 15;
-            const spawnY = y + Math.sin(angle) * 15;
-            return [new Projectile(spawnX, spawnY, angle, this.projectileSpeed, this.damage, this.lifetime, this.isPlayerOwned)];
-        }
-        return null; // On cooldown
-    }
-    
-    secondaryAttack(x, y, angle) {
-        if (this.secondaryCooldownTimer <= 0) {
-            this.secondaryCooldownTimer = this.secondaryCooldown;
-            
-            // Default secondary attack: shotgun spread (3 projectiles)
             const projectiles = [];
-            const spread = 0.25; // radians
-            const angles = [angle - spread, angle, angle + spread];
             
-            for (let a of angles) {
-                const spawnX = x + Math.cos(a) * 15;
-                const spawnY = y + Math.sin(a) * 15;
-                // Secondary attack does 70% damage per projectile but shoots 3
-                projectiles.push(new Projectile(spawnX, spawnY, a, this.projectileSpeed * 0.9, this.damage * 0.7, this.lifetime * 0.8, this.isPlayerOwned));
+            if (this.projectileCount === 1) {
+                const spawnX = x + Math.cos(angle) * 15;
+                const spawnY = y + Math.sin(angle) * 15;
+                // Add slight inaccuracy if spread > 0
+                const finalAngle = angle + (Math.random() * this.spread - this.spread/2);
+                projectiles.push(new Projectile(spawnX, spawnY, finalAngle, this.projectileSpeed, this.damage, this.lifetime, this.isPlayerOwned));
+            } else {
+                const startAngle = angle - this.spread / 2;
+                const angleStep = this.projectileCount > 1 ? this.spread / (this.projectileCount - 1) : 0;
+                
+                for (let i = 0; i < this.projectileCount; i++) {
+                    const a = startAngle + (angleStep * i);
+                    const spawnX = x + Math.cos(a) * 15;
+                    const spawnY = y + Math.sin(a) * 15;
+                    projectiles.push(new Projectile(spawnX, spawnY, a, this.projectileSpeed * (0.9 + Math.random()*0.2), this.damage, this.lifetime * (0.9 + Math.random()*0.2), this.isPlayerOwned));
+                }
             }
             
             return projectiles;

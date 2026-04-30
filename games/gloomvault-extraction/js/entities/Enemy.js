@@ -26,7 +26,7 @@ class Enemy extends Entity {
         // Weapon for ranged
         this.weapon = null;
         if (this.type === 'ranged') {
-            this.weapon = new Weapon(false);
+            this.weapon = new Weapon(null, false);
             this.weapon.baseCooldown = 1.5; // Slower attack rate
             this.weapon.cooldown = 1.5;
             this.weapon.baseDamage = Math.floor(15 * levelMultiplier);
@@ -112,7 +112,7 @@ class Enemy extends Entity {
             // Always try to shoot if in range
             if (distToPlayer < 400 && this.weapon) {
                 this.angle = Math.atan2(player.y - this.y, player.x - this.x);
-                const projs = this.weapon.primaryAttack(this.x, this.y, this.angle);
+                const projs = this.weapon.attack(this.x, this.y, this.angle);
                 if (projs && projs.length > 0) newProjectiles.push(...projs);
             }
         }

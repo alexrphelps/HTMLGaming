@@ -8,6 +8,7 @@ class UpgradeSystem {
     }
 
     static getSalvageValue(item) {
+        if (item && item.isStarter) return 0;
         if (!item) return 0;
         const rarityConfig = UpgradeConfig.costs[item.rarity];
         if (!rarityConfig) return 1;

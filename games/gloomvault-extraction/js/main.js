@@ -55,13 +55,34 @@ document.addEventListener('DOMContentLoaded', () => {
     let scraps = 0;
     let itemInUpgradeSlot = null;
 
-    function loadStashData() {
+    
+    function ensureStarterEquipment(eq) {
+        if (!eq.weapon) {
+            eq.weapon = { id: 'starter_wep1', name: 'Rusty Glock', type: 'weapon', weaponType: 'pistol', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true };
+        }
+        if (!eq.weapon2) {
+            eq.weapon2 = { id: 'starter_wep2', name: 'Sawed-off Shotgun', type: 'weapon', weaponType: 'shotgun', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true };
+        }
+        const minorHeal = { type: 'heal', value: 25, cooldown: 15, name: 'Minor Heal', text: 'Use to heal 25 HP (15s CD)' };
+        if (!eq.trinket1) {
+            eq.trinket1 = { id: 'starter_tr1', name: 'Health Potion', type: 'trinket', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true, activeAbility: minorHeal };
+        }
+        if (!eq.trinket2) {
+            eq.trinket2 = { id: 'starter_tr2', name: 'Health Potion', type: 'trinket', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true, activeAbility: minorHeal };
+        }
+    }
+function loadStashData() {
         try {
             stashItems = JSON.parse(localStorage.getItem('gloomvault_stash')) || [];
-            stashEquipment = JSON.parse(localStorage.getItem('gloomvault_equipment')) || {
-                helm: null, chest: null, pants: null, boots: null,
-                weapon: null, weapon2: null, trinket1: null, trinket2: null
-            };
+            let savedEq = JSON.parse(localStorage.getItem('gloomvault_equipment'));
+            if (!savedEq) {
+                savedEq = {
+                    helm: null, chest: null, pants: null, boots: null,
+                    weapon: null, weapon2: null, trinket1: null, trinket2: null
+                };
+                ensureStarterEquipment(savedEq);
+            }
+            stashEquipment = savedEq;
             scraps = parseInt(localStorage.getItem('gloomvault_scraps')) || 0;
         } catch(e) {
             stashItems = [];
@@ -362,6 +383,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showTooltip(item, e) {
         if (!item) return;
+        
+        let implicits = item.modifiers ? item.modifiers.filter(m => m.isImplicit) : [];
+        let explicits = item.modifiers ? item.modifiers.filter(m => !m.isImplicit && !m.isTrait) : [];
+        
         tooltip.innerHTML = `
             <div class="tooltip-title" style="color: ${item.color}">${item.name}</div>
             <div class="tooltip-stats">
@@ -369,9 +394,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 Rarity: ${item.rarity}<br>
                 Gear Score: ${item.gearScore}
             </div>
-            ${item.modifiers && item.modifiers.length > 0 ? `
+            ${implicits.length > 0 ? `
+                <div class="modifier-list" style="border-bottom: 1px solid #555; padding-bottom: 5px; margin-bottom: 5px;">
+                    ${implicits.map(m => {
+                        let modClass = 'modifier-neutral';
+                        if (m.text.includes('+') || m.value > 0) modClass = 'modifier-positive';
+                        if (m.text.includes('-') || m.value < 0) modClass = 'modifier-negative';
+                        return '<div class="modifier-line ' + modClass + '"><i>' + m.text + '</i></div>';
+                    }).join('')}
+                </div>
+            ` : ''}
+            ${explicits.length > 0 ? `
                 <div class="modifier-list">
-                    ${item.modifiers.map(m => {
+                    ${explicits.map(m => {
                         let modClass = 'modifier-neutral';
                         if (m.text.includes('+') || m.value > 0) modClass = 'modifier-positive';
                         if (m.text.includes('-') || m.value < 0) modClass = 'modifier-negative';
@@ -383,6 +418,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="modifier-list" style="color: #ffeb3b; font-weight: bold; border-top: 1px solid #777;">
                     Active Ability: ${item.activeAbility.name}<br>
                     <span style="font-weight: normal; color: #fff;">${item.activeAbility.text}</span>
+                </div>
+            ` : ''}
+            ${item.passiveTrait ? `
+                <div class="modifier-list" style="color: #e040fb; font-weight: bold; border-top: 1px dashed #e040fb; padding-top: 5px; margin-top: 5px;">
+                    Trait: ${item.passiveTrait.name}<br>
+                    <span style="font-weight: normal; color: #fff;">${item.passiveTrait.text}</span>
                 </div>
             ` : ''}
         `;
@@ -518,7 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Update Equipment
-        document.querySelectorAll('.equip-slots .equip-slot:not(.stash-slot)').forEach(slot => {
+        document.querySelectorAll('#inventory-screen .equip-slot').forEach(slot => {
             const slotId = slot.dataset.slot;
             const item = engine.player.equipment[slotId];
             slot.innerHTML = slotId.replace(/[0-9]/g, '').toUpperCase(); // default text
@@ -529,10 +570,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Update Stats Display
+        
         document.getElementById('stat-dmg').textContent = 
-            (engine.player.weapon ? Math.round(engine.player.weapon.damage) : Math.round(engine.player.stats.flatDamage));
+            (engine.player.weapon1 ? Math.round(engine.player.weapon1.damage) : Math.round(engine.player.stats.flatDamage));
         document.getElementById('stat-spd').textContent = 
-            (engine.player.weapon ? (1 / engine.player.weapon.cooldown).toFixed(2) + '/s' : '-');
+            (engine.player.weapon1 ? (1 / engine.player.weapon1.cooldown).toFixed(2) + '/s' : '-');
         document.getElementById('stat-ms').textContent = Math.round(engine.player.speed);
+        
+        document.getElementById('stat-armor').textContent = Math.round(engine.player.stats.armor || 0);
+        document.getElementById('stat-dr').textContent = Math.round((engine.player.stats.damageReduction || 0) * 100) + '%';
+        const dodgeCd = engine.player.dodgeCooldown * Math.max(0.2, engine.player.stats.dodgeCooldownMultiplier || 1.0);
+        document.getElementById('stat-dodge').textContent = dodgeCd.toFixed(2) + 's';
+        document.getElementById('stat-thorns').textContent = Math.round(engine.player.stats.thorns || 0);
     }
 });

@@ -17,17 +17,14 @@ class LootGen {
             { name: 'Trinket', slot: 'trinket' }
         ];
 
-        this.modifierPool = [
-            { name: 'Damage', type: 'percent', stat: 'damageMultiplier', range: [5, 15] },
-            { name: 'Attack Speed', type: 'percent', stat: 'attackSpeedMultiplier', range: [5, 20] },
-            { name: 'Flat Damage', type: 'flat', stat: 'flatDamage', range: [2, 10] },
-            { name: 'Lifesteal', type: 'percent', stat: 'lifesteal', range: [1, 5] },
-            { name: 'Movement Speed', type: 'percent', stat: 'movementSpeedMultiplier', range: [5, 15] },
-            { name: 'Cooldown Reduction', type: 'percent', stat: 'cooldownReduction', range: [2, 10] }
+        this.weaponSubTypes = [
+            { id: 'pistol', names: ['Glock', 'Revolver', 'Pistol', 'Handcannon'] },
+            { id: 'shotgun', names: ['Shotgun', 'Blunderbuss', 'Scattergun'] },
+            { id: 'assault_rifle', names: ['Assault Rifle', 'Carbine', 'SMG'] },
+            { id: 'sniper', names: ['Sniper Rifle', 'Longrifle', 'Marksman Rifle'] },
+            { id: 'melee_stab', names: ['Spear', 'Pike', 'Lance', 'Rapier'] },
+            { id: 'melee_cleave', names: ['Greatsword', 'Battleaxe', 'Cleaver'] }
         ];
-
-        this.prefixes = ['Rusty', 'Iron', 'Steel', 'Gloom', 'Shadow', 'Void', 'Blood'];
-        this.suffixes = ['of the Bear', 'of Swiftness', 'of the Leech', 'of Power', 'of the Void'];
         
         this.trinketAbilities = [
             { type: 'heal', value: 50, cooldown: 15, name: 'Healing Surge', text: 'Use to heal 50 HP (15s CD)' },
@@ -50,9 +47,24 @@ class LootGen {
         return this.types[Math.floor(Math.random() * this.types.length)];
     }
 
+    createModFromTemplate(template, mult = 1.0, isImplicit = false) {
+        const modValue = Math.floor((Math.random() * (template.range[1] - template.range[0] + 1) + template.range[0]) * mult);
+        const sign = modValue >= 0 ? '+' : '';
+        const symbol = template.type.includes('percent') ? '%' : '';
+        return {
+            name: template.name,
+            stat: template.stat,
+            value: modValue,
+            type: template.type,
+            text: `${sign}${modValue}${symbol} ${template.name}`,
+            isImplicit: isImplicit
+        };
+    }
+
     generateItem(floor) {
         const rarity = this.rollRarity();
         const type = this.rollType();
+        const slotConfig = LootConfig.slots[type.slot];
         
         // Gear Score Formula: Floor * 10 to Floor * 15
         const minGS = Math.max(1, floor) * 10;
@@ -60,38 +72,103 @@ class LootGen {
         const baseGS = Math.floor(Math.random() * (maxGS - minGS + 1)) + minGS;
         const gearScore = Math.floor(baseGS * rarity.mult);
 
-        // Generate Modifiers
-        const numMods = Math.floor(Math.random() * (rarity.maxMods - rarity.minMods + 1)) + rarity.minMods;
         const modifiers = [];
-        const availableMods = [...this.modifierPool];
+
+        // 1. Calculate Base Armor if applicable
+        let baseArmor = 0;
+        if (slotConfig.baseArmorMultiplier > 0) {
+            // Armor scales with Gear Score
+            baseArmor = Math.floor(gearScore * 0.5 * slotConfig.baseArmorMultiplier);
+            modifiers.push({
+                name: 'Base Armor',
+                stat: 'armor',
+                value: baseArmor,
+                type: 'flat',
+                text: `+${baseArmor} Armor`,
+                isImplicit: true
+            });
+        }
+
+        // 2. Add slot Implicit stat if applicable
+        if (slotConfig.implicit) {
+            modifiers.push(this.createModFromTemplate(slotConfig.implicit, rarity.mult, true));
+        }
+
+        // 3. Roll Prefix and Suffix
+        let prefix = '';
+        let suffix = '';
+        
+        // Items always have a prefix, except maybe Common weapons/trinkets might just be "Rusty" etc.
+        // We'll give it a 50% chance for prefix on Common, 100% on Epic/Legendary
+        if (type.slot !== 'weapon' && type.slot !== 'trinket') {
+            const rolledPrefix = LootConfig.prefixes[Math.floor(Math.random() * LootConfig.prefixes.length)];
+            prefix = rolledPrefix.name;
+            modifiers.push(this.createModFromTemplate(rolledPrefix.guaranteed, rarity.mult));
+        } else {
+            // Fallback for weapons and trinkets which don't use the armor prefix pool directly
+            const basicPrefixes = ['Rusty', 'Iron', 'Steel', 'Gloom', 'Shadow', 'Void', 'Blood'];
+            prefix = basicPrefixes[Math.floor(Math.random() * basicPrefixes.length)];
+        }
+
+        if (rarity.name !== 'Common' && type.slot !== 'weapon' && type.slot !== 'trinket') {
+            const rolledSuffix = LootConfig.suffixes[Math.floor(Math.random() * LootConfig.suffixes.length)];
+            suffix = rolledSuffix.name;
+            modifiers.push(this.createModFromTemplate(rolledSuffix.guaranteed, rarity.mult));
+        } else if (rarity.name !== 'Common') {
+            const basicSuffixes = ['of the Bear', 'of Swiftness', 'of the Leech', 'of Power', 'of the Void'];
+            suffix = basicSuffixes[Math.floor(Math.random() * basicSuffixes.length)];
+        }
+
+        // 4. Generate Random Extra Modifiers
+        const numMods = Math.floor(Math.random() * (rarity.maxMods - rarity.minMods + 1)) + rarity.minMods;
+        const availableMods = [...LootConfig.modifierPool];
 
         for (let i = 0; i < numMods; i++) {
             if (availableMods.length === 0) break;
             const modIndex = Math.floor(Math.random() * availableMods.length);
             const modTemplate = availableMods.splice(modIndex, 1)[0];
-            
-            const modValue = Math.floor((Math.random() * (modTemplate.range[1] - modTemplate.range[0] + 1) + modTemplate.range[0]) * rarity.mult);
-            
-            modifiers.push({
-                name: modTemplate.name,
-                stat: modTemplate.stat,
-                value: modValue,
-                type: modTemplate.type,
-                text: `+${modValue}${modTemplate.type === 'percent' ? '%' : ''} ${modTemplate.name}`
-            });
+            modifiers.push(this.createModFromTemplate(modTemplate, rarity.mult));
         }
 
-        // Generate Name
-        const prefix = this.prefixes[Math.floor(Math.random() * this.prefixes.length)];
-        let name = `${prefix} ${type.name}`;
-        if (rarity.name !== 'Common') {
-             const suffix = this.suffixes[Math.floor(Math.random() * this.suffixes.length)];
+        // 5. Generate Name
+        let baseName = type.name;
+        let weaponType = null;
+        
+        if (type.slot === 'weapon') {
+            const subType = this.weaponSubTypes[Math.floor(Math.random() * this.weaponSubTypes.length)];
+            weaponType = subType.id;
+            baseName = subType.names[Math.floor(Math.random() * subType.names.length)];
+        }
+        
+        let name = `${prefix} ${baseName}`;
+        if (suffix !== '') {
              name += ` ${suffix}`;
         }
 
+        // 6. Assign Trinket Abilities
         let activeAbility = null;
         if (type.slot === 'trinket') {
             activeAbility = this.trinketAbilities[Math.floor(Math.random() * this.trinketAbilities.length)];
+        }
+
+        // 7. Roll Boons/Curses (Traits) for Epic and Legendary
+        let passiveTrait = null;
+        if (rarity.name === 'Legendary' || (rarity.name === 'Epic' && Math.random() < 0.2)) {
+            passiveTrait = LootConfig.traits[Math.floor(Math.random() * LootConfig.traits.length)];
+            
+            // Apply trait modifiers to item
+            for (const tMod of passiveTrait.modifiers) {
+                const sign = tMod.value > 0 ? '+' : '';
+                const symbol = tMod.type.includes('percent') ? '%' : '';
+                modifiers.push({
+                    name: tMod.name,
+                    stat: tMod.stat,
+                    value: tMod.value,
+                    type: tMod.type,
+                    text: `${sign}${tMod.value}${symbol} ${tMod.name}`,
+                    isTrait: true
+                });
+            }
         }
 
         this.itemIdCounter++;
@@ -99,12 +176,15 @@ class LootGen {
             id: `item_${this.itemIdCounter}`,
             name: name,
             type: type.slot,
+            weaponType: weaponType,
             rarity: rarity.name,
             color: rarity.color,
             gearScore: gearScore,
             modifiers: modifiers,
             upgradeLevel: 0,
-            activeAbility: activeAbility
+            activeAbility: activeAbility,
+            passiveTrait: passiveTrait,
+            baseArmor: baseArmor
         };
     }
 }

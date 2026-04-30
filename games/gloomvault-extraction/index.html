@@ -23,48 +23,48 @@
         <!-- Stash Screen -->
         <div id="stash-screen" class="screen">
             <h2>Player Stash & Equipment</h2>
-            <div class="inventory-content" style="background-color: var(--color-bg); padding: 20px; width: 80%; border: 2px solid var(--color-accent); margin-top: 20px;">
-                <div class="equipment-panel">
-                    <h3>Starting Equipment</h3>
-                    <div class="equip-slots" id="stash-equip-slots">
-                        <div class="equip-slot stash-slot helm" data-slot="helm">Helm</div>
-                        <div class="equip-slot stash-slot chest" data-slot="chest">Chest</div>
-                        <div class="equip-slot stash-slot pants" data-slot="pants">Pants</div>
-                        <div class="equip-slot stash-slot boots" data-slot="boots">Boots</div>
-                        <div class="equip-slot stash-slot weapon" data-slot="weapon">Weapon 1</div>
-                        <div class="equip-slot stash-slot weapon" data-slot="weapon2">Weapon 2</div>
-                        <div class="equip-slot stash-slot trinket" data-slot="trinket1">Trinket 1</div>
-                        <div class="equip-slot stash-slot trinket" data-slot="trinket2">Trinket 2</div>
+            <div class="inventory-content" style="background-color: var(--color-bg); padding: 30px; width: fit-content; border: 2px solid var(--color-accent); margin: 0 auto; box-shadow: 0 0 20px rgba(138, 43, 226, 0.15); border-radius: 8px; flex: 0 0 auto;">
+                <div class="equipment-panel" style="border-right: 2px dashed #444; padding-right: 30px; margin-right: 10px; flex: 0 0 auto;">
+                    <h3 style="text-align: center; color: #ccc;">Starting Equipment</h3>
+                    <div class="stash-equip-grid" id="stash-equip-slots">
+                        <div class="equip-slot stash-slot helm" data-slot="helm" style="grid-area: helm;">Helm</div>
+                        <div class="equip-slot stash-slot trinket" data-slot="trinket1" style="grid-area: trinket1;">Trinket 1</div>
+                        <div class="equip-slot stash-slot chest" data-slot="chest" style="grid-area: chest;">Chest</div>
+                        <div class="equip-slot stash-slot trinket" data-slot="trinket2" style="grid-area: trinket2;">Trinket 2</div>
+                        <div class="equip-slot stash-slot weapon" data-slot="weapon" style="grid-area: weapon1;">Weapon 1</div>
+                        <div class="equip-slot stash-slot pants" data-slot="pants" style="grid-area: pants;">Pants</div>
+                        <div class="equip-slot stash-slot weapon" data-slot="weapon2" style="grid-area: weapon2;">Weapon 2</div>
+                        <div class="equip-slot stash-slot boots" data-slot="boots" style="grid-area: boots;">Boots</div>
                     </div>
                 </div>
-                <div class="backpack-panel">
-                    <h3>Stash</h3>
-                    <div class="inventory-grid" id="stash-grid" style="overflow-y: auto; max-height: 400px; max-width: none; width: 400px; display: grid; grid-template-columns: repeat(5, 1fr); auto-rows: 1fr;">
+                <div class="backpack-panel" style="flex: 0 0 auto;">
+                    <h3 style="text-align: center; color: #ccc;">Stash</h3>
+                    <div class="inventory-grid" id="stash-grid" style="overflow-y: auto; max-height: 400px; max-width: none; width: 400px; display: grid; grid-template-columns: repeat(5, 1fr); auto-rows: 1fr; background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333; margin-top: 10px;">
                         <!-- Grid generated in JS -->
                     </div>
                 </div>
             </div>
             
-            <div style="margin-top: 20px; display: flex; justify-content: space-between; width: 80%; align-items: flex-start; flex-direction: column; gap: 20px;">
-                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                    <div id="scrap-counter" style="font-size: 24px; color: #a0a0a0;">Scraps: 0</div>
+            <div style="margin: 20px auto; border: 2px solid var(--color-accent); padding: 20px 30px; width: fit-content; border-radius: 8px; background-color: rgba(20, 20, 20, 0.8); box-shadow: 0 0 15px rgba(138, 43, 226, 0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 40px;">
+                    <div id="scrap-counter" style="font-size: 24px; color: var(--color-accent); font-weight: bold; text-shadow: 0 0 5px rgba(138, 43, 226, 0.5);">Scraps: 0</div>
                     
                     <div style="display: flex; gap: 20px;">
-                        <div class="upgrade-panel" style="border: 1px solid var(--color-danger); padding: 10px; display: flex; gap: 10px; align-items: center;">
-                            <span style="color: var(--color-danger);">Salvage:</span>
-                            <div class="equip-slot" id="stash-salvage-dropzone" data-slot="stash-salvage">Drop Here</div>
+                        <div class="upgrade-panel" style="border: 1px dashed var(--color-danger); padding: 15px; display: flex; gap: 15px; align-items: center; border-radius: 6px; background: rgba(192, 57, 43, 0.05);">
+                            <span style="color: var(--color-danger); font-weight: bold;">Salvage:</span>
+                            <div class="equip-slot square-slot" id="stash-salvage-dropzone" data-slot="stash-salvage" style="width: 70px;">Drop Here</div>
                         </div>
 
-                        <div class="upgrade-panel" style="border: 1px solid var(--color-accent); padding: 10px; display: flex; gap: 10px; align-items: center;">
-                            <span>Upgrade Item:</span>
-                            <div class="equip-slot" id="upgrade-dropzone" data-slot="upgrade">Drop Item</div>
-                            <button id="btn-upgrade-item" class="menu-btn secondary" disabled>Upgrade (Cost: --)</button>
+                        <div class="upgrade-panel" style="border: 1px dashed var(--color-accent); padding: 15px; display: flex; gap: 15px; align-items: center; border-radius: 6px; background: rgba(138, 43, 226, 0.05);">
+                            <span style="color: var(--color-accent); font-weight: bold;">Upgrade:</span>
+                            <div class="equip-slot square-slot" id="upgrade-dropzone" data-slot="upgrade" style="width: 70px;">Drop Item</div>
+                            <button id="btn-upgrade-item" class="menu-btn secondary" disabled style="margin-top: 0; padding: 10px 20px;">Upgrade (--)</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <button id="btn-stash-back" class="menu-btn secondary" style="margin-top: 20px;">Back to Menu</button>
+            <button id="btn-stash-back" class="menu-btn secondary" style="margin-top: 10px; padding: 15px 50px; border-radius: 8px;">Back to Menu</button>
         </div>
 
         <!-- Game Over Screen -->
@@ -103,7 +103,34 @@
         <div id="play-screen" class="screen">
             <canvas id="game-canvas"></canvas>
             <div id="ui-layer">
-                <div class="health-bar">HP: 100/100</div>
+                <div id="action-bar-container">
+                    <div id="player-health-bar-container">
+                        <div id="player-health-bar-fill"></div>
+                        <div id="player-health-bar-text">100 / 100</div>
+                    </div>
+                    <div id="action-bar-slots">
+                        <div class="action-slot" id="slot-weapon1">
+                            <div class="action-icon"></div>
+                            <div class="cooldown-overlay"></div>
+                            <div class="keybind">LMB</div>
+                        </div>
+                        <div class="action-slot" id="slot-weapon2">
+                            <div class="action-icon"></div>
+                            <div class="cooldown-overlay"></div>
+                            <div class="keybind">RMB</div>
+                        </div>
+                        <div class="action-slot" id="slot-trinket1">
+                            <div class="action-icon"></div>
+                            <div class="cooldown-overlay"></div>
+                            <div class="keybind">Q</div>
+                        </div>
+                        <div class="action-slot" id="slot-trinket2">
+                            <div class="action-icon"></div>
+                            <div class="cooldown-overlay"></div>
+                            <div class="keybind">E</div>
+                        </div>
+                    </div>
+                </div>
                 <div id="interaction-hint" class="interaction-hint hidden">Press [E] to Pick Up</div>
             </div>
 
@@ -113,31 +140,35 @@
                     <h2>Inventory</h2>
                     <button id="btn-close-inventory" class="close-btn">X</button>
                 </div>
-                <div class="inventory-content">
-                    <div class="equipment-panel">
-                        <h3>Equipment</h3>
-                        <div class="equip-slots">
-                            <div class="equip-slot helm" data-slot="helm">Helm</div>
-                            <div class="equip-slot chest" data-slot="chest">Chest</div>
-                            <div class="equip-slot pants" data-slot="pants">Pants</div>
-                            <div class="equip-slot boots" data-slot="boots">Boots</div>
-                            <div class="equip-slot weapon" data-slot="weapon">Weapon 1</div>
-                            <div class="equip-slot weapon" data-slot="weapon2">Weapon 2</div>
-                            <div class="equip-slot trinket" data-slot="trinket1">Trinket 1</div>
-                            <div class="equip-slot trinket" data-slot="trinket2">Trinket 2</div>
+                <div class="inventory-content" style="flex: 0 0 auto;">
+                    <div class="equipment-panel" style="border-right: 2px dashed #444; padding-right: 20px; margin-right: 10px; flex: 0 0 auto;">
+                        <h3 style="text-align: center; color: #ccc;">Equipment</h3>
+                        <div class="stash-equip-grid" style="grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px 60px 60px; gap: 10px;">
+                            <div class="equip-slot helm" data-slot="helm" style="grid-area: helm;">Helm</div>
+                            <div class="equip-slot trinket" data-slot="trinket1" style="grid-area: trinket1;">Trinket 1</div>
+                            <div class="equip-slot chest" data-slot="chest" style="grid-area: chest;">Chest</div>
+                            <div class="equip-slot trinket" data-slot="trinket2" style="grid-area: trinket2;">Trinket 2</div>
+                            <div class="equip-slot weapon" data-slot="weapon" style="grid-area: weapon1;">Weapon 1</div>
+                            <div class="equip-slot pants" data-slot="pants" style="grid-area: pants;">Pants</div>
+                            <div class="equip-slot weapon" data-slot="weapon2" style="grid-area: weapon2;">Weapon 2</div>
+                            <div class="equip-slot boots" data-slot="boots" style="grid-area: boots;">Boots</div>
                         </div>
-                        <div class="player-stats">
-                            <h4>Stats</h4>
+                        <div class="player-stats" style="margin-top: 20px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid #333;">
+                            <h4 style="text-align: center; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 10px; color: var(--color-accent);">Stats</h4>
                             <ul id="stats-list">
                                 <li>Damage: <span id="stat-dmg">10</span></li>
                                 <li>Attack Speed: <span id="stat-spd">1.0</span></li>
                                 <li>Move Speed: <span id="stat-ms">200</span></li>
+                                <li>Armor: <span id="stat-armor">0</span></li>
+                                <li>Damage Red.: <span id="stat-dr">0%</span></li>
+                                <li>Dodge CD: <span id="stat-dodge">1.0s</span></li>
+                                <li>Thorns: <span id="stat-thorns">0</span></li>
                             </ul>
                         </div>
                     </div>
-                    <div class="backpack-panel">
-                        <h3>Backpack</h3>
-                        <div class="inventory-grid" id="inventory-grid">
+                    <div class="backpack-panel" style="flex: 0 0 auto;">
+                        <h3 style="text-align: center; color: #ccc;">Backpack</h3>
+                        <div class="inventory-grid" id="inventory-grid" style="background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333; margin-top: 10px; width: 350px; height: 350px;">
                             <!-- 5x5 grid generated in JS -->
                         </div>
                     </div>
@@ -151,6 +182,8 @@
     <script src="js/core/Renderer.js"></script>
     <script src="js/config/MapConfig.js"></script>
     <script src="js/config/UpgradeConfig.js"></script>
+    <script src="js/config/CombatConfig.js"></script>
+    <script src="js/config/LootConfig.js"></script>
     <script src="js/systems/LootGen.js"></script>
     <script src="js/entities/Entity.js"></script>
     <script src="js/entities/DroppedItem.js"></script>

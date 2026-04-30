@@ -184,9 +184,47 @@ class MapGen {
 
     getStartPos() {
         if (this.rooms.length === 0) return { x: 50, y: 50 }; // Fallback
+        return this.getValidFloorPosNear(this.rooms[0].center.x, this.rooms[0].center.y);
+    }
+
+    getValidFloorPosNear(startX, startY) {
+        // BFS to find nearest floor tile (value 1)
+        let queue = [{x: startX, y: startY}];
+        let visited = new Set();
+        visited.add(`${startX},${startY}`);
+
+        // Directions: up, down, left, right, diagonals
+        const dirs = [
+            {x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0},
+            {x: -1, y: -1}, {x: 1, y: -1}, {x: -1, y: 1}, {x: 1, y: 1}
+        ];
+
+        while(queue.length > 0) {
+            let curr = queue.shift();
+            
+            if (this.getTile(curr.x, curr.y) === 1) {
+                return {
+                    x: curr.x * this.tileSize + this.tileSize / 2,
+                    y: curr.y * this.tileSize + this.tileSize / 2
+                };
+            }
+
+            for (let d of dirs) {
+                let nx = curr.x + d.x;
+                let ny = curr.y + d.y;
+                let key = `${nx},${ny}`;
+                
+                if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows && !visited.has(key)) {
+                    visited.add(key);
+                    queue.push({x: nx, y: ny});
+                }
+            }
+        }
+        
+        // Fallback
         return {
-            x: this.rooms[0].center.x * this.tileSize + this.tileSize / 2,
-            y: this.rooms[0].center.y * this.tileSize + this.tileSize / 2
+            x: startX * this.tileSize + this.tileSize / 2,
+            y: startY * this.tileSize + this.tileSize / 2
         };
     }
 }

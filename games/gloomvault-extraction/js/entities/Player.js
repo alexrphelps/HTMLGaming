@@ -6,7 +6,9 @@ class Player extends Entity {
         this.angle = 0; // facing direction
 
         // Equip a default weapon
-        this.weapon = new Weapon(true);
+        
+        this.weapon1 = null;
+        this.weapon2 = null;
 
         // Dodge Mechanics
         this.isDodging = false;
@@ -43,7 +45,13 @@ class Player extends Entity {
             movementSpeedMultiplier: 1.0,
             flatDamage: 0,
             lifesteal: 0,
-            cooldownReduction: 0
+            cooldownReduction: 0,
+            armor: 0,
+            damageReduction: 0,
+            thorns: 0,
+            dodgeCooldownMultiplier: 1.0,
+            maxHpMultiplier: 1.0,
+            armorMultiplier: 1.0
         };
 
         // Current Stats (Modified by gear)
@@ -61,8 +69,24 @@ class Player extends Entity {
         return false;
     }
 
+    takeDamage(amount) {
+        // Use CombatConfig to calculate mitigated damage
+        let finalDamage = amount;
+        if (typeof CombatConfig !== 'undefined') {
+            finalDamage = CombatConfig.calculateDamageTaken(amount, this.stats.armor, this.stats.damageReduction);
+        }
+        super.takeDamage(finalDamage);
+        return finalDamage;
+    }
+
     recalculateStats() {
+        
+        // Instantiate weapons based on equipment
+        this.weapon1 = this.equipment.weapon ? new Weapon(this.equipment.weapon, true) : null;
+        this.weapon2 = this.equipment.weapon2 ? new Weapon(this.equipment.weapon2, true) : null;
+        
         // Reset to base
+
         this.stats = { ...this.baseStats };
 
         // Aggregate modifiers
@@ -77,7 +101,7 @@ class Player extends Entity {
 
         // Apply modifiers
         for (const mod of activeMods) {
-            if (mod.type === 'percent') {
+            if (mod.type === 'percent' || mod.type === 'percent_penalty') {
                 if (this.stats[mod.stat] !== undefined) {
                     // additive percentages (10% + 5% = 1.15 multiplier)
                     this.stats[mod.stat] += (mod.value / 100);
@@ -90,15 +114,25 @@ class Player extends Entity {
         }
 
         // Apply derived stats
+        this.stats.maxHp = this.baseStats.maxHp * this.stats.maxHpMultiplier;
         this.maxHp = this.stats.maxHp;
+        
+        this.stats.armor = this.stats.armor * this.stats.armorMultiplier;
+
         if (this.hp > this.maxHp) this.hp = this.maxHp;
 
         this.speed = this.stats.speed * this.stats.movementSpeedMultiplier;
         
-        if (this.weapon) {
-            this.weapon.damage = this.weapon.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage;
-            this.weapon.cooldown = this.weapon.baseCooldown / this.stats.attackSpeedMultiplier;
+        
+        if (this.weapon1) {
+            this.weapon1.damage = Math.round(this.weapon1.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
+            this.weapon1.cooldown = this.weapon1.baseCooldown / this.stats.attackSpeedMultiplier;
         }
+        if (this.weapon2) {
+            this.weapon2.damage = Math.round(this.weapon2.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
+            this.weapon2.cooldown = this.weapon2.baseCooldown / this.stats.attackSpeedMultiplier;
+        }
+
     }
 
     useTrinketAbility(slot, particleSystem) {
@@ -150,10 +184,12 @@ class Player extends Entity {
 
     update(dt, input, camera, mapGen, particleSystem) {
         // Handle dodge input
+        const currentDodgeCooldown = this.dodgeCooldown * Math.max(0.2, this.stats.dodgeCooldownMultiplier);
+        
         if (input.isKeyDown('ShiftLeft') && !this.isDodging && this.dodgeCooldownTimer <= 0) {
             this.isDodging = true;
             this.dodgeTimer = this.dodgeTime;
-            this.dodgeCooldownTimer = this.dodgeCooldown;
+            this.dodgeCooldownTimer = currentDodgeCooldown;
         }
 
         let vx = 0;
@@ -207,9 +243,9 @@ class Player extends Entity {
         }
 
         // Update weapon cooldowns
-        if (this.weapon) {
-            this.weapon.update(dt);
-        }
+        
+        if (this.weapon1) this.weapon1.update(dt);
+        if (this.weapon2) this.weapon2.update(dt);
         
         // Update trinket cooldowns
         if (this.abilityCooldowns.trinket1 > 0) this.abilityCooldowns.trinket1 -= dt;
@@ -239,23 +275,23 @@ class Player extends Entity {
             if (projs && projs.length > 0) newProjectiles.push(...projs);
         }
 
-        if (input.mouse.down && this.weapon) {
-            const projs = this.weapon.primaryAttack(this.x, this.y, this.angle);
+        
+        if (input.mouse.down && this.weapon1) {
+            const projs = this.weapon1.attack(this.x, this.y, this.angle);
             if (projs && projs.length > 0) {
                 newProjectiles.push(...projs);
                 isAttacking = true;
             }
         }
         
-        if (input.mouse.rightDown && this.weapon) {
-            const projs = this.weapon.secondaryAttack(this.x, this.y, this.angle);
+        if (input.mouse.rightDown && this.weapon2) {
+            const projs = this.weapon2.attack(this.x, this.y, this.angle);
             if (projs && projs.length > 0) {
                 newProjectiles.push(...projs);
                 isAttacking = true;
             }
         }
 
-        // Even if on cooldown, if button is held, keep animation state
         if (input.mouse.down || input.mouse.rightDown) {
             isAttacking = true;
         }
