@@ -189,6 +189,81 @@ class MapGen {
         return this.getValidFloorPosNear(this.rooms[0].center.x, this.rooms[0].center.y);
     }
 
+    getDoorPositions(count, excludePositions = [], minDistance = 0) {
+        let valid = [];
+        for (let y = 1; y < this.rows - 1; y++) {
+            for (let x = 1; x < this.cols - 1; x++) {
+                if (this.grid[y * this.cols + x] === 0) {
+                    // Check if it's on outer edge
+                    if (x <= 5 || x >= this.cols - 6 || y <= 5 || y >= this.rows - 6) {
+                        // Check if adjacent to floor
+                        let adjacentFloors = 0;
+                        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+                        for (let d of dirs) {
+                            let nx = x + d.dx, ny = y + d.dy;
+                            if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows) {
+                                if (this.grid[ny * this.cols + nx] === 1) adjacentFloors++;
+                            }
+                        }
+                        if (adjacentFloors > 0) {
+                            valid.push({x, y});
+                        }
+                    }
+                }
+            }
+        }
+        return this.pickWithDistance(valid, count, excludePositions, minDistance);
+    }
+
+    getHolePositions(count, excludePositions = [], minDistance = 0) {
+        let valid = [];
+        // Use rooms 1 to N (skip 0 to avoid spawning hole right where player starts)
+        for (let i = 1; i < this.rooms.length; i++) {
+            let r = this.rooms[i];
+            for (let rect of r.rects) {
+                for (let y = rect.y + 1; y < rect.y + rect.height - 1; y++) {
+                    for (let x = rect.x + 1; x < rect.x + rect.width - 1; x++) {
+                        if (this.grid[y * this.cols + x] === 1) {
+                            valid.push({x, y});
+                        }
+                    }
+                }
+            }
+        }
+        return this.pickWithDistance(valid, count, excludePositions, minDistance);
+    }
+
+    pickWithDistance(validTiles, count, excludePositions, minDistance) {
+        let res = [];
+        let copy = [...validTiles];
+        let allExclusions = [...excludePositions];
+
+        while (res.length < count && copy.length > 0) {
+            let idx = Math.floor(Math.random() * copy.length);
+            let candidateTile = copy.splice(idx, 1)[0];
+            
+            let px = candidateTile.x * this.tileSize + this.tileSize / 2;
+            let py = candidateTile.y * this.tileSize + this.tileSize / 2;
+
+            let tooClose = false;
+            for (let ep of allExclusions) {
+                let dx = ep.x - px;
+                let dy = ep.y - py;
+                if (dx*dx + dy*dy < minDistance * minDistance) {
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (!tooClose) {
+                let pos = {x: px, y: py};
+                res.push(pos);
+                allExclusions.push(pos);
+            }
+        }
+        return res;
+    }
+
     getValidFloorPosNear(startX, startY) {
         // BFS to find nearest floor tile (value 1)
         let queue = [{x: startX, y: startY}];

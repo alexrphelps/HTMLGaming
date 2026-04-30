@@ -1,7 +1,10 @@
 class Enemy extends Entity {
-    constructor(x, y, type, levelMultiplier = 1.0) {
+    constructor(x, y, type, hpMultiplier = 1.0, damageMultiplier = null) {
         // Base stats based on type
         let width = 30, height = 30, hp = 50, speed = 100, color = '#ff0000';
+        
+        // If damageMultiplier not provided, fallback to hpMultiplier for backwards compatibility
+        let dmgMult = damageMultiplier !== null ? damageMultiplier : hpMultiplier;
         
         if (type === 'ranged') {
             hp = 30; speed = 80; color = '#ff8800';
@@ -10,7 +13,7 @@ class Enemy extends Entity {
         }
 
         // Apply level multiplier to health
-        hp = Math.floor(hp * levelMultiplier);
+        hp = Math.floor(hp * hpMultiplier);
 
         super(x, y, width, height, hp);
 
@@ -30,20 +33,20 @@ class Enemy extends Entity {
             this.weapon = new Weapon({weaponType: 'pistol'}, false);
             this.weapon.baseCooldown = 1.5;
             this.weapon.cooldown = 1.5;
-            this.weapon.baseDamage = Math.floor(15 * levelMultiplier);
+            this.weapon.baseDamage = Math.floor(15 * dmgMult);
             this.weapon.damage = this.weapon.baseDamage;
             this.weapon.projectileSpeed = 300;
         } else if (this.type === 'grunt') {
             this.weapon = new Weapon({weaponType: 'melee_stab'}, false);
             this.weapon.baseCooldown = 1.0;
             this.weapon.cooldown = 1.0;
-            this.weapon.baseDamage = Math.floor(20 * levelMultiplier);
+            this.weapon.baseDamage = Math.floor(20 * dmgMult);
             this.weapon.damage = this.weapon.baseDamage;
         } else if (this.type === 'brute') {
             this.weapon = new Weapon({weaponType: 'melee_cleave'}, false);
             this.weapon.baseCooldown = 2.0;
             this.weapon.cooldown = 2.0;
-            this.weapon.baseDamage = Math.floor(40 * levelMultiplier);
+            this.weapon.baseDamage = Math.floor(40 * dmgMult);
             this.weapon.damage = this.weapon.baseDamage;
         }
 

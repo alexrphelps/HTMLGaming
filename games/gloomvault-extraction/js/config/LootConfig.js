@@ -70,50 +70,51 @@ const LootConfig = {
     traits: [
         {
             name: 'Glass Cannon',
-            text: '+30% Damage, -50% Armor',
             modifiers: [
-                { name: 'Damage', type: 'percent', stat: 'damageMultiplier', value: 30 },
-                { name: 'Armor Penalty', type: 'percent_penalty', stat: 'armorMultiplier', value: -50 }
+                { name: 'Damage', type: 'percent', stat: 'damageMultiplier', range: [20, 40] },
+                { name: 'Armor', type: 'percent_penalty', stat: 'armorMultiplier', range: [-60, -40] }
             ]
         },
         {
             name: 'Blood Magic',
-            text: '+10% Lifesteal, -30% Max HP',
             modifiers: [
-                { name: 'Lifesteal', type: 'percent', stat: 'lifesteal', value: 10 },
-                { name: 'Max HP Penalty', type: 'percent_penalty', stat: 'maxHpMultiplier', value: -30 }
+                { name: 'Lifesteal', type: 'percent', stat: 'lifesteal', range: [8, 15] },
+                { name: 'Max HP', type: 'percent_penalty', stat: 'maxHpMultiplier', range: [-40, -20] }
             ]
         },
         {
             name: 'Sluggish Titan',
-            text: '+20% Damage Reduction, -20% Movement Speed',
             modifiers: [
-                { name: 'Damage Reduction', type: 'percent', stat: 'damageReduction', value: 20 },
-                { name: 'Movement Speed Penalty', type: 'percent_penalty', stat: 'movementSpeedMultiplier', value: -20 }
+                { name: 'Damage Reduction', type: 'percent', stat: 'damageReduction', range: [15, 25] },
+                { name: 'Movement Speed', type: 'percent_penalty', stat: 'movementSpeedMultiplier', range: [-30, -15] }
             ]
         },
         {
             name: 'Berserker\'s Rage',
-            text: '+40% Attack Speed, +20% Damage Taken',
             modifiers: [
-                { name: 'Attack Speed', type: 'percent', stat: 'attackSpeedMultiplier', value: 40 },
-                { name: 'Damage Taken Penalty', type: 'percent_penalty', stat: 'damageReduction', value: -20 }
+                { name: 'Attack Speed', type: 'percent', stat: 'attackSpeedMultiplier', range: [30, 50] },
+                { name: 'Damage Taken', type: 'percent_penalty', stat: 'damageReduction', range: [-30, -10] }
             ]
         },
         {
             name: 'Immovable Object',
-            text: '+50 Armor, Cannot Dodge',
             modifiers: [
-                { name: 'Armor', type: 'flat', stat: 'armor', value: 50 },
+                { name: 'Armor', type: 'flat', stat: 'armor', range: [40, 70] },
                 { name: 'Dodge Disabled', type: 'flat', stat: 'canDodge', value: -1 } // Disables dodge
             ]
         },
         {
             name: 'Vampire Lord',
-            text: '+15% Max Lifesteal Cap, -20% Max HP',
             modifiers: [
-                { name: 'Max Lifesteal Cap', type: 'percent', stat: 'lifestealCapBonus', value: 15 },
-                { name: 'Max HP Penalty', type: 'percent_penalty', stat: 'maxHpMultiplier', value: -20 }
+                { name: 'Max Lifesteal Cap', type: 'percent', stat: 'lifestealCapBonus', range: [10, 20] },
+                { name: 'Max HP', type: 'percent_penalty', stat: 'maxHpMultiplier', range: [-30, -15] }
+            ]
+        },
+        {
+            name: 'Arcane Barrier',
+            modifiers: [
+                { name: 'Shield', type: 'flat', stat: 'maxShield', range: [14, 23] },
+                { name: 'Shield Regen', type: 'flat', stat: 'shieldRegen', range: [1, 2] }
             ]
         }
     ]

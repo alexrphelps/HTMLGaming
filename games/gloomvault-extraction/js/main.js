@@ -702,6 +702,57 @@ function loadStashData() {
             inventoryScreen.classList.remove('hidden');
             engine.isRunning = false; // Pause game
             updateInventoryUI();
+            
+            // Render expanded minimap over the paused game
+            if (engine.renderer && engine.player && engine.mapGen) {
+                // Wait for the next tick to ensure the overlay bounds have updated
+                requestAnimationFrame(() => {
+                    const invRect = inventoryScreen.getBoundingClientRect();
+                    const canvasRect = engine.canvas.getBoundingClientRect();
+                    const padding = 20;
+
+                    const spaceRight = canvasRect.right - invRect.right;
+                    const spaceLeft = invRect.left - canvasRect.left;
+
+                    let mapX, mapWidth;
+                    if (spaceRight >= spaceLeft) {
+                        mapWidth = spaceRight - padding * 2;
+                        mapX = (invRect.right - canvasRect.left) + padding;
+                    } else {
+                        mapWidth = spaceLeft - padding * 2;
+                        mapX = padding;
+                    }
+
+                    // Keep standard aspect ratio by choosing min of width and available height
+                    let availableHeight = canvasRect.height - padding * 2;
+                    let mapHeight = Math.min(mapWidth, availableHeight);
+                    // Match width to height to make it perfectly square, as long as it fits
+                    mapWidth = mapHeight;
+
+                    // Re-calculate X to center within the chosen side if needed, but let's just pin to edge
+                    if (spaceRight < spaceLeft) {
+                        // Place on left, pin to right edge of the available left space
+                        mapX = (invRect.left - canvasRect.left) - mapWidth - padding;
+                    }
+
+                    let mapY = (canvasRect.height - mapHeight) / 2;
+
+                    // Fallbacks for extremely small screens
+                    if (mapWidth < 100) mapWidth = 100;
+                    if (mapHeight < 100) mapHeight = 100;
+
+                    const dynamicLayout = { x: mapX, y: mapY, width: mapWidth, height: mapHeight };
+
+                    engine.renderer.renderMinimap(
+                        engine.player, 
+                        engine.portal, 
+                        engine.mapGen, 
+                        typeof MinimapConfig !== 'undefined' ? MinimapConfig : window.MinimapConfig, 
+                        true, 
+                        dynamicLayout
+                    );
+                });
+            }
         } else {
             // Close Inventory
             inventoryScreen.classList.add('hidden');
@@ -887,5 +938,10 @@ function loadStashData() {
             lsText += ` (${Math.round(totalLs * 100)}%)`;
         }
         document.getElementById('stat-ls').textContent = lsText;
+
+        // Force UI update for Health Bar in case max HP changed
+        if (typeof engine.updateHealthBarUI === 'function') {
+            engine.updateHealthBarUI();
+        }
     }
 });

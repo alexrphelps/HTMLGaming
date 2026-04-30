@@ -6,7 +6,8 @@ class SpawnManager {
 
         // Base calculation: e.g. 100x100 = 10000 / 150 = ~66 enemies base
         let baseCount = Math.floor((mapGen.cols * mapGen.rows) / 150);
-        let totalEnemies = Math.floor(baseCount * (1 + (floorLevel * 0.1)));
+        let enemyCountScale = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.enemyCountScale : 0.1;
+        let totalEnemies = Math.floor(baseCount * (1 + (floorLevel * enemyCountScale)));
 
         // Find valid spawn tiles
         const validTiles = [];
@@ -46,9 +47,12 @@ class SpawnManager {
                 type = 'ranged';
             }
 
-            const levelMultiplier = 1 + (floorLevel * 0.2);
+            let hpScale = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.enemyHpScale : 0.2;
+            let dmgScale = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.enemyDamageScale : 0.2;
+            const hpMultiplier = 1 + (floorLevel * hpScale);
+            const dmgMultiplier = 1 + (floorLevel * dmgScale);
 
-            const enemy = new Enemy(spawnPoint.x, spawnPoint.y, type, levelMultiplier);
+            const enemy = new Enemy(spawnPoint.x, spawnPoint.y, type, hpMultiplier, dmgMultiplier);
             enemiesArray.push(enemy);
         }
 

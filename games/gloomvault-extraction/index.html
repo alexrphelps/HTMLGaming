@@ -108,6 +108,10 @@
             <canvas id="game-canvas"></canvas>
             <div id="ui-layer">
                 <div id="action-bar-container">
+                    <div id="player-shield-bar-container" style="display: none;">
+                        <div id="player-shield-bar-fill"></div>
+                        <div id="player-shield-bar-text">0 / 0</div>
+                    </div>
                     <div id="player-health-bar-container">
                         <div id="player-health-bar-fill"></div>
                         <div id="player-health-bar-text">100 / 100</div>
@@ -185,6 +189,7 @@
     <script src="js/core/Input.js"></script>
     <script src="js/core/Camera.js"></script>
     <script src="js/core/Renderer.js"></script>
+    <script src="js/config/DifficultyConfig.js"></script>
     <script src="js/config/MapConfig.js"></script>
     <script src="js/config/MinimapConfig.js"></script>
     <script src="js/config/UpgradeConfig.js"></script>
@@ -194,6 +199,7 @@
     <script src="js/entities/Entity.js"></script>
     <script src="js/entities/DroppedItem.js"></script>
     <script src="js/entities/ExtractionPortal.js"></script>
+    <script src="js/entities/FloorTransition.js"></script>
     <script src="js/entities/LootChest.js"></script>
     <script src="js/systems/MapGen.js"></script>
     <script src="js/systems/UpgradeSystem.js"></script>

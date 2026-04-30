@@ -24,11 +24,12 @@ class LootChest extends Entity {
         for (let i = 0; i < numItems; i++) {
             let item;
             
+            let effectiveFloorLevel = (gameEngine.currentFloor - 1) + (gameEngine.gearDifficultyFloor || 1);
             // Ensure at least 1 Epic or Legendary
             if (!hasHighRarity && i === numItems - 1) {
-                item = this.generateHighRarityItem(gameEngine.lootGen, gameEngine.currentFloor);
+                item = this.generateHighRarityItem(gameEngine.lootGen, effectiveFloorLevel);
             } else {
-                item = gameEngine.lootGen.generateItem(gameEngine.currentFloor);
+                item = gameEngine.lootGen.generateItem(effectiveFloorLevel);
                 if (item.rarity === 'Epic' || item.rarity === 'Legendary') {
                     hasHighRarity = true;
                 }

@@ -38,9 +38,14 @@ class Player extends Entity {
 
         this.activeHoTs = [];
 
+        this.shield = 0;
+        this.shieldRegenTimer = 0;
+
         // Base Stats (Unmodified)
         this.baseStats = {
             maxHp: 100,
+            maxShield: 0,
+            shieldRegen: 0,
             speed: 200,
             damageMultiplier: 1.0,
             attackSpeedMultiplier: 1.0,
@@ -79,8 +84,30 @@ class Player extends Entity {
         if (typeof CombatConfig !== 'undefined') {
             finalDamage = CombatConfig.calculateDamageTaken(amount, this.stats.armor, this.stats.damageReduction);
         }
-        super.takeDamage(finalDamage);
-        return finalDamage;
+
+        this.shieldRegenTimer = 0; // Reset regen on hit
+
+        let damageToShield = 0;
+        let damageToHp = 0;
+
+        if (this.shield > 0) {
+            if (this.shield >= finalDamage) {
+                damageToShield = finalDamage;
+                this.shield -= finalDamage;
+            } else {
+                damageToShield = this.shield;
+                damageToHp = finalDamage - this.shield;
+                this.shield = 0;
+            }
+        } else {
+            damageToHp = finalDamage;
+        }
+
+        if (damageToHp > 0) {
+            super.takeDamage(damageToHp);
+        }
+        
+        return { total: finalDamage, shield: damageToShield, hp: damageToHp };
     }
 
     recalculateStats() {
@@ -121,9 +148,14 @@ class Player extends Entity {
         this.stats.maxHp = this.stats.maxHp * this.stats.maxHpMultiplier;
         this.maxHp = this.stats.maxHp;
         
+        this.maxShield = this.stats.maxShield;
+        this.shieldRegen = this.stats.shieldRegen;
+        
         this.stats.armor = this.stats.armor * this.stats.armorMultiplier;
 
         if (this.hp > this.maxHp) this.hp = this.maxHp;
+        if (this.maxShield === 0) this.shield = 0;
+        if (this.shield > this.maxShield) this.shield = this.maxShield;
 
         this.speed = this.stats.speed * this.stats.movementSpeedMultiplier;
         
@@ -273,6 +305,17 @@ class Player extends Entity {
             hot.durationLeft -= dt;
             if (hot.durationLeft <= 0) {
                 this.activeHoTs.splice(i, 1);
+            }
+        }
+
+        // Process Shield Regen
+        if (this.maxShield > 0 && this.shield < this.maxShield) {
+            this.shieldRegenTimer += dt;
+            if (this.shieldRegenTimer >= 5.0) { // 5 seconds without damage
+                this.shield += this.shieldRegen * dt;
+                if (this.shield > this.maxShield) {
+                    this.shield = this.maxShield;
+                }
             }
         }
 

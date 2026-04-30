@@ -163,21 +163,52 @@ class LootGen {
         // 7. Roll Boons/Curses (Traits) for Epic and Legendary
         let passiveTrait = null;
         if (rarity.name === 'Legendary' || (rarity.name === 'Epic' && Math.random() < 0.2)) {
-            passiveTrait = LootConfig.traits[Math.floor(Math.random() * LootConfig.traits.length)];
+            const baseTrait = LootConfig.traits[Math.floor(Math.random() * LootConfig.traits.length)];
             
+            passiveTrait = { name: baseTrait.name, modifiers: [] };
+            let traitTexts = [];
+
             // Apply trait modifiers to item
-            for (const tMod of passiveTrait.modifiers) {
-                const sign = tMod.value > 0 ? '+' : '';
+            for (const tMod of baseTrait.modifiers) {
+                let val = tMod.value;
+                if (tMod.range) {
+                    const min = Math.min(tMod.range[0], tMod.range[1]);
+                    const max = Math.max(tMod.range[0], tMod.range[1]);
+                    val = Math.floor(Math.random() * (max - min + 1)) + min;
+                }
+                const sign = val > 0 ? '+' : '';
                 const symbol = tMod.type.includes('percent') ? '%' : '';
+                
+                let text = `${sign}${val}${symbol} ${tMod.name}`;
+                if (tMod.stat === 'canDodge') {
+                    text = 'Cannot Dodge';
+                }
+                traitTexts.push(text);
+
                 modifiers.push({
                     name: tMod.name,
                     stat: tMod.stat,
-                    value: tMod.value,
+                    value: val,
                     type: tMod.type,
-                    text: `${sign}${tMod.value}${symbol} ${tMod.name}`,
+                    text: text,
                     isTrait: true
                 });
+
+                passiveTrait.modifiers.push({
+                    ...tMod,
+                    value: val
+                });
             }
+            
+            if (baseTrait.name === 'Arcane Barrier') {
+                const shieldMod = passiveTrait.modifiers.find(m => m.stat === 'maxShield');
+                const regenMod = passiveTrait.modifiers.find(m => m.stat === 'shieldRegen');
+                if (shieldMod && regenMod) {
+                    traitTexts = [`+${shieldMod.value} Shield (Regen: +${regenMod.value}/s)`];
+                }
+            }
+            
+            passiveTrait.text = traitTexts.join(', ');
         }
 
         this.itemIdCounter++;

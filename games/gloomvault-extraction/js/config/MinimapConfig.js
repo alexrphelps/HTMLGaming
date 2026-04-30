@@ -2,6 +2,8 @@ const MinimapConfig = {
     // UI Placement and Dimensions
     width: 200,
     height: 200,
+    expandedWidth: 800,
+    expandedHeight: 800,
     xOffset: 20, // Distance from right edge
     yOffset: 20, // Distance from top edge
     

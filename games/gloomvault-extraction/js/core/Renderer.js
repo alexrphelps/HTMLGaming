@@ -60,51 +60,74 @@ class Renderer {
         this.ctx.fillRect(screenPos.x - w / 2, screenPos.y - h / 2, w, h);
     }
 
-    renderMinimap(player, portal, map, config) {
+    renderMinimap(player, portal, map, config, isExpanded = false, dynamicLayout = null) {
         if (!config || !map || !player) return;
 
-        const uiX = this.canvas.width - config.width - config.xOffset;
-        const uiY = config.yOffset;
+        let currentWidth = isExpanded ? config.expandedWidth : config.width;
+        let currentHeight = isExpanded ? config.expandedHeight : config.height;
+
+        let uiX = this.canvas.width - currentWidth - config.xOffset;
+        let uiY = config.yOffset;
+
+        if (dynamicLayout) {
+            currentWidth = dynamicLayout.width;
+            currentHeight = dynamicLayout.height;
+            uiX = dynamicLayout.x;
+            uiY = dynamicLayout.y;
+        }
 
         // Draw background and border
         this.ctx.fillStyle = config.backgroundColor;
-        this.ctx.fillRect(uiX, uiY, config.width, config.height);
+        this.ctx.fillRect(uiX, uiY, currentWidth, currentHeight);
         this.ctx.strokeStyle = config.borderColor;
         this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(uiX, uiY, config.width, config.height);
+        this.ctx.strokeRect(uiX, uiY, currentWidth, currentHeight);
 
         // Calculate tile range to render
         const pTileX = Math.floor(player.x / map.tileSize);
         const pTileY = Math.floor(player.y / map.tileSize);
 
         // Minimap center
-        const centerX = uiX + config.width / 2;
-        const centerY = uiY + config.height / 2;
+        const centerX = uiX + currentWidth / 2;
+        const centerY = uiY + currentHeight / 2;
 
-        const tileScale = config.tileScale;
-        const tilesAcross = Math.ceil(config.width / tileScale);
-        const tilesDown = Math.ceil(config.height / tileScale);
+        let tileScale = config.tileScale;
+        let mapCenterX = pTileX;
+        let mapCenterY = pTileY;
+
+        if (isExpanded) {
+            // When expanded, scale the tiles to fit the entire map into the minimap view
+            const scaleX = currentWidth / map.cols;
+            const scaleY = currentHeight / map.rows;
+            tileScale = Math.min(scaleX, scaleY) * 0.95; // 95% to leave a tiny padding
+            // Center the entire map instead of centering on player
+            mapCenterX = map.cols / 2;
+            mapCenterY = map.rows / 2;
+        }
+
+        const tilesAcross = Math.ceil(currentWidth / tileScale);
+        const tilesDown = Math.ceil(currentHeight / tileScale);
         
         const halfAcross = Math.floor(tilesAcross / 2);
         const halfDown = Math.floor(tilesDown / 2);
 
-        const startTileX = pTileX - halfAcross;
-        const endTileX = pTileX + halfAcross;
-        const startTileY = pTileY - halfDown;
-        const endTileY = pTileY + halfDown;
+        const startTileX = Math.floor(mapCenterX - halfAcross);
+        const endTileX = Math.ceil(mapCenterX + halfAcross);
+        const startTileY = Math.floor(mapCenterY - halfDown);
+        const endTileY = Math.ceil(mapCenterY + halfDown);
 
         // Set clipping mask so tiles don't overflow the minimap rect
         this.ctx.save();
         this.ctx.beginPath();
-        this.ctx.rect(uiX, uiY, config.width, config.height);
+        this.ctx.rect(uiX, uiY, currentWidth, currentHeight);
         this.ctx.clip();
 
         // Draw tiles
         for (let ty = startTileY; ty <= endTileY; ty++) {
             for (let tx = startTileX; tx <= endTileX; tx++) {
                 // Calculate draw position
-                const drawX = centerX + (tx - pTileX) * tileScale - tileScale / 2;
-                const drawY = centerY + (ty - pTileY) * tileScale - tileScale / 2;
+                const drawX = centerX + (tx - mapCenterX) * tileScale - tileScale / 2;
+                const drawY = centerY + (ty - mapCenterY) * tileScale - tileScale / 2;
 
                 if (tx < 0 || tx >= map.cols || ty < 0 || ty >= map.rows) {
                     // Out of bounds
@@ -133,8 +156,8 @@ class Renderer {
             const portTileY = Math.floor(portal.y / map.tileSize);
             if (portTileX >= 0 && portTileX < map.cols && portTileY >= 0 && portTileY < map.rows) {
                 if (map.visitedGrid[portTileY * map.cols + portTileX]) {
-                    const drawX = centerX + (portTileX - pTileX) * tileScale;
-                    const drawY = centerY + (portTileY - pTileY) * tileScale;
+                    const drawX = centerX + (portTileX - mapCenterX) * tileScale;
+                    const drawY = centerY + (portTileY - mapCenterY) * tileScale;
                     this.ctx.fillStyle = config.portalColor;
                     this.ctx.beginPath();
                     this.ctx.arc(drawX, drawY, tileScale, 0, Math.PI * 2);
@@ -144,9 +167,11 @@ class Renderer {
         }
 
         // Draw Player
+        const playerDrawX = centerX + (pTileX - mapCenterX) * tileScale;
+        const playerDrawY = centerY + (pTileY - mapCenterY) * tileScale;
         this.ctx.fillStyle = config.playerColor;
         this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY, tileScale, 0, Math.PI * 2);
+        this.ctx.arc(playerDrawX, playerDrawY, tileScale, 0, Math.PI * 2);
         this.ctx.fill();
 
         this.ctx.restore();

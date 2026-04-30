@@ -73,46 +73,93 @@ class GameEngine {
         
         this.input.attach(this.canvas);
         
+        this.generateFloor(false);
+        
+        if (this.player && this.combatFeedback) {
+            this.combatFeedback.addText(`Floor ${this.currentFloor}`, this.player.x, this.player.y - 40, '#a335ee', 20, 2.0);
+        }
+
+        this.state = 'PLAYING';
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        requestAnimationFrame((time) => this.loop(time));
+    }
+
+    descendToNextFloor() {
+        this.currentFloor += typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.descentFloorIncrement : 1;
+        console.log(`Descending to floor ${this.currentFloor}`);
+        this.generateFloor(true);
+        this.combatFeedback.addText(`Floor ${this.currentFloor}`, this.player.x, this.player.y - 40, '#a335ee', 20, 2.0);
+    }
+
+    generateFloor(isNextFloor) {
         // Generate new level
         this.mapGen.generate();
         this.camera.setBounds(this.mapCols * this.tileSize, this.mapRows * this.tileSize);
 
         // Spawn player at start of level
         const startPos = this.mapGen.getStartPos();
-        this.player = new Player(startPos.x, startPos.y);
+        
+        if (!isNextFloor || !this.player) {
+            this.player = new Player(startPos.x, startPos.y);
+            // Load equipment
+            try {
+                let savedEq = JSON.parse(localStorage.getItem('gloomvault_equipment'));
+                if (!savedEq) {
+                    savedEq = { helm: null, chest: null, pants: null, boots: null, weapon: null, weapon2: null, trinket1: null, trinket2: null };
+                }
+                ensureStarterEquipment(savedEq);
+                this.player.equipment = savedEq;
+                this.player.recalculateStats();
 
-        // Load equipment
-        try {
-            
-            let savedEq = JSON.parse(localStorage.getItem('gloomvault_equipment'));
-            if (!savedEq) {
-                savedEq = { helm: null, chest: null, pants: null, boots: null, weapon: null, weapon2: null, trinket1: null, trinket2: null };
+                // Calculate starting floor based on gear score
+                let totalGS = 0;
+                for (let slot in this.player.equipment) {
+                    if (this.player.equipment[slot] && this.player.equipment[slot].gearScore) {
+                        totalGS += this.player.equipment[slot].gearScore;
+                    }
+                }
+                this.playerGearScore = totalGS;
+
+                if (!isNextFloor) {
+                    const minFloor = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.minStartingFloor : 1;
+                    const gsPerFloor = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.gearScorePerFloor : 40;
+                    this.gearDifficultyFloor = Math.max(minFloor, Math.floor(totalGS / gsPerFloor));
+                    this.currentFloor = 1;
+                }
+
+            } catch(e) {
+                console.error('Failed to load equipment', e);
             }
-            ensureStarterEquipment(savedEq);
-            this.player.equipment = savedEq;
-            this.player.recalculateStats();
-
-        } catch(e) {
-            console.error('Failed to load equipment', e);
+        } else {
+            // Keep existing player, just move them
+            this.player.x = startPos.x;
+            this.player.y = startPos.y;
+            this.player.projectiles = []; // clear their projectiles
         }
 
-        this.projectiles = []; // Reset projectiles
-        this.enemies = []; // Reset enemies
-        this.droppedItems = []; // Reset dropped items
-        this.lootChests = []; // Reset loot chests
-        this.combatFeedback = new CombatFeedback(); // Reset combat feedback
-        this.particleSystem = new ParticleSystem(); // Reset particles
+        // Calculate the actual difficulty level for enemies and loot
+        const effectiveFloorLevel = (this.currentFloor - 1) + (this.gearDifficultyFloor || 1);
+
+        // Reset entities
+        this.projectiles = []; 
+        this.enemies = []; 
+        this.droppedItems = []; 
+        this.lootChests = []; 
+        this.floorTransitions = [];
+        this.combatFeedback = new CombatFeedback(); 
+        this.particleSystem = new ParticleSystem(); 
 
         // Pre-populate entire map with enemies
         this.spawnManager.populateMap(
             this.mapGen, 
             this.enemies, 
             startPos, 
-            this.currentFloor, 
+            effectiveFloorLevel, 
             this.playerGearScore
         );
 
-        // Spawn Portal
+        // Spawn Portal (1 per floor)
         const rooms = this.mapGen.rooms;
         const lastRoom = rooms[rooms.length - 1];
         if (lastRoom) {
@@ -134,10 +181,20 @@ class GameEngine {
             }
         }
 
-        this.state = 'PLAYING';
-        this.isRunning = true;
-        this.lastTime = performance.now();
-        requestAnimationFrame((time) => this.loop(time));
+        // Spawn Doors and Holes
+        const minTransDist = typeof DifficultyConfig !== 'undefined' ? (DifficultyConfig.minTransitionDistance || 300) : 300;
+        
+        const numDoors = Math.floor(Math.random() * 3) + 1; // 1 to 3 doors
+        const doorPositions = this.mapGen.getDoorPositions(numDoors, [], minTransDist);
+        for (let p of doorPositions) {
+            this.floorTransitions.push(new FloorTransition(p.x, p.y, 'door'));
+        }
+
+        const numHoles = Math.floor(Math.random() * 3) + 1; // 1 to 3 holes
+        const holePositions = this.mapGen.getHolePositions(numHoles, doorPositions, minTransDist);
+        for (let p of holePositions) {
+            this.floorTransitions.push(new FloorTransition(p.x, p.y, 'hole'));
+        }
     }
 
     stop() {
@@ -229,7 +286,8 @@ class GameEngine {
                 
                 // Roll for loot drop (20% chance)
                 if (Math.random() < 0.2) {
-                    const itemData = this.lootGen.generateItem(this.currentFloor);
+                    const effectiveFloorLevel = (this.currentFloor - 1) + (this.gearDifficultyFloor || 1);
+                    const itemData = this.lootGen.generateItem(effectiveFloorLevel);
                     this.droppedItems.push(new DroppedItem(enemy.x, enemy.y, itemData));
                 }
 
@@ -273,10 +331,17 @@ class GameEngine {
             } else {
                 // Check collision with player
                 if (Math.hypot(this.player.x - proj.x, this.player.y - proj.y) < (this.player.width/2 + proj.width/2)) {
-                    let actualDamage = this.player.takeDamage(proj.damage);
+                    let damageInfo = this.player.takeDamage(proj.damage);
                     this.camera.shake(8, 0.2); // Bigger shake for player taking damage
-                    this.combatFeedback.addText(`-${Math.round(actualDamage)}`, this.player.x, this.player.y, '#ff0000', 16, 1.0);
-                    this.particleSystem.emitImpact(this.player.x, this.player.y, '#ff0000');
+                    
+                    if (damageInfo.shield > 0) {
+                        this.combatFeedback.addText(`-${Math.round(damageInfo.shield)}`, this.player.x, this.player.y - 10, '#3498db', 16, 1.0);
+                        this.particleSystem.emitImpact(this.player.x, this.player.y, '#3498db');
+                    }
+                    if (damageInfo.hp > 0) {
+                        this.combatFeedback.addText(`-${Math.round(damageInfo.hp)}`, this.player.x, this.player.y, '#ff0000', 16, 1.0);
+                        this.particleSystem.emitImpact(this.player.x, this.player.y, '#ff0000');
+                    }
                     
                     // Thorns logic
                     if (this.player.stats.thorns > 0 && proj.owner) {
@@ -314,6 +379,21 @@ class GameEngine {
             }
         }
 
+        // Update Floor Transitions
+        let closestTransition = null;
+        let transitionDistance = Infinity;
+        for (let i = this.floorTransitions.length - 1; i >= 0; i--) {
+            let transition = this.floorTransitions[i];
+            transition.update(dt);
+            if (this.player && !transition.activated) {
+                const dist = Math.hypot(this.player.x - transition.x, this.player.y - transition.y);
+                if (dist <= transition.interactionRadius && dist < transitionDistance) {
+                    closestTransition = transition;
+                    transitionDistance = dist;
+                }
+            }
+        }
+
         // Update Loot Chests
         let closestChest = null;
         let chestDistance = Infinity;
@@ -337,6 +417,14 @@ class GameEngine {
             if (this.input.isKeyDown('KeyF')) {
                 this.input.keys['KeyF'] = false;
                 this.extract();
+            }
+        } else if (closestTransition) {
+            interactionHint.textContent = 'Press [F] to Descend';
+            interactionHint.classList.remove('hidden');
+
+            if (this.input.isKeyDown('KeyF')) {
+                this.input.keys['KeyF'] = false;
+                closestTransition.interact(this);
             }
         } else if (closestChest) {
             interactionHint.textContent = 'Press [F] to Open Chest';
@@ -379,24 +467,43 @@ class GameEngine {
 
         // Update UI
         if (this.player) {
-            const hpBarFill = document.getElementById('player-health-bar-fill');
-            const hpBarText = document.getElementById('player-health-bar-text');
-            if (hpBarFill && hpBarText) {
-                const hpPercent = Math.max(0, (this.player.hp / this.player.maxHp) * 100);
-                hpBarFill.style.width = `${hpPercent}%`;
-                hpBarText.textContent = `${Math.ceil(this.player.hp)} / ${Math.ceil(this.player.maxHp)}`;
-                
-                // Color fading logic
-                if (hpPercent < 10) {
-                    hpBarFill.style.backgroundColor = '#e74c3c'; // Red
-                } else if (hpPercent < 35) {
-                    hpBarFill.style.backgroundColor = '#e67e22'; // Orange
-                } else {
-                    hpBarFill.style.backgroundColor = '#2ecc71'; // Green
-                }
-            }
-
+            this.updateHealthBarUI();
             this.updateActionBarUI();
+        }
+    }
+
+    updateHealthBarUI() {
+        if (!this.player) return;
+        const hpBarFill = document.getElementById('player-health-bar-fill');
+        const hpBarText = document.getElementById('player-health-bar-text');
+        if (hpBarFill && hpBarText) {
+            const hpPercent = Math.max(0, (this.player.hp / this.player.maxHp) * 100);
+            hpBarFill.style.width = `${hpPercent}%`;
+            hpBarText.textContent = `${Math.ceil(this.player.hp)} / ${Math.ceil(this.player.maxHp)}`;
+            
+            // Color fading logic
+            if (hpPercent < 10) {
+                hpBarFill.style.backgroundColor = '#e74c3c'; // Red
+            } else if (hpPercent < 35) {
+                hpBarFill.style.backgroundColor = '#e67e22'; // Orange
+            } else {
+                hpBarFill.style.backgroundColor = '#2ecc71'; // Green
+            }
+        }
+
+        const shieldBarContainer = document.getElementById('player-shield-bar-container');
+        const shieldBarFill = document.getElementById('player-shield-bar-fill');
+        const shieldBarText = document.getElementById('player-shield-bar-text');
+        
+        if (shieldBarContainer && shieldBarFill && shieldBarText) {
+            if (this.player.maxShield > 0) {
+                shieldBarContainer.style.display = 'block';
+                const shieldPercent = Math.max(0, (this.player.shield / this.player.maxShield) * 100);
+                shieldBarFill.style.width = `${shieldPercent}%`;
+                shieldBarText.textContent = `${Math.ceil(this.player.shield)} / ${Math.ceil(this.player.maxShield)}`;
+            } else {
+                shieldBarContainer.style.display = 'none';
+            }
         }
     }
 
@@ -507,6 +614,11 @@ class GameEngine {
         // Draw Portal
         if (this.portal) {
             this.portal.render(this.ctx, this.camera);
+        }
+
+        // Draw Floor Transitions
+        for (let transition of this.floorTransitions) {
+            transition.render(this.ctx, this.renderer);
         }
 
         // 3. Draw Enemies
