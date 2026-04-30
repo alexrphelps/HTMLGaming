@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     let scraps = 0;
     let itemInUpgradeSlot = null;
+    let itemInRepairSlot = null;
 
     
     function ensureStarterEquipment(eq) {
@@ -84,6 +85,20 @@ function loadStashData() {
             }
             stashEquipment = savedEq;
             scraps = parseInt(localStorage.getItem('gloomvault_scraps')) || 0;
+
+            // Migrate durability for stash items and equipment missing it
+            const migrateItem = (item) => {
+                if (!item || item.isStarter || item.type === 'trinket') return;
+                if (item.durability === undefined && typeof DurabilityConfig !== 'undefined') {
+                    const maxDur = DurabilityConfig.calculateMaxDurability(item);
+                    item.maxDurability = maxDur;
+                    item.durability = maxDur;
+                }
+            };
+            stashItems.forEach(migrateItem);
+            for (const slot in stashEquipment) {
+                migrateItem(stashEquipment[slot]);
+            }
         } catch(e) {
             stashItems = [];
             scraps = 0;
@@ -111,13 +126,15 @@ function loadStashData() {
             e.stopPropagation();
             element.classList.remove('drag-over');
             
-            if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade'].includes(draggedItemSource.source)) return;
+            if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade', 'repair'].includes(draggedItemSource.source)) return;
 
             let sourceList = null;
             let sourceItem = null;
             
             if (draggedItemSource.source === 'upgrade') {
                 sourceItem = itemInUpgradeSlot.item;
+            } else if (draggedItemSource.source === 'repair') {
+                sourceItem = itemInRepairSlot.item;
             } else {
                 sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
                 sourceItem = sourceList[draggedItemSource.id];
@@ -135,6 +152,9 @@ function loadStashData() {
 
             if (draggedItemSource.source === 'upgrade') {
                 itemInUpgradeSlot = null; // Remove from upgrade slot
+            }
+            if (draggedItemSource.source === 'repair') {
+                itemInRepairSlot = null; // Remove from repair slot
             }
 
             if (sourceList) {
@@ -166,7 +186,7 @@ function loadStashData() {
             e.preventDefault();
             stashSalvageDropzone.classList.remove('drag-over');
 
-            if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade'].includes(draggedItemSource.source)) return;
+            if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade', 'repair'].includes(draggedItemSource.source)) return;
 
             let sourceList = null;
             let sourceItem = null;
@@ -174,6 +194,9 @@ function loadStashData() {
             if (draggedItemSource.source === 'upgrade') {
                 sourceItem = itemInUpgradeSlot.item;
                 itemInUpgradeSlot = null; // Remove from upgrade slot
+            } else if (draggedItemSource.source === 'repair') {
+                sourceItem = itemInRepairSlot.item;
+                itemInRepairSlot = null; // Remove from repair slot
             } else {
                 sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
                 sourceItem = sourceList[draggedItemSource.id];
@@ -241,6 +264,56 @@ function loadStashData() {
         }
     });
 
+    // --- Repair Dropzone Logic ---
+    const repairDropzone = document.getElementById('repair-dropzone');
+    const btnRepair = document.getElementById('btn-repair-item');
+
+    if (repairDropzone) {
+        repairDropzone.addEventListener('dragover', (e) => { e.preventDefault(); repairDropzone.classList.add('drag-over'); });
+        repairDropzone.addEventListener('dragleave', () => repairDropzone.classList.remove('drag-over'));
+        repairDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            repairDropzone.classList.remove('drag-over');
+
+            if (!draggedItemSource || !['stash', 'stash-equip'].includes(draggedItemSource.source)) return;
+
+            let sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
+            let sourceItem = sourceList[draggedItemSource.id];
+            if (!sourceItem || !sourceItem.maxDurability) return;
+
+            let previousRepairItem = itemInRepairSlot ? itemInRepairSlot.item : null;
+
+            if (previousRepairItem && draggedItemSource.source === 'stash-equip') {
+                let emptyIndex = -1;
+                for (let k = 0; k < stashItems.length; k++) {
+                    if (!stashItems[k]) { emptyIndex = k; break; }
+                }
+                if (emptyIndex === -1) return;
+                stashItems[emptyIndex] = previousRepairItem;
+                sourceList[draggedItemSource.id] = null;
+            } else {
+                sourceList[draggedItemSource.id] = previousRepairItem;
+            }
+
+            itemInRepairSlot = { item: sourceItem, sourceId: draggedItemSource.id, sourceList: sourceList };
+            saveStashData();
+            updateStashUI();
+        });
+    }
+
+    if (btnRepair) {
+        btnRepair.addEventListener('click', () => {
+            if (!itemInRepairSlot) return;
+            const result = UpgradeSystem.repairItem(itemInRepairSlot.item, scraps);
+            if (result.success) {
+                scraps = result.remainingScraps;
+                saveStashData();
+                updateStashUI();
+                hideTooltip();
+            }
+        });
+    }
+
     btnUpgrade.addEventListener('mouseenter', (e) => {
         if (!itemInUpgradeSlot) return;
         const simulated = UpgradeSystem.simulateUpgrade(itemInUpgradeSlot.item);
@@ -252,8 +325,7 @@ function loadStashData() {
     btnUpgrade.addEventListener('mousemove', (e) => {
         if (!itemInUpgradeSlot) return;
         if (currentHoveredItem && currentHoveredSourceData && currentHoveredSourceData.source === 'upgrade_preview') {
-            tooltip.style.left = `${e.clientX + 15}px`;
-            tooltip.style.top = `${e.clientY + 15}px`;
+            positionTooltipSafely(tooltip, e.clientX, e.clientY);
         }
     });
 
@@ -278,6 +350,30 @@ function loadStashData() {
             upgradeDropzone.innerHTML = 'Drop Item';
             btnUpgrade.textContent = 'Upgrade (Cost: --)';
             btnUpgrade.disabled = true;
+        }
+
+        refreshRepairUI();
+    }
+
+    function refreshRepairUI() {
+        if (!repairDropzone || !btnRepair) return;
+
+        if (itemInRepairSlot) {
+            repairDropzone.innerHTML = '';
+            repairDropzone.appendChild(createDraggableItem(itemInRepairSlot.item, { source: 'repair', type: 'repair', id: 'repair' }));
+
+            const cost = UpgradeSystem.getRepairCost(itemInRepairSlot.item);
+            if (cost !== null) {
+                btnRepair.textContent = `Repair (Cost: ${cost})`;
+                btnRepair.disabled = scraps < cost;
+            } else {
+                btnRepair.textContent = 'Full Durability';
+                btnRepair.disabled = true;
+            }
+        } else {
+            repairDropzone.innerHTML = 'Drop Item';
+            btnRepair.textContent = 'Repair (Cost: --)';
+            btnRepair.disabled = true;
         }
     }
 
@@ -337,6 +433,8 @@ function loadStashData() {
         for (const slot in stashEquipment) {
             const item = stashEquipment[slot];
             if (item && item.modifiers) {
+                // Skip broken items (durability === 0)
+                if (item.durability !== undefined && item.durability <= 0) continue;
                 activeMods.push(...item.modifiers);
             }
         }
@@ -358,7 +456,7 @@ function loadStashData() {
         stats.armor = stats.armor * (stats.armorMultiplier || 1.0);
         const finalSpeed = stats.speed * stats.movementSpeedMultiplier;
         
-        let weapon1 = stashEquipment.weapon ? new Weapon(stashEquipment.weapon, false) : null;
+        let weapon1 = stashEquipment.weapon && !(stashEquipment.weapon.durability !== undefined && stashEquipment.weapon.durability <= 0) ? new Weapon(stashEquipment.weapon, false) : null;
         let weaponDamage = 0;
         let weaponCooldown = 0;
 
@@ -703,6 +801,33 @@ function loadStashData() {
         `;
     }
 
+    function positionTooltipSafely(tooltipEl, x, y) {
+        const tooltipWidth = tooltipEl.offsetWidth;
+        const tooltipHeight = tooltipEl.offsetHeight;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        let left = x + 15;
+        let top = y + 15;
+
+        // Check right boundary
+        if (left + tooltipWidth > viewportWidth - 5) {
+            left = x - tooltipWidth - 15;
+        }
+
+        // Check bottom boundary
+        if (top + tooltipHeight > viewportHeight - 5) {
+            top = y - tooltipHeight - 15;
+        }
+
+        // Final safety clamps to ensure it doesn't go off the top/left edges
+        left = Math.max(5, left);
+        top = Math.max(5, top);
+
+        tooltipEl.style.left = `${left}px`;
+        tooltipEl.style.top = `${top}px`;
+    }
+
     function showTooltip(item, e, sourceData) {
         if (!item) return;
         currentHoveredItem = item;
@@ -785,10 +910,18 @@ function loadStashData() {
                 </div>
             ` : ''}
             ${comparisonHTML}
+            ${item.maxDurability !== undefined ? (() => {
+                const pct = item.maxDurability > 0 ? (item.durability / item.maxDurability) : 0;
+                const colorClass = item.durability <= 0 ? 'dur-broken' : pct <= 0.10 ? 'dur-red' : pct <= 0.25 ? 'dur-orange' : pct <= 0.50 ? 'dur-yellow' : 'dur-green';
+                const label = item.durability <= 0 ? 'BROKEN' : `${Math.ceil(item.durability)} / ${item.maxDurability}`;
+                return `<div class="durability-bar-container">
+                    <div class="durability-bar-label">Durability: ${label}</div>
+                    <div class="durability-bar"><div class="durability-bar-fill ${colorClass}" style="width: ${Math.max(0, pct * 100)}%"></div></div>
+                </div>`;
+            })() : ''}
         `;
-        tooltip.style.left = `${e.clientX + 15}px`;
-        tooltip.style.top = `${e.clientY + 15}px`;
         tooltip.classList.remove('hidden');
+        positionTooltipSafely(tooltip, e.clientX, e.clientY);
     }
 
     function hideTooltip() {
@@ -862,6 +995,7 @@ function loadStashData() {
                     engine.renderer.renderMinimap(
                         engine.player, 
                         engine.portal, 
+                        engine.floorTransitions,
                         engine.mapGen, 
                         typeof MinimapConfig !== 'undefined' ? MinimapConfig : window.MinimapConfig, 
                         true, 
@@ -988,7 +1122,19 @@ function loadStashData() {
         div.className = 'item-dragger';
         div.draggable = true;
         div.style.backgroundColor = item.color;
-        div.textContent = item.name;
+        
+        let displayName = item.name;
+        if (item.maxDurability !== undefined) {
+            if (item.durability <= 0) {
+                div.classList.add('item-broken');
+                displayName += ' (Broken)';
+            } else {
+                const pct = item.durability / item.maxDurability;
+                if (pct <= 0.10) div.classList.add('item-critical-durability');
+                else if (pct <= 0.25) div.classList.add('item-low-durability');
+            }
+        }
+        div.textContent = displayName;
         
         div.addEventListener('dragstart', (e) => {
             draggedItemSource = sourceData;
@@ -1064,6 +1210,43 @@ function loadStashData() {
 
     // Stat Tooltip Logic
     const statTooltip = document.createElement('div');
+
+    // Durability HUD update
+    function updateDurabilityHUD() {
+        if (!engine.player) return;
+        const slots = [
+            { id: 'dur-helm', slot: 'helm' },
+            { id: 'dur-chest', slot: 'chest' },
+            { id: 'dur-pants', slot: 'pants' },
+            { id: 'dur-boots', slot: 'boots' },
+            { id: 'dur-weapon1', slot: 'weapon' },
+            { id: 'dur-weapon2', slot: 'weapon2' }
+        ];
+        for (const s of slots) {
+            const el = document.getElementById(s.id);
+            if (!el) continue;
+            const item = engine.player.equipment[s.slot];
+            if (!item || !item.maxDurability) {
+                el.className = 'dur-icon dur-state-hidden';
+                continue;
+            }
+            const pct = item.maxDurability > 0 ? item.durability / item.maxDurability : 0;
+            let state = 'good';
+            let fillColor = '#2ecc71';
+            if (item.durability <= 0) { state = 'broken'; fillColor = '#555'; }
+            else if (pct <= 0.10) { state = 'critical'; fillColor = '#e74c3c'; }
+            else if (pct <= 0.25) { state = 'low'; fillColor = '#f1c40f'; }
+            el.className = `dur-icon dur-state-${state}`;
+            const fill = el.querySelector('.dur-fill');
+            if (fill) {
+                fill.style.width = `${Math.max(0, pct * 100)}%`;
+                fill.style.backgroundColor = fillColor;
+            }
+        }
+    }
+
+    // Expose HUD update to engine
+    window.gloomvaultApp.updateDurabilityHUD = updateDurabilityHUD;
     statTooltip.className = 'item-tooltip hidden'; // Reuse styling but we'll populate simple text
     statTooltip.style.padding = '8px 12px';
     statTooltip.style.maxWidth = '250px';
@@ -1076,14 +1259,12 @@ function loadStashData() {
         const text = e.currentTarget.getAttribute('data-stat-tip');
         if (!text) return;
         statTooltip.innerHTML = text;
-        statTooltip.style.left = `${e.clientX + 15}px`;
-        statTooltip.style.top = `${e.clientY + 15}px`;
         statTooltip.classList.remove('hidden');
+        positionTooltipSafely(statTooltip, e.clientX, e.clientY);
     }
     
     function handleStatMouseMove(e) {
-        statTooltip.style.left = `${e.clientX + 15}px`;
-        statTooltip.style.top = `${e.clientY + 15}px`;
+        positionTooltipSafely(statTooltip, e.clientX, e.clientY);
     }
 
     function handleStatMouseOut(e) {
