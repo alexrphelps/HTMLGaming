@@ -300,7 +300,21 @@ function loadStashData() {
             cell.className = 'inventory-cell';
             setupExtractDropZone(cell, 'extract-loot', i);
             if (currentLoot[i]) {
-                cell.appendChild(createDraggableItem(currentLoot[i], { source: 'extract-loot', id: i }));
+                const itemEl = createDraggableItem(currentLoot[i], { source: 'extract-loot', id: i });
+                itemEl.addEventListener('click', () => {
+                    let emptyIndex = -1;
+                    for (let k = 0; k < stashItems.length; k++) {
+                        if (!stashItems[k]) { emptyIndex = k; break; }
+                    }
+                    if (emptyIndex !== -1) {
+                        stashItems[emptyIndex] = currentLoot[i];
+                        currentLoot[i] = null;
+                        saveStashData();
+                        updateExtractionUI();
+                        hideTooltip();
+                    }
+                });
+                cell.appendChild(itemEl);
             }
             lootGrid.appendChild(cell);
         }
@@ -312,7 +326,21 @@ function loadStashData() {
             cell.className = 'inventory-cell';
             setupExtractDropZone(cell, 'extract-stash', i);
             if (stashItems[i]) {
-                cell.appendChild(createDraggableItem(stashItems[i], { source: 'extract-stash', id: i }));
+                const itemEl = createDraggableItem(stashItems[i], { source: 'extract-stash', id: i });
+                itemEl.addEventListener('click', () => {
+                    let emptyIndex = -1;
+                    for (let k = 0; k < 25; k++) {
+                        if (!currentLoot[k]) { emptyIndex = k; break; }
+                    }
+                    if (emptyIndex !== -1) {
+                        currentLoot[emptyIndex] = stashItems[i];
+                        stashItems[i] = null;
+                        saveStashData();
+                        updateExtractionUI();
+                        hideTooltip();
+                    }
+                });
+                cell.appendChild(itemEl);
             }
             stashExGrid.appendChild(cell);
         }
@@ -361,6 +389,34 @@ function loadStashData() {
             
             saveStashData();
             updateExtractionUI();
+        });
+    }
+
+    // Stash All button
+    const btnStashAll = document.getElementById('btn-stash-all');
+    if(btnStashAll) {
+        btnStashAll.addEventListener('click', () => {
+            let movedAny = false;
+            for (let i = 0; i < 25; i++) {
+                if (currentLoot[i]) {
+                    let emptyIndex = -1;
+                    for (let k = 0; k < stashItems.length; k++) {
+                        if (!stashItems[k]) { emptyIndex = k; break; }
+                    }
+                    if (emptyIndex !== -1) {
+                        stashItems[emptyIndex] = currentLoot[i];
+                        currentLoot[i] = null;
+                        movedAny = true;
+                    } else {
+                        break; // Stash is full
+                    }
+                }
+            }
+            if (movedAny) {
+                saveStashData();
+                updateExtractionUI();
+                hideTooltip();
+            }
         });
     }
 

@@ -77,12 +77,15 @@
         <!-- Extraction Screen -->
         <div id="extraction-screen" class="screen">
             <h2>Extraction Successful</h2>
-            <div style="display: flex; gap: 20px; width: 90%; justify-content: center;">
-                <div class="backpack-panel">
-                    <h3>Loot (Drag to Stash or Salvage)</h3>
+            <div style="display: flex; gap: 20px; width: 90%; max-width: 1000px; justify-content: center;">
+                <div class="backpack-panel" style="flex: 0 1 400px; min-width: 0;">
+                    <h3>Loot (Click/Drag to Stash)</h3>
                     <div class="inventory-grid" id="extract-loot-grid" style="display: grid; grid-template-columns: repeat(5, 1fr);"></div>
                 </div>
-                <div class="backpack-panel">
+                <div style="display: flex; align-items: center;">
+                    <button id="btn-stash-all" class="menu-btn" style="padding: 10px 20px; font-size: 1.2rem; min-width: 150px;">Stash All &raquo;</button>
+                </div>
+                <div class="backpack-panel" style="flex: 0 1 400px; min-width: 0;">
                     <h3>Stash</h3>
                     <div class="inventory-grid" id="extract-stash-grid" style="overflow-y: auto; max-height: 400px; display: grid; grid-template-columns: repeat(5, 1fr);"></div>
                 </div>
@@ -91,7 +94,7 @@
             <div style="margin-top: 20px; display: flex; gap: 20px; align-items: center;">
                 <div class="upgrade-panel" style="border: 1px solid var(--color-danger); padding: 10px; display: flex; gap: 10px; align-items: center;">
                     <span style="color: var(--color-danger);">Salvage for Scraps:</span>
-                    <div class="equip-slot" id="salvage-dropzone" data-slot="salvage">Drop Here</div>
+                    <div class="equip-slot square-slot" id="salvage-dropzone" data-slot="salvage" style="width: 70px;">Drop Here</div>
                 </div>
                 <div id="extract-scrap-counter" style="font-size: 24px; color: #a0a0a0;">Scraps: 0</div>
             </div>
