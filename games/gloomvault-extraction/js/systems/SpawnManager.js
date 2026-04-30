@@ -6,8 +6,9 @@ class SpawnManager {
 
         // Base calculation: e.g. 100x100 = 10000 / 150 = ~66 enemies base
         let baseCount = Math.floor((mapGen.cols * mapGen.rows) / 150);
-        let enemyCountScale = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.enemyCountScale : 0.1;
-        let totalEnemies = Math.floor(baseCount * (1 + (floorLevel * enemyCountScale)));
+        let enemyCountScale = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.enemyCountScale : 0.05;
+        let countMultiplier = Math.min(2.0, 1 + (floorLevel * enemyCountScale));
+        let totalEnemies = Math.floor(baseCount * countMultiplier);
 
         // Apply dev mode enemy count multiplier
         if (typeof DevConfig !== 'undefined' && DevConfig.DEV_MODE_ENABLED) {

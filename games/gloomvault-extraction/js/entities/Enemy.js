@@ -40,7 +40,7 @@ class Enemy extends Entity {
             this.weapon = new Weapon({weaponType: 'melee_stab'}, false);
             this.weapon.baseCooldown = 1.0;
             this.weapon.cooldown = 1.0;
-            this.weapon.baseDamage = Math.floor(20 * dmgMult);
+            this.weapon.baseDamage = Math.floor(10 * dmgMult);
             this.weapon.damage = this.weapon.baseDamage;
         } else if (this.type === 'brute') {
             this.weapon = new Weapon({weaponType: 'melee_cleave'}, false);

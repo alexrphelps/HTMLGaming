@@ -459,6 +459,13 @@ function loadStashData() {
         let weapon1 = stashEquipment.weapon && !(stashEquipment.weapon.durability !== undefined && stashEquipment.weapon.durability <= 0) ? new Weapon(stashEquipment.weapon, false) : null;
         let weaponDamage = 0;
         let weaponCooldown = 0;
+        let totalGearScore = 0;
+        
+        for (const slot in stashEquipment) {
+            if (stashEquipment[slot] && stashEquipment[slot].gearScore) {
+                totalGearScore += stashEquipment[slot].gearScore;
+            }
+        }
 
         if (weapon1) {
             weaponDamage = Math.round(weapon1.baseDamage * stats.damageMultiplier + stats.flatDamage);
@@ -468,6 +475,9 @@ function loadStashData() {
         }
 
         // Update UI
+        const gsEl = document.getElementById('stash-stat-gs');
+        if (gsEl) gsEl.textContent = totalGearScore;
+        
         document.getElementById('stash-stat-dmg').textContent = weaponDamage;
         document.getElementById('stash-stat-spd').textContent = weapon1 ? (1 / weaponCooldown).toFixed(2) + '/s' : '-';
         document.getElementById('stash-stat-ms').textContent = Math.round(finalSpeed);
@@ -1179,6 +1189,14 @@ function loadStashData() {
         });
 
         // Update Stats Display
+        let totalGearScore = 0;
+        for (const slot in engine.player.equipment) {
+            if (engine.player.equipment[slot] && engine.player.equipment[slot].gearScore) {
+                totalGearScore += engine.player.equipment[slot].gearScore;
+            }
+        }
+        const gsEl = document.getElementById('stat-gs');
+        if (gsEl) gsEl.textContent = totalGearScore;
         
         document.getElementById('stat-dmg').textContent = 
             (engine.player.weapon1 ? Math.round(engine.player.weapon1.damage) : Math.round(engine.player.stats.flatDamage));

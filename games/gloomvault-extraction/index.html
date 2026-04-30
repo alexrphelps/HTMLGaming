@@ -39,6 +39,7 @@
                     <div class="player-stats" style="margin-top: 20px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid #333;">
                         <h4 style="text-align: center; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 10px; color: var(--color-accent);">Stats</h4>
                             <ul id="stash-stats-list">
+                                <li data-stat-tip="Aggregate power of all equipped items">Gear Score: <span id="stash-stat-gs" style="color: #ffd700; font-weight: bold;">0</span></li>
                                 <li data-stat-tip="Final damage per projectile hit">Damage: <span id="stash-stat-dmg">10</span></li>
                                 <li data-stat-tip="Attacks per second; higher = faster firing">Attack Speed: <span id="stash-stat-spd">1.0</span></li>
                                 <li data-stat-tip="Movement velocity; base 200">Move Speed: <span id="stash-stat-ms">200</span></li>
@@ -72,6 +73,12 @@
                             <span style="color: var(--color-accent); font-weight: bold;">Upgrade:</span>
                             <div class="equip-slot square-slot" id="upgrade-dropzone" data-slot="upgrade" style="width: 70px;">Drop Item</div>
                             <button id="btn-upgrade-item" class="menu-btn secondary" disabled style="margin-top: 0; padding: 10px 20px;">Upgrade (--)</button>
+                        </div>
+
+                        <div class="upgrade-panel" style="border: 1px dashed #27ae60; padding: 15px; display: flex; gap: 15px; align-items: center; border-radius: 6px; background: rgba(39, 174, 96, 0.05);">
+                            <span style="color: #27ae60; font-weight: bold;">Repair:</span>
+                            <div class="equip-slot square-slot" id="repair-dropzone" data-slot="repair" style="width: 70px;">Drop Item</div>
+                            <button id="btn-repair-item" class="menu-btn secondary" disabled style="margin-top: 0; padding: 10px 20px; border-color: #27ae60;">Repair (--)</button>
                         </div>
                     </div>
                 </div>
@@ -165,6 +172,36 @@
                     </div>
                 </div>
                 <div id="interaction-hint" class="interaction-hint hidden">Press [E] to Pick Up</div>
+                <div id="durability-hud" class="durability-hud">
+                    <div class="dur-icon" id="dur-helm" data-slot="helm" title="Helm">
+                        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2C8 2 4 5 4 9v4h2v-1h12v1h2V9c0-4-4-7-8-7z" fill="currentColor"/></svg>
+                        <div class="dur-bar"><div class="dur-fill"></div></div>
+                    </div>
+                    <div class="dur-row">
+                        <div class="dur-icon" id="dur-chest" data-slot="chest" title="Chest">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 6h16v12H4z" fill="currentColor"/></svg>
+                            <div class="dur-bar"><div class="dur-fill"></div></div>
+                        </div>
+                        <div class="dur-icon" id="dur-weapon1" data-slot="weapon" title="Weapon 1">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 2l2 14 3-3 4 4 2-2-4-4 3-3z" fill="currentColor"/></svg>
+                            <div class="dur-bar"><div class="dur-fill"></div></div>
+                        </div>
+                    </div>
+                    <div class="dur-row">
+                        <div class="dur-icon" id="dur-pants" data-slot="pants" title="Pants">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 4h12v6l-3 10h-2l-1-8-1 8H9L6 10z" fill="currentColor"/></svg>
+                            <div class="dur-bar"><div class="dur-fill"></div></div>
+                        </div>
+                        <div class="dur-icon" id="dur-weapon2" data-slot="weapon2" title="Weapon 2">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 2l2 14 3-3 4 4 2-2-4-4 3-3z" fill="currentColor"/></svg>
+                            <div class="dur-bar"><div class="dur-fill"></div></div>
+                        </div>
+                    </div>
+                    <div class="dur-icon" id="dur-boots" data-slot="boots" title="Boots">
+                        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 8v6l-2 4h8v-4h4v4h2l-2-10z" fill="currentColor"/></svg>
+                        <div class="dur-bar"><div class="dur-fill"></div></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Inventory Overlay -->
@@ -189,6 +226,7 @@
                         <div class="player-stats" style="margin-top: 20px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid #333;">
                             <h4 style="text-align: center; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 10px; color: var(--color-accent);">Stats</h4>
                             <ul id="stats-list">
+                                <li data-stat-tip="Aggregate power of all equipped items">Gear Score: <span id="stat-gs" style="color: #ffd700; font-weight: bold;">0</span></li>
                                 <li data-stat-tip="Final damage per projectile hit">Damage: <span id="stat-dmg">10</span></li>
                                 <li data-stat-tip="Attacks per second; higher = faster firing">Attack Speed: <span id="stat-spd">1.0</span></li>
                                 <li data-stat-tip="Movement velocity; base 200">Move Speed: <span id="stat-ms">200</span></li>
@@ -219,6 +257,7 @@
     <script src="js/config/MapConfig.js"></script>
     <script src="js/config/MinimapConfig.js"></script>
     <script src="js/config/UpgradeConfig.js"></script>
+    <script src="js/config/DurabilityConfig.js"></script>
     <script src="js/config/CombatConfig.js"></script>
     <script src="js/config/LootConfig.js"></script>
     <script src="js/systems/LootGen.js"></script>

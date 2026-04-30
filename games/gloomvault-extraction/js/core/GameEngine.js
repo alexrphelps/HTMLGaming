@@ -124,6 +124,22 @@ class GameEngine {
                 }
                 ensureStarterEquipment(savedEq);
                 this.player.equipment = savedEq;
+                
+                // Migrate existing items that lack durability
+                if (typeof DurabilityConfig !== 'undefined') {
+                    for (const slot in savedEq) {
+                        const item = savedEq[slot];
+                        if (!item || item.isStarter || item.type === 'trinket') continue;
+                        if (item.maxDurability === undefined && DurabilityConfig.baseBySlot[item.type]) {
+                            const baseDur = DurabilityConfig.baseBySlot[item.type];
+                            const rarityMult = DurabilityConfig.rarityMultiplier[item.rarity] || 1.0;
+                            const gsBonus = Math.floor((item.gearScore || 0) * DurabilityConfig.gsScaling);
+                            item.maxDurability = Math.max(1, Math.floor(baseDur * rarityMult) + gsBonus);
+                            item.durability = item.maxDurability;
+                        }
+                    }
+                }
+                
                 this.player.recalculateStats();
 
                 // Calculate starting floor based on gear score
@@ -173,10 +189,10 @@ class GameEngine {
             this.playerGearScore
         );
 
-        // Spawn Portal (1 per floor)
+        // Spawn Portal (1 per every 2nd floor, starting from floor 2)
         const rooms = this.mapGen.rooms;
         const lastRoom = rooms[rooms.length - 1];
-        if (lastRoom) {
+        if (lastRoom && this.currentFloor % 2 === 0) {
             const validPortalPos = this.mapGen.getValidFloorPosNear(lastRoom.center.x, lastRoom.center.y);
             this.portal = new ExtractionPortal(validPortalPos.x, validPortalPos.y);
         } else {
@@ -484,6 +500,9 @@ class GameEngine {
         if (this.player) {
             this.updateHealthBarUI();
             this.updateActionBarUI();
+            if (window.gloomvaultApp && window.gloomvaultApp.updateDurabilityHUD) {
+                window.gloomvaultApp.updateDurabilityHUD(this.player);
+            }
         }
     }
 
@@ -668,7 +687,7 @@ class GameEngine {
 
         // 8. Draw Minimap
         if (this.showMinimap !== false && typeof MinimapConfig !== 'undefined') {
-            this.renderer.renderMinimap(this.player, this.portal, this.mapGen, MinimapConfig);
+            this.renderer.renderMinimap(this.player, this.portal, this.floorTransitions, this.mapGen, MinimapConfig);
         }
     }
 
