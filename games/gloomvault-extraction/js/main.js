@@ -313,6 +313,85 @@ function loadStashData() {
         });
 
         refreshUpgradeUI();
+        updateStashStats();
+    }
+
+    function updateStashStats() {
+        // Base Stats (Unmodified) - mimicking Player constructor
+        const stats = {
+            speed: 200,
+            damageMultiplier: 1.0,
+            attackSpeedMultiplier: 1.0,
+            movementSpeedMultiplier: 1.0,
+            flatDamage: 0,
+            lifesteal: 0,
+            lifestealCapBonus: 0,
+            armor: 0,
+            damageReduction: 0,
+            thorns: 0,
+            dodgeCooldownMultiplier: 1.0
+        };
+
+        // Aggregate modifiers from stashEquipment
+        const activeMods = [];
+        for (const slot in stashEquipment) {
+            const item = stashEquipment[slot];
+            if (item && item.modifiers) {
+                activeMods.push(...item.modifiers);
+            }
+        }
+
+        // Apply modifiers
+        for (const mod of activeMods) {
+            if (mod.type === 'percent' || mod.type === 'percent_penalty') {
+                if (stats[mod.stat] !== undefined) {
+                    stats[mod.stat] += (mod.value / 100);
+                }
+            } else if (mod.type === 'flat') {
+                if (stats[mod.stat] !== undefined) {
+                    stats[mod.stat] += mod.value;
+                }
+            }
+        }
+
+        // Apply derived stats
+        stats.armor = stats.armor * (stats.armorMultiplier || 1.0);
+        const finalSpeed = stats.speed * stats.movementSpeedMultiplier;
+        
+        let weapon1 = stashEquipment.weapon ? new Weapon(stashEquipment.weapon, false) : null;
+        let weaponDamage = 0;
+        let weaponCooldown = 0;
+
+        if (weapon1) {
+            weaponDamage = Math.round(weapon1.baseDamage * stats.damageMultiplier + stats.flatDamage);
+            weaponCooldown = weapon1.baseCooldown / stats.attackSpeedMultiplier;
+        } else {
+            weaponDamage = Math.round(stats.flatDamage);
+        }
+
+        // Update UI
+        document.getElementById('stash-stat-dmg').textContent = weaponDamage;
+        document.getElementById('stash-stat-spd').textContent = weapon1 ? (1 / weaponCooldown).toFixed(2) + '/s' : '-';
+        document.getElementById('stash-stat-ms').textContent = Math.round(finalSpeed);
+        
+        document.getElementById('stash-stat-armor').textContent = Math.round(stats.armor);
+        document.getElementById('stash-stat-dr').textContent = Math.round(stats.damageReduction * 100) + '%';
+        
+        const baseDodgeCooldown = 1.0;
+        const dodgeCd = baseDodgeCooldown * Math.max(0.2, stats.dodgeCooldownMultiplier);
+        document.getElementById('stash-stat-dodge').textContent = dodgeCd.toFixed(2) + 's';
+        
+        document.getElementById('stash-stat-thorns').textContent = Math.round(stats.thorns);
+
+        let baseLsCap = typeof CombatConfig !== 'undefined' ? CombatConfig.caps.lifesteal : 0.35;
+        let currentLsCap = baseLsCap + stats.lifestealCapBonus;
+        let totalLs = stats.lifesteal;
+        let effectiveLs = Math.min(totalLs, currentLsCap);
+        let lsText = `${Math.round(effectiveLs * 100)}%`;
+        if (Math.round(totalLs * 100) > Math.round(currentLsCap * 100)) {
+            lsText += ` (${Math.round(totalLs * 100)}%)`;
+        }
+        document.getElementById('stash-stat-ls').textContent = lsText;
     }
 
     let currentLoot = [];
@@ -477,10 +556,43 @@ function loadStashData() {
 
     // Finish button
     const btnFinishExtraction = document.getElementById('btn-finish-extraction');
+    const extractionConfirmModal = document.getElementById('extraction-confirm-modal');
+    const btnConfirmLeave = document.getElementById('btn-confirm-leave');
+    const btnCancelLeave = document.getElementById('btn-cancel-leave');
+    const extractionConfirmText = document.getElementById('extraction-confirm-text');
+
     if(btnFinishExtraction) {
         btnFinishExtraction.addEventListener('click', () => {
-            showScreen('main-menu');
+            let highRarityCount = 0;
+            if (currentLoot && currentLoot.length > 0) {
+                for (let i = 0; i < currentLoot.length; i++) {
+                    const item = currentLoot[i];
+                    if (item && (item.rarity === 'Epic' || item.rarity === 'Legendary')) {
+                        highRarityCount++;
+                    }
+                }
+            }
+
+            if (highRarityCount > 0) {
+                extractionConfirmText.innerHTML = `You have <strong style="color: #e040fb;">${highRarityCount} High-Value (Epic/Legendary) items</strong> left in your extraction loot.<br><br>If you leave now, they will be lost forever. Are you sure?`;
+                extractionConfirmModal.classList.remove('hidden');
+            } else {
+                showScreen('main-menu');
+            }
         });
+
+        if (btnConfirmLeave) {
+            btnConfirmLeave.addEventListener('click', () => {
+                extractionConfirmModal.classList.add('hidden');
+                showScreen('main-menu');
+            });
+        }
+
+        if (btnCancelLeave) {
+            btnCancelLeave.addEventListener('click', () => {
+                extractionConfirmModal.classList.add('hidden');
+            });
+        }
     }
 
     // --- Inventory Overlay Logic ---
@@ -701,7 +813,11 @@ function loadStashData() {
             // Open Inventory
             inventoryScreen.classList.remove('hidden');
             engine.isRunning = false; // Pause game
+            engine.showMinimap = false; // Hide regular minimap
             updateInventoryUI();
+            
+            // Re-render the game without the regular minimap
+            engine.render(0);
             
             // Render expanded minimap over the paused game
             if (engine.renderer && engine.player && engine.mapGen) {
@@ -758,6 +874,7 @@ function loadStashData() {
             inventoryScreen.classList.add('hidden');
             hideTooltip();
             engine.isRunning = true; // Resume game
+            engine.showMinimap = true; // Show regular minimap again
             engine.lastTime = performance.now(); // reset time to avoid huge jump
             requestAnimationFrame((time) => engine.loop(time));
         }
@@ -944,4 +1061,40 @@ function loadStashData() {
             engine.updateHealthBarUI();
         }
     }
+
+    // Stat Tooltip Logic
+    const statTooltip = document.createElement('div');
+    statTooltip.className = 'item-tooltip hidden'; // Reuse styling but we'll populate simple text
+    statTooltip.style.padding = '8px 12px';
+    statTooltip.style.maxWidth = '250px';
+    statTooltip.style.textAlign = 'center';
+    statTooltip.style.fontSize = '0.9em';
+    statTooltip.style.color = '#fff';
+    document.body.appendChild(statTooltip);
+
+    function handleStatMouseOver(e) {
+        const text = e.currentTarget.getAttribute('data-stat-tip');
+        if (!text) return;
+        statTooltip.innerHTML = text;
+        statTooltip.style.left = `${e.clientX + 15}px`;
+        statTooltip.style.top = `${e.clientY + 15}px`;
+        statTooltip.classList.remove('hidden');
+    }
+    
+    function handleStatMouseMove(e) {
+        statTooltip.style.left = `${e.clientX + 15}px`;
+        statTooltip.style.top = `${e.clientY + 15}px`;
+    }
+
+    function handleStatMouseOut(e) {
+        statTooltip.classList.add('hidden');
+    }
+
+    document.querySelectorAll('[data-stat-tip]').forEach(el => {
+        el.style.cursor = 'help'; // Add a hint cursor
+        el.addEventListener('mouseenter', handleStatMouseOver);
+        el.addEventListener('mousemove', handleStatMouseMove);
+        el.addEventListener('mouseleave', handleStatMouseOut);
+    });
+
 });

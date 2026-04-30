@@ -652,7 +652,7 @@ class GameEngine {
         this.ctx.fillText(`Player: (${Math.floor(this.player.x)}, ${Math.floor(this.player.y)})`, 10, 40);
 
         // 8. Draw Minimap
-        if (typeof MinimapConfig !== 'undefined') {
+        if (this.showMinimap !== false && typeof MinimapConfig !== 'undefined') {
             this.renderer.renderMinimap(this.player, this.portal, this.mapGen, MinimapConfig);
         }
     }
