@@ -82,7 +82,7 @@ class Weapon {
                 const spawnY = y + Math.sin(angle) * 15;
                 // Add slight inaccuracy if spread > 0
                 const finalAngle = angle + (Math.random() * this.spread - this.spread/2);
-                projectiles.push(new Projectile(spawnX, spawnY, finalAngle, this.projectileSpeed, this.damage, this.lifetime, this.isPlayerOwned));
+                projectiles.push(new Projectile(spawnX, spawnY, finalAngle, this.projectileSpeed, this.damage, this.lifetime, this.isPlayerOwned, this.weaponType));
             } else {
                 const startAngle = angle - this.spread / 2;
                 const angleStep = this.projectileCount > 1 ? this.spread / (this.projectileCount - 1) : 0;
@@ -91,7 +91,7 @@ class Weapon {
                     const a = startAngle + (angleStep * i);
                     const spawnX = x + Math.cos(a) * 15;
                     const spawnY = y + Math.sin(a) * 15;
-                    projectiles.push(new Projectile(spawnX, spawnY, a, this.projectileSpeed * (0.9 + Math.random()*0.2), this.damage, this.lifetime * (0.9 + Math.random()*0.2), this.isPlayerOwned));
+                    projectiles.push(new Projectile(spawnX, spawnY, a, this.projectileSpeed * (0.9 + Math.random()*0.2), this.damage, this.lifetime * (0.9 + Math.random()*0.2), this.isPlayerOwned, this.weaponType));
                 }
             }
             

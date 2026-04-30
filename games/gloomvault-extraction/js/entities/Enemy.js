@@ -18,20 +18,33 @@ class Enemy extends Entity {
         this.baseSpeed = speed;
         this.speed = speed;
         this.color = color;
-        this.state = 'idle';
+        this.state = 'wander'; // start wandering
         this.path = [];
         this.pathTimer = 0;
+        this.wanderTimer = 0;
         this.angle = 0;
 
-        // Weapon for ranged
+        // Weapons
         this.weapon = null;
         if (this.type === 'ranged') {
-            this.weapon = new Weapon(null, false);
-            this.weapon.baseCooldown = 1.5; // Slower attack rate
+            this.weapon = new Weapon({weaponType: 'pistol'}, false);
+            this.weapon.baseCooldown = 1.5;
             this.weapon.cooldown = 1.5;
             this.weapon.baseDamage = Math.floor(15 * levelMultiplier);
             this.weapon.damage = this.weapon.baseDamage;
             this.weapon.projectileSpeed = 300;
+        } else if (this.type === 'grunt') {
+            this.weapon = new Weapon({weaponType: 'melee_stab'}, false);
+            this.weapon.baseCooldown = 1.0;
+            this.weapon.cooldown = 1.0;
+            this.weapon.baseDamage = Math.floor(20 * levelMultiplier);
+            this.weapon.damage = this.weapon.baseDamage;
+        } else if (this.type === 'brute') {
+            this.weapon = new Weapon({weaponType: 'melee_cleave'}, false);
+            this.weapon.baseCooldown = 2.0;
+            this.weapon.cooldown = 2.0;
+            this.weapon.baseDamage = Math.floor(40 * levelMultiplier);
+            this.weapon.damage = this.weapon.baseDamage;
         }
 
         // Brute specific
@@ -57,6 +70,44 @@ class Enemy extends Entity {
         }
     }
 
+    hasLineOfSight(player, mapGen) {
+        if (!mapGen) return false;
+        
+        let x0 = this.x;
+        let y0 = this.y;
+        let x1 = player.x;
+        let y1 = player.y;
+
+        let dx = Math.abs(x1 - x0);
+        let dy = Math.abs(y1 - y0);
+        let x = x0;
+        let y = y0;
+        let n = 1 + dx + dy;
+        let x_inc = (x1 > x0) ? 1 : -1;
+        let y_inc = (y1 > y0) ? 1 : -1;
+        let error = dx - dy;
+        dx *= 2;
+        dy *= 2;
+
+        for (; n > 0; --n) {
+            let tileX = Math.floor(x / mapGen.tileSize);
+            let tileY = Math.floor(y / mapGen.tileSize);
+            
+            if (mapGen.getTile(tileX, tileY) === 0) {
+                return false; // hit wall
+            }
+
+            if (error > 0) {
+                x += x_inc;
+                error -= dy;
+            } else {
+                y += y_inc;
+                error += dx;
+            }
+        }
+        return true;
+    }
+
     update(dt, player, mapGen, pathfinder) {
         if (this.hp <= 0) return [];
         
@@ -65,62 +116,110 @@ class Enemy extends Entity {
         // Common cooldowns/timers
         if (this.weapon) this.weapon.update(dt);
         this.pathTimer -= dt;
+        this.wanderTimer -= dt;
 
         const distToPlayer = Math.hypot(player.x - this.x, player.y - this.y);
+        const canSeePlayer = this.hasLineOfSight(player, mapGen);
 
-        // Pathfinding updates every 0.5 seconds
-        if (this.pathTimer <= 0 && this.state !== 'attack' && this.state !== 'flee') {
+        // Aggro logic
+        if (canSeePlayer && distToPlayer < 600) {
+            if (this.state === 'wander' || this.state === 'idle') {
+                this.state = 'chase';
+            }
+        } else if (this.state !== 'wander' && this.state !== 'attack' && distToPlayer > 800) {
+            // Lose aggro if player is too far
+            this.state = 'wander';
+            this.path = [];
+        }
+
+        // Wandering State
+        if (this.state === 'wander') {
+            if (this.path.length === 0) {
+                if (this.wanderTimer <= 0) {
+                    // Pick a random spot nearby
+                    let angle = Math.random() * Math.PI * 2;
+                    let dist = Math.random() * 150 + 50;
+                    let targetX = this.x + Math.cos(angle) * dist;
+                    let targetY = this.y + Math.sin(angle) * dist;
+                    
+                    // Simple check if target is floor
+                    let tX = Math.floor(targetX / mapGen.tileSize);
+                    let tY = Math.floor(targetY / mapGen.tileSize);
+                    if (mapGen.getTile(tX, tY) === 1) {
+                        this.path = pathfinder.findPath(this.x, this.y, targetX, targetY, mapGen);
+                    }
+                    this.wanderTimer = Math.random() * 2 + 1; // Wait 1-3 seconds if no path or arrived
+                }
+            } else {
+                this.followPath(dt, mapGen, this.baseSpeed * 0.5); // Walk slower while wandering
+            }
+        }
+
+        // Pathfinding updates every 0.5 seconds for chasing
+        if (this.pathTimer <= 0 && this.state === 'chase') {
             this.pathTimer = 0.5;
-            // Only path if within aggro range (e.g., 600 pixels)
-            if (distToPlayer < 600) {
+            // Only path if within aggro range
+            if (distToPlayer < 800) {
                 this.path = pathfinder.findPath(this.x, this.y, player.x, player.y, mapGen);
             }
         }
 
         // --- GRUNT LOGIC ---
         if (this.type === 'grunt') {
-            if (this.hp < this.maxHp * 0.2) {
-                this.state = 'flee';
-            } else if (distToPlayer < 600) {
-                this.state = 'chase';
+            if (this.state !== 'wander') {
+                if (this.hp < this.maxHp * 0.2) {
+                    this.state = 'flee';
+                } else if (distToPlayer < 600) {
+                    this.state = 'chase';
+                }
             }
 
             if (this.state === 'flee') {
                 this.angle = Math.atan2(this.y - player.y, this.x - player.x);
                 this.moveInDirection(this.angle, dt, mapGen);
-            } else if (this.state === 'chase' && this.path.length > 0) {
-                this.followPath(dt, mapGen);
+            } else if (this.state === 'chase') {
+                if (distToPlayer > 40 && this.path.length > 0) {
+                    this.followPath(dt, mapGen);
+                } else if (distToPlayer <= 40) {
+                    this.angle = Math.atan2(player.y - this.y, player.x - this.x);
+                    if (this.weapon && this.weapon.cooldownTimer <= 0) {
+                        const projs = this.weapon.attack(this.x, this.y, this.angle);
+                        if (projs && projs.length > 0) newProjectiles.push(...projs);
+                    }
+                }
             }
         }
 
         // --- RANGED LOGIC ---
         if (this.type === 'ranged') {
-            if (distToPlayer < 200) {
-                // Move away
-                this.state = 'flee';
-                this.angle = Math.atan2(this.y - player.y, this.x - player.x);
-                this.moveInDirection(this.angle, dt, mapGen);
-            } else if (distToPlayer > 300 && distToPlayer < 600) {
-                // Move closer
-                this.state = 'chase';
-                if (this.path.length > 0) this.followPath(dt, mapGen);
-            } else {
-                this.state = 'idle'; // Hold position and shoot
-                this.angle = Math.atan2(player.y - this.y, player.x - this.x);
-            }
+            if (this.state !== 'wander') {
+                if (distToPlayer < 200) {
+                    // Move away
+                    this.state = 'flee';
+                    this.angle = Math.atan2(this.y - player.y, this.x - player.x);
+                    this.moveInDirection(this.angle, dt, mapGen);
+                } else if (distToPlayer > 300 && distToPlayer < 600) {
+                    // Move closer
+                    this.state = 'chase';
+                    if (this.path.length > 0) this.followPath(dt, mapGen);
+                } else {
+                    this.state = 'idle'; // Hold position and shoot
+                    this.angle = Math.atan2(player.y - this.y, player.x - this.x);
+                }
 
-            // Always try to shoot if in range
-            if (distToPlayer < 400 && this.weapon) {
-                this.angle = Math.atan2(player.y - this.y, player.x - this.x);
-                const projs = this.weapon.attack(this.x, this.y, this.angle);
-                if (projs && projs.length > 0) newProjectiles.push(...projs);
+                // Always try to shoot if in range and has LoS
+                if (distToPlayer < 400 && this.weapon && canSeePlayer) {
+                    this.angle = Math.atan2(player.y - this.y, player.x - this.x);
+                    const projs = this.weapon.attack(this.x, this.y, this.angle);
+                    if (projs && projs.length > 0) newProjectiles.push(...projs);
+                }
             }
         }
 
         // --- BRUTE LOGIC ---
         if (this.type === 'brute') {
             if (this.state === 'idle' || this.state === 'chase') {
-                if (distToPlayer < 150) {
+                if (distToPlayer < 150 && canSeePlayer) {
                     // Telegraph attack
                     this.state = 'attack';
                     this.attackTimer = 1.0; // 1 second windup
@@ -137,6 +236,13 @@ class Enemy extends Entity {
                 } else if (this.attackTimer <= 0) {
                     // Dash
                     this.moveInDirection(this.angle, dt, mapGen, this.dashSpeed);
+                    
+                    // Attack periodically during dash
+                    if (this.weapon && this.weapon.cooldownTimer <= 0) {
+                        const projs = this.weapon.attack(this.x, this.y, this.angle);
+                        if (projs && projs.length > 0) newProjectiles.push(...projs);
+                    }
+
                     // Reset after dash
                     if (this.attackTimer <= -0.5) { // 0.5 second dash
                         this.state = 'chase';
@@ -150,7 +256,7 @@ class Enemy extends Entity {
         // Update Animation State
         if (this.state === 'attack') {
             this.animationState = 'attack';
-        } else if (this.state === 'chase' || this.state === 'flee') {
+        } else if (this.state === 'chase' || this.state === 'flee' || (this.state === 'wander' && this.path.length > 0)) {
             this.animationState = 'run';
         } else {
             this.animationState = 'idle';
@@ -160,7 +266,7 @@ class Enemy extends Entity {
         return newProjectiles;
     }
 
-    followPath(dt, mapGen) {
+    followPath(dt, mapGen, overrideSpeed = null) {
         const target = this.path[0];
         const dist = Math.hypot(target.x - this.x, target.y - this.y);
 
@@ -170,7 +276,7 @@ class Enemy extends Entity {
         }
 
         this.angle = Math.atan2(this.path[0].y - this.y, this.path[0].x - this.x);
-        this.moveInDirection(this.angle, dt, mapGen);
+        this.moveInDirection(this.angle, dt, mapGen, overrideSpeed);
     }
 
     moveInDirection(angle, dt, mapGen, overrideSpeed = null) {

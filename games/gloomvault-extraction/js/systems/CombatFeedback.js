@@ -4,10 +4,28 @@ class CombatFeedback {
     }
 
     addText(text, x, y, color = '#ff0000', size = 16, lifetime = 1.0) {
+        // Stack text if there are overlaps
+        let overlap = true;
+        let adjustedY = y;
+        let attempts = 0;
+        
+        while (overlap && attempts < 10) {
+            overlap = false;
+            for (let t of this.texts) {
+                // If texts are close horizontally and vertically, stack the new one up
+                if (Math.abs(t.x - x) < 20 && Math.abs(t.y - adjustedY) < size + 2) {
+                    overlap = true;
+                    adjustedY -= (size + 2);
+                    break;
+                }
+            }
+            attempts++;
+        }
+
         this.texts.push({
             text: text,
             x: x,
-            y: y,
+            y: adjustedY,
             color: color,
             size: size,
             lifetime: lifetime,

@@ -208,7 +208,7 @@ class GameEngine {
         // Update Projectiles and Handle Collisions
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             let proj = this.projectiles[i];
-            proj.update(dt, this.mapGen);
+            proj.update(dt, this.mapGen, this.particleSystem);
 
             let hit = false;
 
@@ -244,7 +244,7 @@ class GameEngine {
 
             if (hit || proj.markedForDeletion) {
                 if (!hit && proj.timer < proj.lifetime) {
-                    this.combatFeedback.addText('Block', proj.x, proj.y, '#aaaaaa', 12, 0.5);
+                    // Removed 'Block' text per request
                     this.particleSystem.emitImpact(proj.x, proj.y, '#aaaaaa', 5);
                 }
                 this.projectiles.splice(i, 1);

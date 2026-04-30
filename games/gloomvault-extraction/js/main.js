@@ -525,7 +525,7 @@ function loadStashData() {
         div.className = 'item-dragger';
         div.draggable = true;
         div.style.backgroundColor = item.color;
-        div.textContent = item.name.split(' ')[0]; // short name
+        div.textContent = item.name;
         
         div.addEventListener('dragstart', (e) => {
             draggedItemSource = sourceData;
