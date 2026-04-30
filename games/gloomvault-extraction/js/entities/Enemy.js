@@ -55,6 +55,16 @@ class Enemy extends Entity {
         this.dashTarget = null;
         this.dashSpeed = 400;
 
+        // Knockback
+        this.knockbackVx = 0;
+        this.knockbackVy = 0;
+
+        // Stagger
+        this.staggerTimer = 0;
+
+        // Hit flash
+        this.hitFlashTimer = 0;
+
         // Elite Modifiers
         this.eliteModifier = 'none';
         const eliteRoll = Math.random();
@@ -114,6 +124,46 @@ class Enemy extends Entity {
     update(dt, player, mapGen, pathfinder) {
         if (this.hp <= 0) return [];
         
+        // Process stagger
+        if (this.staggerTimer > 0) {
+            this.staggerTimer -= dt;
+        }
+
+        // Process hit flash
+        if (this.hitFlashTimer > 0) {
+            this.hitFlashTimer -= dt;
+        }
+
+        // Process knockback
+        if (Math.abs(this.knockbackVx) > 1 || Math.abs(this.knockbackVy) > 1) {
+            const oldX = this.x;
+            this.x += this.knockbackVx * dt;
+            if (this.checkCollision(mapGen)) {
+                this.x = oldX;
+                // Wall slam bonus damage
+                this.takeDamage(15);
+                this.knockbackVx = 0;
+            }
+
+            const oldY = this.y;
+            this.y += this.knockbackVy * dt;
+            if (this.checkCollision(mapGen)) {
+                this.y = oldY;
+                this.takeDamage(15);
+                this.knockbackVy = 0;
+            }
+
+            // Decay knockback
+            this.knockbackVx *= Math.max(0, 1 - 8 * dt);
+            this.knockbackVy *= Math.max(0, 1 - 8 * dt);
+        }
+
+        // Skip AI while staggered
+        if (this.staggerTimer > 0) {
+            this.updateAnimation(dt);
+            return [];
+        }
+
         let newProjectiles = [];
 
         // Common cooldowns/timers
@@ -320,6 +370,11 @@ class Enemy extends Entity {
         return false;
     }
 
+    applyKnockback(angle, force) {
+        this.knockbackVx = Math.cos(angle) * force;
+        this.knockbackVy = Math.sin(angle) * force;
+    }
+
     render(ctx, renderer) {
         if (window.gameAssets && window.gameAssets.enemy && window.gameAssets.enemy.complete && window.gameAssets.enemy.naturalWidth > 0) {
             let row = 0;
@@ -343,6 +398,11 @@ class Enemy extends Entity {
         const screenPos = renderer.camera.worldToScreen(this.x, this.y);
         
         ctx.fillStyle = this.color;
+
+        // Hit flash for melee impacts
+        if (this.hitFlashTimer > 0) {
+            ctx.fillStyle = '#ffffff';
+        }
 
         // Flashing effect for brute attack telegraph
         if (this.state === 'attack' && this.type === 'brute') {
