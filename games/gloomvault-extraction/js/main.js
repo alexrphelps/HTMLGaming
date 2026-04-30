@@ -381,12 +381,146 @@ function loadStashData() {
     tooltip.className = 'item-tooltip hidden';
     document.body.appendChild(tooltip);
 
-    function showTooltip(item, e) {
+    let isShiftDown = false;
+    let currentHoveredItem = null;
+    let currentHoveredEvent = null;
+    let currentHoveredSourceData = null;
+
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            if (!isShiftDown) {
+                isShiftDown = true;
+                if (currentHoveredItem && currentHoveredEvent) {
+                    showTooltip(currentHoveredItem, currentHoveredEvent, currentHoveredSourceData);
+                }
+            }
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            if (isShiftDown) {
+                isShiftDown = false;
+                if (currentHoveredItem && currentHoveredEvent) {
+                    showTooltip(currentHoveredItem, currentHoveredEvent, currentHoveredSourceData);
+                }
+            }
+        }
+    });
+
+    function getStatMap(itm) {
+        let map = {};
+        
+        if (itm && itm.type === 'weapon') {
+            // Instantiate a temporary weapon to get base stats
+            if (typeof Weapon !== 'undefined') {
+                let tempWep = new Weapon(itm, false);
+                map['baseDamage'] = { name: 'Base Damage', value: tempWep.baseDamage, type: 'flat' };
+                map['baseCooldown'] = { name: 'Cooldown (s)', value: tempWep.baseCooldown, type: 'flat' };
+                map['projectileCount'] = { name: 'Projectiles', value: tempWep.projectileCount, type: 'flat' };
+            }
+        }
+
+        if (itm && itm.modifiers) {
+            itm.modifiers.forEach(m => {
+                if (!map[m.stat]) map[m.stat] = { name: m.name, value: 0, type: m.type };
+                map[m.stat].value += m.value;
+            });
+        }
+        return map;
+    }
+
+    function buildComparisonHTML(hoverItem, equipItem, slotLabel = "Equipped") {
+        let hoverStats = getStatMap(hoverItem);
+        let equipStats = getStatMap(equipItem);
+        
+        let allStats = new Set([...Object.keys(hoverStats), ...Object.keys(equipStats)]);
+        let deltas = [];
+        
+        let gsDiff = hoverItem.gearScore - equipItem.gearScore;
+        if (gsDiff !== 0) {
+            let sign = gsDiff > 0 ? '+' : '';
+            let colorClass = gsDiff > 0 ? 'modifier-positive' : 'modifier-negative';
+            deltas.push(`<div class="modifier-line ${colorClass}"><strong>${sign}${gsDiff} Gear Score</strong></div>`);
+        }
+
+        allStats.forEach(statKey => {
+            let h = hoverStats[statKey] || { value: 0, name: '', type: '' };
+            let e = equipStats[statKey] || { value: 0, name: '', type: '' };
+            let diff = h.value - e.value;
+            
+            if (Math.abs(diff) > 0.01) {
+                let name = h.name || e.name;
+                let type = h.type || e.type;
+                
+                let sign = diff > 0 ? '+' : '';
+                let percent = (type === 'percent' || type === 'percent_penalty') ? '%' : '';
+                
+                let isGood = diff > 0;
+                if (type === 'percent_penalty' || name.toLowerCase().includes('penalty') || statKey === 'baseCooldown') {
+                    isGood = !isGood;
+                }
+                
+                let valStr = diff % 1 !== 0 ? diff.toFixed(1).replace(/\.0$/, '') : diff;
+                let colorClass = isGood ? 'modifier-positive' : 'modifier-negative';
+                deltas.push(`<div class="modifier-line ${colorClass}">${sign}${valStr}${percent} ${name}</div>`);
+            }
+        });
+        
+        if (deltas.length === 0) {
+            deltas.push('<div class="modifier-line modifier-neutral">Identical Stats</div>');
+        }
+
+        return `
+            <div class="tooltip-comparison" style="border-top: 1px solid #777; margin-top: 5px; padding-top: 5px;">
+                <div style="font-size: 0.85em; color: #ccc; margin-bottom: 2px;">Compared to ${slotLabel}:</div>
+                ${deltas.join('')}
+            </div>
+        `;
+    }
+
+    function showTooltip(item, e, sourceData) {
         if (!item) return;
+        currentHoveredItem = item;
+        currentHoveredEvent = e;
+        currentHoveredSourceData = sourceData;
         
         let implicits = item.modifiers ? item.modifiers.filter(m => m.isImplicit) : [];
         let explicits = item.modifiers ? item.modifiers.filter(m => !m.isImplicit && !m.isTrait) : [];
         
+        let comparisonHTML = '';
+        let isBackpackItem = sourceData && sourceData.type === 'inventory'; // Check if it's an inventory item
+        
+        let isStashScreenOpen = document.getElementById('stash-screen').classList.contains('active');
+        let isInventoryOpen = !inventoryScreen.classList.contains('hidden');
+
+        if (isBackpackItem && (isInventoryOpen || isStashScreenOpen)) {
+            let slotName = item.type.toLowerCase();
+            let equippedItems = [];
+            
+            let equipmentSource = isStashScreenOpen ? stashEquipment : engine.player.equipment;
+            
+            if (slotName === 'weapon') {
+                if (equipmentSource['weapon']) equippedItems.push({ item: equipmentSource['weapon'], label: 'Weapon 1' });
+                if (equipmentSource['weapon2']) equippedItems.push({ item: equipmentSource['weapon2'], label: 'Weapon 2' });
+            } else if (slotName === 'trinket') {
+                if (equipmentSource['trinket1']) equippedItems.push({ item: equipmentSource['trinket1'], label: 'Trinket 1' });
+                if (equipmentSource['trinket2']) equippedItems.push({ item: equipmentSource['trinket2'], label: 'Trinket 2' });
+            } else {
+                if (equipmentSource[slotName]) equippedItems.push({ item: equipmentSource[slotName], label: 'Equipped' });
+            }
+            
+            if (equippedItems.length > 0) {
+                if (isShiftDown) {
+                    equippedItems.forEach(eq => {
+                        comparisonHTML += buildComparisonHTML(item, eq.item, eq.label);
+                    });
+                } else {
+                    comparisonHTML = `<div class="tooltip-hint" style="color: #aaa; font-size: 0.85em; margin-top: 8px; text-align: center; border-top: 1px dashed #555; padding-top: 4px;">Shift to compare</div>`;
+                }
+            }
+        }
+
         tooltip.innerHTML = `
             <div class="tooltip-title" style="color: ${item.color}">${item.name}</div>
             <div class="tooltip-stats">
@@ -426,6 +560,7 @@ function loadStashData() {
                     <span style="font-weight: normal; color: #fff;">${item.passiveTrait.text}</span>
                 </div>
             ` : ''}
+            ${comparisonHTML}
         `;
         tooltip.style.left = `${e.clientX + 15}px`;
         tooltip.style.top = `${e.clientY + 15}px`;
@@ -434,6 +569,9 @@ function loadStashData() {
 
     function hideTooltip() {
         tooltip.classList.add('hidden');
+        currentHoveredItem = null;
+        currentHoveredEvent = null;
+        currentHoveredSourceData = null;
     }
 
     // Toggle Inventory
@@ -463,6 +601,44 @@ function loadStashData() {
     }
 
     let draggedItemSource = null;
+
+    inventoryScreen.addEventListener('dragover', (e) => {
+        if (e.target === inventoryScreen) {
+            e.preventDefault(); // allow drop
+        }
+    });
+
+    inventoryScreen.addEventListener('drop', (e) => {
+        if (e.target !== inventoryScreen) return;
+        
+        e.preventDefault();
+        
+        if (!draggedItemSource || !engine.player || draggedItemSource.source !== 'game') return;
+
+        let sourceList = draggedItemSource.type === 'inventory' ? engine.player.inventory : engine.player.equipment;
+        let sourceItem = sourceList[draggedItemSource.id];
+
+        if (!sourceItem) return;
+
+        // Remove item from player
+        sourceList[draggedItemSource.id] = null;
+
+        // Calculate drop position with random offset
+        const offsetX = (Math.random() - 0.5) * 40;
+        const offsetY = (Math.random() - 0.5) * 40;
+        const dropX = engine.player.x + offsetX;
+        const dropY = engine.player.y + offsetY;
+
+        // Spawn item in the world
+        engine.droppedItems.push(new DroppedItem(dropX, dropY, sourceItem));
+        engine.combatFeedback.addText('Dropped', dropX, dropY, '#aaaaaa', 12, 1.0);
+
+        // Update player stats and UI
+        engine.player.recalculateStats();
+        updateInventoryUI();
+        
+        draggedItemSource = null;
+    });
 
     function setupDropZone(element, type, id) {
         element.addEventListener('dragover', (e) => {
@@ -538,8 +714,8 @@ function loadStashData() {
             document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
         });
 
-        div.addEventListener('mouseenter', (e) => showTooltip(item, e));
-        div.addEventListener('mousemove', (e) => showTooltip(item, e));
+        div.addEventListener('mouseenter', (e) => showTooltip(item, e, sourceData));
+        div.addEventListener('mousemove', (e) => showTooltip(item, e, sourceData));
         div.addEventListener('mouseleave', hideTooltip);
 
         return div;
