@@ -391,7 +391,14 @@ class GameEngine {
             } else {
                 // Check collision with player
                 if (Math.hypot(this.player.x - proj.x, this.player.y - proj.y) < (this.player.width/2 + proj.width/2)) {
-                    let damageInfo = this.player.takeDamage(proj.damage);
+                    let incomingDamage = proj.damage;
+                    // Melee damage resistance - 30% DR while actively attacking with melee
+                    const w1Attacking = this.player.weapon1 && (this.player.weapon1.weaponType === 'melee_stab' || this.player.weapon1.weaponType === 'melee_cleave') && this.player.weapon1.cooldownTimer > 0;
+                    const w2Attacking = this.player.weapon2 && (this.player.weapon2.weaponType === 'melee_stab' || this.player.weapon2.weaponType === 'melee_cleave') && this.player.weapon2.cooldownTimer > 0;
+                    if (w1Attacking || w2Attacking) {
+                        incomingDamage = Math.round(incomingDamage * 0.7);
+                    }
+                    let damageInfo = this.player.takeDamage(incomingDamage);
                     this.camera.shake(8, 0.2); // Bigger shake for player taking damage
                     
                     if (damageInfo.shield > 0) {
