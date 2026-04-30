@@ -158,8 +158,9 @@ class Player extends Entity {
                 }
                 break;
             case 'nova':
-                for (let i = 0; i < 8; i++) {
-                    const angle = (Math.PI * 2 / 8) * i;
+                const projectileCount = ability.projectiles || 8;
+                for (let i = 0; i < projectileCount; i++) {
+                    const angle = (Math.PI * 2 / projectileCount) * i;
                     const spawnX = this.x + Math.cos(angle) * 15;
                     const spawnY = this.y + Math.sin(angle) * 15;
                     projectiles.push(new Projectile(spawnX, spawnY, angle, 400, ability.damage * this.stats.damageMultiplier, 1.5, true));

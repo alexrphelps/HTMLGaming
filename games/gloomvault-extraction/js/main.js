@@ -118,7 +118,6 @@ function loadStashData() {
             
             if (draggedItemSource.source === 'upgrade') {
                 sourceItem = itemInUpgradeSlot.item;
-                itemInUpgradeSlot = null; // Remove from upgrade slot
             } else {
                 sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
                 sourceItem = sourceList[draggedItemSource.id];
@@ -132,6 +131,10 @@ function loadStashData() {
             if (type === 'stash-equip') {
                 const targetSlotType = id.replace(/[0-9]/g, '');
                 if (sourceItem.type !== targetSlotType) return;
+            }
+
+            if (draggedItemSource.source === 'upgrade') {
+                itemInUpgradeSlot = null; // Remove from upgrade slot
             }
 
             if (sourceList) {
@@ -207,10 +210,21 @@ function loadStashData() {
         // If there's an item in the upgrade slot already, put it back to source
         let previousUpgradeItem = itemInUpgradeSlot ? itemInUpgradeSlot.item : null;
         
+        if (previousUpgradeItem && draggedItemSource.source === 'stash-equip') {
+            let emptyIndex = -1;
+            for (let k = 0; k < stashItems.length; k++) {
+                if (!stashItems[k]) { emptyIndex = k; break; }
+            }
+            if (emptyIndex === -1) {
+                return; // Stash is full, prevent swap
+            }
+            stashItems[emptyIndex] = previousUpgradeItem;
+            sourceList[draggedItemSource.id] = null;
+        } else {
+            sourceList[draggedItemSource.id] = previousUpgradeItem;
+        }
+
         itemInUpgradeSlot = { item: sourceItem, sourceId: draggedItemSource.id, sourceList: sourceList };
-        
-        // Clear from source array to avoid duplication, and swap the previous item
-        sourceList[draggedItemSource.id] = previousUpgradeItem;
         
         saveStashData();
         updateStashUI(); // Refresh UI
@@ -223,8 +237,27 @@ function loadStashData() {
             scraps = result.remainingScraps;
             saveStashData();
             updateStashUI();
+            hideTooltip();
         }
     });
+
+    btnUpgrade.addEventListener('mouseenter', (e) => {
+        if (!itemInUpgradeSlot) return;
+        const simulated = UpgradeSystem.simulateUpgrade(itemInUpgradeSlot.item);
+        if (simulated) {
+            showTooltip(simulated, e, { source: 'upgrade_preview', type: 'upgrade_preview' });
+        }
+    });
+
+    btnUpgrade.addEventListener('mousemove', (e) => {
+        if (!itemInUpgradeSlot) return;
+        if (currentHoveredItem && currentHoveredSourceData && currentHoveredSourceData.source === 'upgrade_preview') {
+            tooltip.style.left = `${e.clientX + 15}px`;
+            tooltip.style.top = `${e.clientY + 15}px`;
+        }
+    });
+
+    btnUpgrade.addEventListener('mouseleave', hideTooltip);
 
     function refreshUpgradeUI() {
         document.getElementById('scrap-counter').textContent = `Scraps: ${scraps}`;

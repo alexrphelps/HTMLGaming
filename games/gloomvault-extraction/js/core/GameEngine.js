@@ -302,7 +302,7 @@ class GameEngine {
             if (this.input.isKeyDown('KeyF')) {
                 // Attempt to add to inventory
                 if (this.player.addToInventory(closestItem.itemData)) {
-                    this.combatFeedback.addText('Picked up', closestItem.x, closestItem.y, closestItem.itemData.color, 14, 1.0);
+                    this.combatFeedback.addText(`Found ${closestItem.itemData.type.charAt(0).toUpperCase() + closestItem.itemData.type.slice(1)}`, closestItem.x, closestItem.y, closestItem.itemData.color, 14, 1.0);
                     // Remove from world
                     const idx = this.droppedItems.indexOf(closestItem);
                     if (idx > -1) {

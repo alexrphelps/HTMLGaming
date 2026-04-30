@@ -28,8 +28,8 @@ class LootGen {
         
         this.trinketAbilities = [
             { type: 'heal', value: 50, cooldown: 15, name: 'Healing Surge', text: 'Use to heal 50 HP (15s CD)' },
-            { type: 'nova', damage: 40, cooldown: 8, name: 'Arcane Nova', text: 'Fires 8 projectiles around you (8s CD)' },
-            { type: 'dash', speed: 800, time: 0.3, cooldown: 5, name: 'Phase Shift', text: 'A swift directional dash (5s CD)' }
+            { type: 'nova', damage: 40, projectiles: 8, cooldown: 8, name: 'Arcane Nova', text: 'Fires 8 projectiles around you (8s CD)' },
+            { type: 'dash', speed: 800, time: 0.3, cooldown: 5, name: 'Phase Shift', text: 'A swift directional dash at 800 speed (5s CD)' }
         ];
     }
 
@@ -148,7 +148,8 @@ class LootGen {
         // 6. Assign Trinket Abilities
         let activeAbility = null;
         if (type.slot === 'trinket') {
-            activeAbility = this.trinketAbilities[Math.floor(Math.random() * this.trinketAbilities.length)];
+            const baseAbility = this.trinketAbilities[Math.floor(Math.random() * this.trinketAbilities.length)];
+            activeAbility = JSON.parse(JSON.stringify(baseAbility));
         }
 
         // 7. Roll Boons/Curses (Traits) for Epic and Legendary
