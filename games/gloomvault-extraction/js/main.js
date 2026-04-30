@@ -602,14 +602,20 @@ function loadStashData() {
 
     let draggedItemSource = null;
 
-    inventoryScreen.addEventListener('dragover', (e) => {
-        if (e.target === inventoryScreen) {
-            e.preventDefault(); // allow drop
+    const playScreen = document.getElementById('play-screen');
+
+    playScreen.addEventListener('dragover', (e) => {
+        // Allow dropping anywhere on play-screen that is outside inventory slots
+        if (!e.target.closest('.inventory-cell') && !e.target.closest('.equip-slot')) {
+            e.preventDefault();
         }
     });
 
-    inventoryScreen.addEventListener('drop', (e) => {
-        if (e.target !== inventoryScreen) return;
+    playScreen.addEventListener('drop', (e) => {
+        // Ignore if dropped on an inventory cell or equip slot (handled by those specifically)
+        if (e.target.closest('.inventory-cell') || e.target.closest('.equip-slot')) {
+            return;
+        }
         
         e.preventDefault();
         
