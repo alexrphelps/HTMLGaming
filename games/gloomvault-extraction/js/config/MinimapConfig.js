@@ -18,7 +18,9 @@ const MinimapConfig = {
     exploredFloorColor: '#333333',
     exploredWallColor: '#666666',
     playerColor: '#00ff00',
-    portalColor: '#9900ff'
+    portalColor: '#9900ff',
+    doorColor: '#8b5a2b',
+    holeColor: '#111111'
 };
 
 if (typeof window !== 'undefined') {

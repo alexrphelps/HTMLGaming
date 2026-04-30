@@ -528,3 +528,119 @@ body {
 .modifier-neutral {
     color: #2196F3;
 }
+
+/* === Durability System === */
+
+/* Durability bar in tooltips */
+.durability-bar-container {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #555;
+}
+
+.durability-bar-label {
+    font-size: 0.8rem;
+    color: #aaa;
+    margin-bottom: 3px;
+}
+
+.durability-bar {
+    width: 100%;
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.durability-bar-fill {
+    height: 100%;
+    transition: width 0.2s ease;
+    border-radius: 3px;
+}
+
+.dur-green { background-color: #2ecc71; }
+.dur-yellow { background-color: #f1c40f; }
+.dur-orange { background-color: #e67e22; }
+.dur-red { background-color: #e74c3c; }
+.dur-broken { background-color: #666; }
+
+/* Broken / low durability item indicators */
+.item-dragger.item-low-durability {
+    box-shadow: inset 0 0 8px rgba(241, 196, 15, 0.6);
+}
+
+.item-dragger.item-critical-durability {
+    box-shadow: inset 0 0 8px rgba(231, 76, 60, 0.6);
+    animation: critical-pulse 1.5s ease-in-out infinite;
+}
+
+.item-dragger.item-broken {
+    opacity: 0.5;
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.8);
+    filter: grayscale(60%);
+}
+
+@keyframes critical-pulse {
+    0%, 100% { box-shadow: inset 0 0 8px rgba(231, 76, 60, 0.6); }
+    50% { box-shadow: inset 0 0 15px rgba(231, 76, 60, 0.9); }
+}
+
+/* In-dungeon Durability HUD */
+.durability-hud {
+    position: absolute;
+    bottom: 30px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0.85;
+}
+
+.durability-hud .dur-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.durability-hud .dur-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    color: #aaa;
+    min-width: 28px;
+}
+
+.durability-hud .dur-icon.dur-state-good { color: #2ecc71; }
+.durability-hud .dur-icon.dur-state-low { color: #f1c40f; }
+.durability-hud .dur-icon.dur-state-critical { color: #e74c3c; animation: critical-pulse-icon 1.5s ease-in-out infinite; }
+.durability-hud .dur-icon.dur-state-broken { color: #555; }
+.durability-hud .dur-icon.dur-state-hidden { display: none; }
+
+@keyframes critical-pulse-icon {
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 1; }
+}
+
+.durability-hud .dur-bar {
+    width: 24px;
+    height: 3px;
+    background: #333;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.durability-hud .dur-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Repair dropzone */
+#repair-dropzone.drag-over {
+    border-color: #27ae60;
+    background-color: rgba(39, 174, 96, 0.2);
+}

@@ -60,7 +60,7 @@ class Renderer {
         this.ctx.fillRect(screenPos.x - w / 2, screenPos.y - h / 2, w, h);
     }
 
-    renderMinimap(player, portal, map, config, isExpanded = false, dynamicLayout = null) {
+    renderMinimap(player, portal, floorTransitions, map, config, isExpanded = false, dynamicLayout = null) {
         if (!config || !map || !player) return;
 
         let currentWidth = isExpanded ? config.expandedWidth : config.width;
@@ -162,6 +162,26 @@ class Renderer {
                     this.ctx.beginPath();
                     this.ctx.arc(drawX, drawY, tileScale, 0, Math.PI * 2);
                     this.ctx.fill();
+                }
+            }
+        }
+
+        // Draw Floor Transitions (Doors and Holes)
+        if (floorTransitions && floorTransitions.length > 0) {
+            for (let transition of floorTransitions) {
+                if (transition.activated) continue;
+                
+                const tTileX = Math.floor(transition.x / map.tileSize);
+                const tTileY = Math.floor(transition.y / map.tileSize);
+                
+                if (tTileX >= 0 && tTileX < map.cols && tTileY >= 0 && tTileY < map.rows) {
+                    if (map.visitedGrid[tTileY * map.cols + tTileX]) {
+                        const drawX = centerX + (tTileX - mapCenterX) * tileScale - tileScale / 2;
+                        const drawY = centerY + (tTileY - mapCenterY) * tileScale - tileScale / 2;
+                        
+                        this.ctx.fillStyle = transition.type === 'door' ? config.doorColor : config.holeColor;
+                        this.ctx.fillRect(Math.floor(drawX), Math.floor(drawY), Math.ceil(tileScale), Math.ceil(tileScale));
+                    }
                 }
             }
         }

@@ -107,6 +107,17 @@ class GameEngine {
     }
 
     generateFloor(isNextFloor) {
+        // Select a random map configuration
+        const configKeys = Object.keys(MapConfigs);
+        const randomKey = configKeys[Math.floor(Math.random() * configKeys.length)];
+        this.currentMapConfig = MapConfigs[randomKey];
+        this.mapCols = this.currentMapConfig.cols;
+        this.mapRows = this.currentMapConfig.rows;
+        console.log(`Generating map style: ${randomKey}`);
+
+        // Re-instantiate mapGen with the new config
+        this.mapGen = new MapGen(this.currentMapConfig, this.tileSize);
+
         // Generate new level
         this.mapGen.generate();
         this.camera.setBounds(this.mapCols * this.tileSize, this.mapRows * this.tileSize);
@@ -290,8 +301,8 @@ class GameEngine {
         // Update portal
         let nearPortal = false;
         if (this.portal) {
-            this.portal.update(dt);
-            if (this.player) {
+            this.portal.update(dt, this.enemies);
+            if (this.player && !this.portal.enemiesNearby) {
                 const dist = Math.hypot(this.player.x - this.portal.x, this.player.y - this.portal.y);
                 if (dist <= this.portal.interactionRadius) {
                     nearPortal = true;
@@ -451,8 +462,8 @@ class GameEngine {
         let transitionDistance = Infinity;
         for (let i = this.floorTransitions.length - 1; i >= 0; i--) {
             let transition = this.floorTransitions[i];
-            transition.update(dt);
-            if (this.player && !transition.activated) {
+            transition.update(dt, this.enemies);
+            if (this.player && !transition.activated && !transition.enemiesNearby) {
                 const dist = Math.hypot(this.player.x - transition.x, this.player.y - transition.y);
                 if (dist <= transition.interactionRadius && dist < transitionDistance) {
                     closestTransition = transition;

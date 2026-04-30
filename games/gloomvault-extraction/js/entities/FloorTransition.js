@@ -3,13 +3,24 @@ class FloorTransition extends Entity {
         super(x, y, 40, 40);
         this.type = type; // 'door' or 'hole'
         this.interactionRadius = 60;
+        this.closedRadius = 40;
         this.pulse = 0;
         this.activated = false;
+        this.enemiesNearby = false;
+        this.enemyCheckRadius = 150;
     }
 
-    update(dt) {
+    update(dt, enemies = []) {
         if (!this.activated) {
             this.pulse += dt * 2;
+            this.enemiesNearby = false;
+            for (let enemy of enemies) {
+                const dist = Math.hypot(this.x - enemy.x, this.y - enemy.y);
+                if (dist <= this.enemyCheckRadius) {
+                    this.enemiesNearby = true;
+                    break;
+                }
+            }
         }
     }
 
@@ -52,11 +63,19 @@ class FloorTransition extends Entity {
 
         // Draw interaction pulse if not activated
         if (!this.activated) {
-            ctx.strokeStyle = `rgba(100, 200, 255, ${0.5 + Math.sin(this.pulse) * 0.3})`;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(screenPos.x, screenPos.y, this.interactionRadius, 0, Math.PI * 2);
-            ctx.stroke();
+            if (this.enemiesNearby) {
+                ctx.strokeStyle = `rgba(255, 50, 50, ${0.5 + Math.sin(this.pulse) * 0.3})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, this.closedRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            } else {
+                ctx.strokeStyle = `rgba(100, 200, 255, ${0.5 + Math.sin(this.pulse) * 0.3})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, this.interactionRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
     }
 }

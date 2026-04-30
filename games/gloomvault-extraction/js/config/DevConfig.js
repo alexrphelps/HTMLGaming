@@ -6,7 +6,7 @@
  */
 const DevConfig = {
     // Master toggle - set to true to enable developer mode
-    DEV_MODE_ENABLED: false,
+    DEV_MODE_ENABLED: true,
 
     // --- Session Overrides (managed by DevPanel, reset on hide) ---
     godMode: false,

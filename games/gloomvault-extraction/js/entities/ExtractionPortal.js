@@ -3,11 +3,22 @@ class ExtractionPortal extends Entity {
         super(x, y);
         this.radius = 30;
         this.interactionRadius = 60;
+        this.closedRadius = 40;
         this.pulse = 0;
+        this.enemiesNearby = false;
+        this.enemyCheckRadius = 150;
     }
 
-    update(dt) {
+    update(dt, enemies = []) {
         this.pulse += dt * 2;
+        this.enemiesNearby = false;
+        for (let enemy of enemies) {
+            const dist = Math.hypot(this.x - enemy.x, this.y - enemy.y);
+            if (dist <= this.enemyCheckRadius) {
+                this.enemiesNearby = true;
+                break;
+            }
+        }
     }
 
     render(ctx, camera) {
@@ -16,14 +27,23 @@ class ExtractionPortal extends Entity {
 
         // Draw outer portal glow
         ctx.beginPath();
-        ctx.arc(screenX, screenY, this.radius + Math.sin(this.pulse) * 5, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(138, 43, 226, 0.3)'; // Purple glow
+        if (this.enemiesNearby) {
+            ctx.arc(screenX, screenY, this.closedRadius + Math.sin(this.pulse) * 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 50, 50, 0.3)'; // Red glow
+        } else {
+            ctx.arc(screenX, screenY, this.radius + Math.sin(this.pulse) * 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(138, 43, 226, 0.3)'; // Purple glow
+        }
         ctx.fill();
 
         // Draw inner portal core
         ctx.beginPath();
         ctx.arc(screenX, screenY, this.radius - 10, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(75, 0, 130, 0.8)'; // Darker purple core
+        if (this.enemiesNearby) {
+            ctx.fillStyle = 'rgba(150, 0, 0, 0.8)'; // Dark red core
+        } else {
+            ctx.fillStyle = 'rgba(75, 0, 130, 0.8)'; // Darker purple core
+        }
         ctx.fill();
 
         // Swirling effect

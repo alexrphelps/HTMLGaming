@@ -40,6 +40,34 @@ const MapConfigs = {
         corridorWidth: 3,         // Wide tunnels
         wobbleChance: 0.60,       // Highly erratic tunnels
         smoothingPasses: 3        // Very round, eroded walls
+    },
+    // A confusing, tight maze of small organic burrows
+    the_labyrinth: {
+        cols: 100,
+        rows: 100,
+        numRooms: 35,
+        minRoomSize: 3,
+        maxRoomSize: 6,
+        perfectSquareChance: 0.0, // No square rooms
+        blobMinRects: 1,
+        blobMaxRects: 2,
+        corridorWidth: 1,         // Very narrow tunnels
+        wobbleChance: 0.80,       // Extremely erratic zigzag tunnels
+        smoothingPasses: 2        // Eroded edges
+    },
+    // A few massive, perfectly square arena rooms connected by wide highways
+    arena_halls: {
+        cols: 120,
+        rows: 120,
+        numRooms: 6,
+        minRoomSize: 15,
+        maxRoomSize: 30,
+        perfectSquareChance: 1.0, // Only perfect squares
+        blobMinRects: 1,
+        blobMaxRects: 1,
+        corridorWidth: 4,         // Wide highways
+        wobbleChance: 0.0,        // Straight highways
+        smoothingPasses: 0        // Sharp architectural corners
     }
 };
 

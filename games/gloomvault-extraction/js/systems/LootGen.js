@@ -226,8 +226,21 @@ class LootGen {
             passiveTrait.text = traitTexts.join(', ');
         }
 
+        // 8. Calculate Durability (skip trinkets)
+        let durability = null;
+        let maxDurability = null;
+        if (type.slot !== 'trinket' && typeof DurabilityConfig !== 'undefined' && DurabilityConfig.baseBySlot[type.slot]) {
+            const baseDur = DurabilityConfig.baseBySlot[type.slot];
+            const rarityMult = DurabilityConfig.rarityMultiplier[rarity.name] || 1.0;
+            const gsBonus = Math.floor(gearScore * DurabilityConfig.gsScaling);
+            const rawDur = Math.floor(baseDur * rarityMult) + gsBonus;
+            const variance = 1 + (Math.random() * 2 - 1) * DurabilityConfig.randomRange;
+            maxDurability = Math.max(1, Math.floor(rawDur * variance));
+            durability = maxDurability;
+        }
+
         this.itemIdCounter++;
-        return {
+        const item = {
             id: `item_${this.itemIdCounter}`,
             name: name,
             type: type.slot,
@@ -241,5 +254,12 @@ class LootGen {
             passiveTrait: passiveTrait,
             baseArmor: baseArmor
         };
+
+        if (maxDurability !== null) {
+            item.durability = durability;
+            item.maxDurability = maxDurability;
+        }
+
+        return item;
     }
 }

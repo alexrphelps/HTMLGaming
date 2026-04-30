@@ -43,6 +43,11 @@ class UpgradeSystem {
             item.name = item.name.replace(/\+\d+/, `+${item.upgradeLevel}`);
         }
 
+        // Upgrading fully repairs the item
+        if (item.maxDurability) {
+            item.durability = item.maxDurability;
+        }
+
         return { success: true, remainingScraps: availableScraps - cost };
     }
 
@@ -96,5 +101,26 @@ class UpgradeSystem {
         }
 
         return simulated;
+    }
+
+    static getRepairCost(item) {
+        if (!item || !item.maxDurability || item.durability >= item.maxDurability) return null;
+        if (item.isStarter) return null;
+        const costsConfig = typeof DurabilityConfig !== 'undefined' ? DurabilityConfig.repairCosts : null;
+        const rarityConfig = costsConfig ? costsConfig[item.rarity] : null;
+        if (!costsConfig || !rarityConfig) return null;
+        
+        const missingDurability = item.maxDurability - item.durability;
+        const gsScaling = Math.max(costsConfig.minCostPerPoint, item.gearScore * costsConfig.baseCostMultiplier);
+        const costPerPoint = gsScaling * rarityConfig.multiplier;
+        
+        return Math.max(1, Math.ceil(missingDurability * costPerPoint));
+    }
+
+    static repairItem(item, availableScraps) {
+        const cost = this.getRepairCost(item);
+        if (cost === null || availableScraps < cost) return { success: false, remainingScraps: availableScraps };
+        item.durability = item.maxDurability;
+        return { success: true, remainingScraps: availableScraps - cost };
     }
 }
