@@ -20,13 +20,38 @@
             <div class="version-info">v0.1.0 Prototype</div>
         </div>
 
-        <!-- Stash Screen Placeholder -->
+        <!-- Stash Screen -->
         <div id="stash-screen" class="screen">
-            <h2>Player Stash</h2>
-            <div class="stash-grid-placeholder">
-                <p>No items yet.</p>
+            <h2>Player Stash & Equipment</h2>
+            <div class="inventory-content" style="background-color: var(--color-bg); padding: 20px; width: 80%; border: 2px solid var(--color-accent); margin-top: 20px;">
+                <div class="equipment-panel">
+                    <h3>Starting Equipment</h3>
+                    <div class="equip-slots" id="stash-equip-slots">
+                        <div class="equip-slot stash-slot helm" data-slot="helm">Helm</div>
+                        <div class="equip-slot stash-slot chest" data-slot="chest">Chest</div>
+                        <div class="equip-slot stash-slot pants" data-slot="pants">Pants</div>
+                        <div class="equip-slot stash-slot boots" data-slot="boots">Boots</div>
+                        <div class="equip-slot stash-slot weapon" data-slot="weapon">Weapon 1</div>
+                        <div class="equip-slot stash-slot weapon" data-slot="weapon2">Weapon 2</div>
+                        <div class="equip-slot stash-slot trinket" data-slot="trinket1">Trinket 1</div>
+                        <div class="equip-slot stash-slot trinket" data-slot="trinket2">Trinket 2</div>
+                    </div>
+                </div>
+                <div class="backpack-panel">
+                    <h3>Stash</h3>
+                    <div class="inventory-grid" id="stash-grid" style="overflow-y: auto; max-height: 400px; max-width: none; width: 400px; display: grid; grid-template-columns: repeat(5, 1fr); auto-rows: 1fr;">
+                        <!-- Grid generated in JS -->
+                    </div>
+                </div>
             </div>
-            <button id="btn-stash-back" class="menu-btn secondary">Back</button>
+            <button id="btn-stash-back" class="menu-btn secondary">Back to Menu</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="screen">
+            <h1 class="game-title" style="color: var(--color-danger); text-shadow: 0 0 20px rgba(192, 57, 43, 0.5);">YOU DIED</h1>
+            <p style="margin-bottom: 20px;">Your inventory and equipped gear have been lost.</p>
+            <button id="btn-game-over-menu" class="menu-btn">Return to Menu</button>
         </div>
 
         <!-- Game Screen Placeholder -->
@@ -34,8 +59,44 @@
             <canvas id="game-canvas"></canvas>
             <div id="ui-layer">
                 <div class="health-bar">HP: 100/100</div>
-                <button id="btn-extract-temp" class="menu-btn temp-action">Force Extract</button>
-                <button id="btn-die-temp" class="menu-btn temp-action danger">Force Death</button>
+                <div id="interaction-hint" class="interaction-hint hidden">Press [E] to Pick Up</div>
+            </div>
+
+            <!-- Inventory Overlay -->
+            <div id="inventory-screen" class="inventory-overlay hidden">
+                <div class="inventory-header">
+                    <h2>Inventory</h2>
+                    <button id="btn-close-inventory" class="close-btn">X</button>
+                </div>
+                <div class="inventory-content">
+                    <div class="equipment-panel">
+                        <h3>Equipment</h3>
+                        <div class="equip-slots">
+                            <div class="equip-slot helm" data-slot="helm">Helm</div>
+                            <div class="equip-slot chest" data-slot="chest">Chest</div>
+                            <div class="equip-slot pants" data-slot="pants">Pants</div>
+                            <div class="equip-slot boots" data-slot="boots">Boots</div>
+                            <div class="equip-slot weapon" data-slot="weapon">Weapon 1</div>
+                            <div class="equip-slot weapon" data-slot="weapon2">Weapon 2</div>
+                            <div class="equip-slot trinket" data-slot="trinket1">Trinket 1</div>
+                            <div class="equip-slot trinket" data-slot="trinket2">Trinket 2</div>
+                        </div>
+                        <div class="player-stats">
+                            <h4>Stats</h4>
+                            <ul id="stats-list">
+                                <li>Damage: <span id="stat-dmg">10</span></li>
+                                <li>Attack Speed: <span id="stat-spd">1.0</span></li>
+                                <li>Move Speed: <span id="stat-ms">200</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="backpack-panel">
+                        <h3>Backpack</h3>
+                        <div class="inventory-grid" id="inventory-grid">
+                            <!-- 5x5 grid generated in JS -->
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -44,10 +105,13 @@
     <script src="js/core/Camera.js"></script>
     <script src="js/core/Renderer.js"></script>
     <script src="js/config/MapConfig.js"></script>
+    <script src="js/systems/LootGen.js"></script>
+    <script src="js/entities/Entity.js"></script>
+    <script src="js/entities/DroppedItem.js"></script>
+    <script src="js/entities/ExtractionPortal.js"></script>
     <script src="js/systems/MapGen.js"></script>
     <script src="js/systems/Weapon.js"></script>
     <script src="js/systems/CombatFeedback.js"></script>
-    <script src="js/entities/Entity.js"></script>
     <script src="js/entities/Enemy.js"></script>
     <script src="js/entities/Projectile.js"></script>
     <script src="js/entities/Player.js"></script>

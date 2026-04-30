@@ -15,6 +15,82 @@ class Player extends Entity {
         this.dodgeTimer = 0;
         this.dodgeCooldown = 1.0; // seconds
         this.dodgeCooldownTimer = 0;
+
+        // Inventory & Equipment
+        this.inventory = new Array(25).fill(null); // 5x5 grid
+        this.equipment = {
+            helm: null,
+            chest: null,
+            pants: null,
+            boots: null,
+            weapon: null,
+            weapon2: null,
+            trinket1: null,
+            trinket2: null
+        };
+
+        // Base Stats (Unmodified)
+        this.baseStats = {
+            maxHp: 100,
+            speed: 200,
+            damageMultiplier: 1.0,
+            attackSpeedMultiplier: 1.0,
+            movementSpeedMultiplier: 1.0,
+            flatDamage: 0,
+            lifesteal: 0,
+            cooldownReduction: 0
+        };
+
+        // Current Stats (Modified by gear)
+        this.stats = { ...this.baseStats };
+        this.recalculateStats();
+    }
+
+    addToInventory(item) {
+        for (let i = 0; i < this.inventory.length; i++) {
+            if (this.inventory[i] === null) {
+                this.inventory[i] = item;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    recalculateStats() {
+        // Reset to base
+        this.stats = { ...this.baseStats };
+
+        // Aggregate modifiers
+        const activeMods = [];
+        
+        for (const slot in this.equipment) {
+            const item = this.equipment[slot];
+            if (item && item.modifiers) {
+                activeMods.push(...item.modifiers);
+            }
+        }
+
+        // Apply modifiers
+        for (const mod of activeMods) {
+            if (mod.type === 'percent') {
+                if (this.stats[mod.stat] !== undefined) {
+                    // additive percentages (10% + 5% = 1.15 multiplier)
+                    this.stats[mod.stat] += (mod.value / 100);
+                }
+            } else if (mod.type === 'flat') {
+                if (this.stats[mod.stat] !== undefined) {
+                    this.stats[mod.stat] += mod.value;
+                }
+            }
+        }
+
+        // Apply derived stats
+        this.speed = this.stats.speed * this.stats.movementSpeedMultiplier;
+        
+        if (this.weapon) {
+            this.weapon.damage = this.weapon.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage;
+            this.weapon.cooldown = this.weapon.baseCooldown / this.stats.attackSpeedMultiplier;
+        }
     }
 
     update(dt, input, camera, mapGen) {

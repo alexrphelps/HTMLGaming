@@ -26,7 +26,9 @@ class GameEngine {
         this.player = null; // initialized in start()
         this.enemies = [];
         this.projectiles = [];
+        this.droppedItems = [];
         this.combatFeedback = new CombatFeedback();
+        this.lootGen = new LootGen();
 
         // Game State
         this.lastTime = 0;
@@ -61,8 +63,20 @@ class GameEngine {
         const startPos = this.mapGen.getStartPos();
         this.player = new Player(startPos.x, startPos.y);
 
+        // Load equipment
+        try {
+            const savedEq = JSON.parse(localStorage.getItem('gloomvault_equipment'));
+            if (savedEq) {
+                this.player.equipment = savedEq;
+                this.player.recalculateStats();
+            }
+        } catch(e) {
+            console.error('Failed to load equipment', e);
+        }
+
         this.projectiles = []; // Reset projectiles
         this.enemies = []; // Reset enemies
+        this.droppedItems = []; // Reset dropped items
         this.combatFeedback = new CombatFeedback(); // Reset combat feedback
 
         // Pre-populate entire map with enemies
@@ -73,6 +87,17 @@ class GameEngine {
             this.currentFloor, 
             this.playerGearScore
         );
+
+        // Spawn Portal
+        const rooms = this.mapGen.rooms;
+        const lastRoom = rooms[rooms.length - 1];
+        if (lastRoom) {
+            const portalX = lastRoom.center.x * this.tileSize + this.tileSize / 2;
+            const portalY = lastRoom.center.y * this.tileSize + this.tileSize / 2;
+            this.portal = new ExtractionPortal(portalX, portalY);
+        } else {
+            this.portal = null;
+        }
 
         this.state = 'PLAYING';
         this.isRunning = true;
@@ -112,6 +137,24 @@ class GameEngine {
             
             // Update camera to follow player
             this.camera.follow(this.player);
+
+            // Check Death
+            if (this.player.hp <= 0) {
+                this.die();
+                return;
+            }
+        }
+
+        // Update portal
+        let nearPortal = false;
+        if (this.portal) {
+            this.portal.update(dt);
+            if (this.player) {
+                const dist = Math.hypot(this.player.x - this.portal.x, this.player.y - this.portal.y);
+                if (dist <= this.portal.interactionRadius) {
+                    nearPortal = true;
+                }
+            }
         }
 
         // Update enemies
@@ -125,6 +168,13 @@ class GameEngine {
             // Check if enemy died
             if (enemy.hp <= 0) {
                 this.combatFeedback.addText('Dead', enemy.x, enemy.y, '#888888', 14, 2.0);
+                
+                // Roll for loot drop (20% chance)
+                if (Math.random() < 0.2) {
+                    const itemData = this.lootGen.generateItem(this.currentFloor);
+                    this.droppedItems.push(new DroppedItem(enemy.x, enemy.y, itemData));
+                }
+
                 this.enemies.splice(i, 1);
             }
         }
@@ -163,8 +213,70 @@ class GameEngine {
             }
         }
 
+        // Update Dropped Items and Handle Pickups
+        let closestItem = null;
+        let minDistance = Infinity;
+
+        for (let i = this.droppedItems.length - 1; i >= 0; i--) {
+            let item = this.droppedItems[i];
+            item.update(dt);
+            
+            if (this.player) {
+                const dist = Math.hypot(this.player.x - item.x, this.player.y - item.y);
+                if (dist <= item.pickupRadius && dist < minDistance) {
+                    minDistance = dist;
+                    closestItem = item;
+                }
+            }
+        }
+
+        const interactionHint = document.getElementById('interaction-hint');
+        if (nearPortal) {
+            interactionHint.textContent = 'Press [E] to Extract';
+            interactionHint.classList.remove('hidden');
+            
+            if (this.input.isKeyDown('KeyE')) {
+                this.extract();
+                this.input.keys['KeyE'] = false;
+            }
+        } else if (closestItem) {
+            interactionHint.textContent = 'Press [E] to Pick Up';
+            interactionHint.classList.remove('hidden');
+            
+            if (this.input.isKeyDown('KeyE')) {
+                // Attempt to add to inventory
+                if (this.player.addToInventory(closestItem.itemData)) {
+                    this.combatFeedback.addText('Picked up', closestItem.x, closestItem.y, closestItem.itemData.color, 14, 1.0);
+                    // Remove from world
+                    const idx = this.droppedItems.indexOf(closestItem);
+                    if (idx > -1) {
+                        this.droppedItems.splice(idx, 1);
+                    }
+                    // Trigger UI update
+                    if (window.gloomvaultApp) {
+                        window.gloomvaultApp.updateInventoryUI();
+                    }
+                } else {
+                    this.combatFeedback.addText('Inventory Full', closestItem.x, closestItem.y, '#ff0000', 14, 1.0);
+                }
+                
+                // Clear key so we don't spam pickup
+                this.input.keys['KeyE'] = false;
+            }
+        } else {
+            interactionHint.classList.add('hidden');
+        }
+
         // Update Combat Feedback
         this.combatFeedback.update(dt);
+
+        // Update Health Bar UI
+        if (this.player) {
+            const hpBar = document.querySelector('.health-bar');
+            if (hpBar) {
+                hpBar.textContent = `HP: ${Math.ceil(this.player.hp)}/${this.player.maxHp}`;
+            }
+        }
     }
 
     render(dt) {
@@ -202,6 +314,11 @@ class GameEngine {
             this.player.render(this.ctx, this.renderer);
         }
 
+        // Draw Portal
+        if (this.portal) {
+            this.portal.render(this.ctx, this.camera);
+        }
+
         // 3. Draw Enemies
         for (let e of this.enemies) {
             e.render(this.ctx, this.renderer);
@@ -212,10 +329,15 @@ class GameEngine {
             p.render(this.ctx, this.renderer);
         }
 
-        // 5. Draw Combat Feedback
+        // 5. Draw Dropped Items
+        for (let i of this.droppedItems) {
+            i.render(this.ctx, this.renderer);
+        }
+
+        // 6. Draw Combat Feedback
         this.combatFeedback.render(this.ctx, this.renderer);
 
-        // 6. Draw UI Overlay
+        // 7. Draw UI Overlay
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '16px monospace';
         this.ctx.fillText(`FPS: ${Math.round(1 / (performance.now() - this.lastTime) * 1000)}`, 10, 20);
@@ -226,5 +348,52 @@ class GameEngine {
         // If a wall is adjacent to a floor tile, draw it
         return (this.mapGen.getTile(x-1,y) === 1 || this.mapGen.getTile(x+1,y) === 1 ||
                 this.mapGen.getTile(x,y-1) === 1 || this.mapGen.getTile(x,y+1) === 1);
+    }
+
+    extract() {
+        console.log('💎 Extracting!');
+        this.stop();
+
+        // Load existing stash
+        let stash = [];
+        try {
+            stash = JSON.parse(localStorage.getItem('gloomvault_stash')) || [];
+        } catch (e) {
+            stash = [];
+        }
+
+        // Add inventory to stash
+        if (this.player && this.player.inventory) {
+            for (const item of this.player.inventory) {
+                if (item) {
+                    stash.push(item);
+                }
+            }
+        }
+        localStorage.setItem('gloomvault_stash', JSON.stringify(stash));
+
+        // Save equipment
+        if (this.player && this.player.equipment) {
+            localStorage.setItem('gloomvault_equipment', JSON.stringify(this.player.equipment));
+        }
+
+        // Transition to main menu
+        if (window.gloomvaultApp) {
+            window.gloomvaultApp.showScreen('main-menu');
+        }
+    }
+
+    die() {
+        console.log('💀 Died!');
+        this.stop();
+
+        // Wipe equipment (penalty)
+        localStorage.removeItem('gloomvault_equipment');
+        // Keep stash untouched
+
+        // Transition to game over
+        if (window.gloomvaultApp) {
+            window.gloomvaultApp.showScreen('game-over-screen');
+        }
     }
 }

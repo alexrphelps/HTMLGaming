@@ -1,8 +1,10 @@
 class Weapon {
     constructor(isPlayerOwned = true) {
         this.isPlayerOwned = isPlayerOwned;
+        this.baseDamage = 25;
         this.damage = 25;
-        this.attackSpeed = 0.3; // seconds between attacks (cooldown)
+        this.baseCooldown = 0.3; // seconds between attacks
+        this.cooldown = 0.3;
         this.projectileSpeed = 600; // pixels per second
         this.lifetime = 1.5; // seconds before projectile fizzles
         this.cooldownTimer = 0;
@@ -16,7 +18,7 @@ class Weapon {
 
     primaryAttack(x, y, angle) {
         if (this.cooldownTimer <= 0) {
-            this.cooldownTimer = this.attackSpeed;
+            this.cooldownTimer = this.cooldown;
             // Spawn a new projectile slightly in front of the player
             const spawnX = x + Math.cos(angle) * 15;
             const spawnY = y + Math.sin(angle) * 15;

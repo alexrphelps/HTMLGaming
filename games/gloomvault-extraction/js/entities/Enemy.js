@@ -27,8 +27,10 @@ class Enemy extends Entity {
         this.weapon = null;
         if (this.type === 'ranged') {
             this.weapon = new Weapon(false);
-            this.weapon.attackSpeed = 1.5; // Slower attack rate
-            this.weapon.damage = Math.floor(15 * levelMultiplier);
+            this.weapon.baseCooldown = 1.5; // Slower attack rate
+            this.weapon.cooldown = 1.5;
+            this.weapon.baseDamage = Math.floor(15 * levelMultiplier);
+            this.weapon.damage = this.weapon.baseDamage;
             this.weapon.projectileSpeed = 300;
         }
 
