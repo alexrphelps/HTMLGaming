@@ -112,8 +112,8 @@ class Enemy extends Entity {
             // Always try to shoot if in range
             if (distToPlayer < 400 && this.weapon) {
                 this.angle = Math.atan2(player.y - this.y, player.x - this.x);
-                const proj = this.weapon.primaryAttack(this.x, this.y, this.angle);
-                if (proj) newProjectiles.push(proj);
+                const projs = this.weapon.primaryAttack(this.x, this.y, this.angle);
+                if (projs && projs.length > 0) newProjectiles.push(...projs);
             }
         }
 
@@ -146,6 +146,16 @@ class Enemy extends Entity {
                 }
             }
         }
+
+        // Update Animation State
+        if (this.state === 'attack') {
+            this.animationState = 'attack';
+        } else if (this.state === 'chase' || this.state === 'flee') {
+            this.animationState = 'run';
+        } else {
+            this.animationState = 'idle';
+        }
+        this.updateAnimation(dt);
 
         return newProjectiles;
     }
@@ -202,6 +212,25 @@ class Enemy extends Entity {
     }
 
     render(ctx, renderer) {
+        if (window.gameAssets && window.gameAssets.enemy && window.gameAssets.enemy.complete && window.gameAssets.enemy.naturalWidth > 0) {
+            let row = 0;
+            if (this.animationState === 'run') row = 1;
+            if (this.animationState === 'attack') row = 2;
+            
+            const spriteW = 64;
+            const spriteH = 64;
+            const srcX = this.currentFrame * spriteW;
+            const srcY = row * spriteH;
+
+            ctx.save();
+            const screenPos = renderer.camera.worldToScreen(this.x, this.y);
+            ctx.translate(screenPos.x, screenPos.y);
+            ctx.rotate(this.angle);
+            renderer.drawSpriteDirect(ctx, window.gameAssets.enemy, srcX, srcY, spriteW, spriteH, -this.width, -this.height, this.width*2, this.height*2);
+            ctx.restore();
+            return;
+        }
+
         const screenPos = renderer.camera.worldToScreen(this.x, this.y);
         
         ctx.fillStyle = this.color;

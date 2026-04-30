@@ -28,6 +28,11 @@ class Player extends Entity {
             trinket1: null,
             trinket2: null
         };
+        
+        this.abilityCooldowns = {
+            trinket1: 0,
+            trinket2: 0
+        };
 
         // Base Stats (Unmodified)
         this.baseStats = {
@@ -85,6 +90,9 @@ class Player extends Entity {
         }
 
         // Apply derived stats
+        this.maxHp = this.stats.maxHp;
+        if (this.hp > this.maxHp) this.hp = this.maxHp;
+
         this.speed = this.stats.speed * this.stats.movementSpeedMultiplier;
         
         if (this.weapon) {
@@ -93,7 +101,54 @@ class Player extends Entity {
         }
     }
 
-    update(dt, input, camera, mapGen) {
+    useTrinketAbility(slot, particleSystem) {
+        if (this.abilityCooldowns[slot] > 0) return [];
+        const trinket = this.equipment[slot];
+        if (!trinket || !trinket.activeAbility) return [];
+
+        const ability = trinket.activeAbility;
+        
+        // Apply cooldown reduction from stats
+        const cdReduc = Math.min(0.75, this.stats.cooldownReduction); // Cap at 75%
+        this.abilityCooldowns[slot] = ability.cooldown * (1 - cdReduc);
+        
+        const projectiles = [];
+
+        switch (ability.type) {
+            case 'heal':
+                this.hp = Math.min(this.maxHp, this.hp + ability.value);
+                if (particleSystem) {
+                    // Green heal effect
+                    particleSystem.emitDashTrail(this.x, this.y, '#00ff00');
+                    particleSystem.emitImpact(this.x, this.y, '#00ff00', 15);
+                }
+                break;
+            case 'nova':
+                for (let i = 0; i < 8; i++) {
+                    const angle = (Math.PI * 2 / 8) * i;
+                    const spawnX = this.x + Math.cos(angle) * 15;
+                    const spawnY = this.y + Math.sin(angle) * 15;
+                    projectiles.push(new Projectile(spawnX, spawnY, angle, 400, ability.damage * this.stats.damageMultiplier, 1.5, true));
+                }
+                break;
+            case 'dash':
+                if (!this.isDodging) {
+                    this.isDodging = true;
+                    this.dodgeSpeed = ability.speed;
+                    this.dodgeTimer = ability.time;
+                    if (particleSystem) {
+                        particleSystem.emitDashTrail(this.x, this.y, '#00ffff'); // Cyan dash
+                    }
+                } else {
+                    // Refund CD if we were already dodging so we don't waste it
+                    this.abilityCooldowns[slot] = 0; 
+                }
+                break;
+        }
+        return projectiles;
+    }
+
+    update(dt, input, camera, mapGen, particleSystem) {
         // Handle dodge input
         if (input.isKeyDown('ShiftLeft') && !this.isDodging && this.dodgeCooldownTimer <= 0) {
             this.isDodging = true;
@@ -108,6 +163,11 @@ class Player extends Entity {
             // Dash in facing direction
             vx = Math.cos(this.angle) * this.dodgeSpeed;
             vy = Math.sin(this.angle) * this.dodgeSpeed;
+
+            // Emit dash particles
+            if (particleSystem) {
+                particleSystem.emitDashTrail(this.x, this.y, '#aa66ff');
+            }
 
             this.dodgeTimer -= dt;
             if (this.dodgeTimer <= 0) {
@@ -150,6 +210,10 @@ class Player extends Entity {
         if (this.weapon) {
             this.weapon.update(dt);
         }
+        
+        // Update trinket cooldowns
+        if (this.abilityCooldowns.trinket1 > 0) this.abilityCooldowns.trinket1 -= dt;
+        if (this.abilityCooldowns.trinket2 > 0) this.abilityCooldowns.trinket2 -= dt;
 
         // Update facing angle based on mouse
         if (camera && input.mouse) {
@@ -160,14 +224,62 @@ class Player extends Entity {
             this.angle = Math.atan2(worldMouse.y - this.y, worldMouse.x - this.x);
         }
 
-        // Handle primary attack input
+        // Handle attacks
         const newProjectiles = [];
+        let isAttacking = false;
+        
+        // Handle trinket abilities
+        if (input.isKeyDown('KeyQ') && this.abilityCooldowns.trinket1 <= 0) {
+            const projs = this.useTrinketAbility('trinket1', particleSystem);
+            if (projs && projs.length > 0) newProjectiles.push(...projs);
+        }
+        
+        if (input.isKeyDown('KeyE') && this.abilityCooldowns.trinket2 <= 0) {
+            const projs = this.useTrinketAbility('trinket2', particleSystem);
+            if (projs && projs.length > 0) newProjectiles.push(...projs);
+        }
+
         if (input.mouse.down && this.weapon) {
-            const proj = this.weapon.primaryAttack(this.x, this.y, this.angle);
-            if (proj) {
-                newProjectiles.push(proj);
+            const projs = this.weapon.primaryAttack(this.x, this.y, this.angle);
+            if (projs && projs.length > 0) {
+                newProjectiles.push(...projs);
+                isAttacking = true;
             }
         }
+        
+        if (input.mouse.rightDown && this.weapon) {
+            const projs = this.weapon.secondaryAttack(this.x, this.y, this.angle);
+            if (projs && projs.length > 0) {
+                newProjectiles.push(...projs);
+                isAttacking = true;
+            }
+        }
+
+        // Even if on cooldown, if button is held, keep animation state
+        if (input.mouse.down || input.mouse.rightDown) {
+            isAttacking = true;
+        }
+
+        // Update Animation State
+        if (isAttacking) {
+            if (this.animationState !== 'attack') {
+                this.animationState = 'attack';
+                this.currentFrame = 0;
+            }
+        } else if (Math.abs(vx) > 0 || Math.abs(vy) > 0 || this.isDodging) {
+            if (this.animationState !== 'run') {
+                this.animationState = 'run';
+                this.currentFrame = 0;
+            }
+        } else {
+            if (this.animationState !== 'idle') {
+                this.animationState = 'idle';
+                this.currentFrame = 0;
+            }
+        }
+        
+        this.updateAnimation(dt);
+
         return newProjectiles; // Return any new projectiles to the GameEngine
     }
 
@@ -199,6 +311,30 @@ class Player extends Entity {
     }
 
     render(ctx, renderer) {
+        // Try drawing sprite first
+        if (window.gameAssets && window.gameAssets.player && window.gameAssets.player.complete && window.gameAssets.player.naturalWidth > 0) {
+            // Assume sprite sheet is structured:
+            // rows: idle (0), run (1), attack (2)
+            // cols: frames
+            let row = 0;
+            if (this.animationState === 'run') row = 1;
+            if (this.animationState === 'attack') row = 2;
+            
+            // Assume 64x64 sprites on the sheet
+            const spriteW = 64;
+            const spriteH = 64;
+            const srcX = this.currentFrame * spriteW;
+            const srcY = row * spriteH;
+
+            ctx.save();
+            const screenPos = renderer.camera.worldToScreen(this.x, this.y);
+            ctx.translate(screenPos.x, screenPos.y);
+            ctx.rotate(this.angle);
+            renderer.drawSpriteDirect(ctx, window.gameAssets.player, srcX, srcY, spriteW, spriteH, -this.width, -this.height, this.width*2, this.height*2);
+            ctx.restore();
+            return;
+        }
+
         // Draw the player (placeholder circle with direction indicator)
         const screenPos = renderer.camera.worldToScreen(this.x, this.y);
         

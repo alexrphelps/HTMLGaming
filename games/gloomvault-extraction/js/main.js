@@ -14,6 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Screen management
     const screens = document.querySelectorAll('.screen');
     
+    // Asset Loading
+    window.gameAssets = {
+        player: new Image(),
+        enemy: new Image()
+    };
+    
+    // Attempt to load sprites (will fail gracefully to rectangles)
+    window.gameAssets.player.src = 'assets/sprites/player.png';
+    window.gameAssets.enemy.src = 'assets/sprites/enemy.png';
+
     function showScreen(id) {
         screens.forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
@@ -42,6 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
         helm: null, chest: null, pants: null, boots: null,
         weapon: null, weapon2: null, trinket1: null, trinket2: null
     };
+    let scraps = 0;
+    let itemInUpgradeSlot = null;
 
     function loadStashData() {
         try {
@@ -50,14 +62,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 helm: null, chest: null, pants: null, boots: null,
                 weapon: null, weapon2: null, trinket1: null, trinket2: null
             };
+            scraps = parseInt(localStorage.getItem('gloomvault_scraps')) || 0;
         } catch(e) {
             stashItems = [];
+            scraps = 0;
         }
     }
 
     function saveStashData() {
         localStorage.setItem('gloomvault_stash', JSON.stringify(stashItems));
         localStorage.setItem('gloomvault_equipment', JSON.stringify(stashEquipment));
+        localStorage.setItem('gloomvault_scraps', scraps.toString());
     }
 
     function setupStashDropZone(element, type, id) {
@@ -74,12 +89,20 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             element.classList.remove('drag-over');
             
-            if (!draggedItemSource || (draggedItemSource.source !== 'stash' && draggedItemSource.source !== 'stash-equip')) return;
+            if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade'].includes(draggedItemSource.source)) return;
 
-            let sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
+            let sourceList = null;
+            let sourceItem = null;
+            
+            if (draggedItemSource.source === 'upgrade') {
+                sourceItem = itemInUpgradeSlot.item;
+                itemInUpgradeSlot = null; // Remove from upgrade slot
+            } else {
+                sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
+                sourceItem = sourceList[draggedItemSource.id];
+            }
+
             let targetList = type === 'stash' ? stashItems : stashEquipment;
-
-            let sourceItem = sourceList[draggedItemSource.id];
             let targetItem = targetList[id];
 
             if (!sourceItem) return;
@@ -89,7 +112,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sourceItem.type !== targetSlotType) return;
             }
 
-            sourceList[draggedItemSource.id] = targetItem;
+            if (sourceList) {
+                sourceList[draggedItemSource.id] = targetItem;
+            } else if (targetItem) {
+                 // If there's an item in target and we came from upgrade slot, swap it in
+                 itemInUpgradeSlot = { item: targetItem, sourceId: id, sourceList: targetList };
+            }
             targetList[id] = sourceItem;
 
             saveStashData();
@@ -101,6 +129,102 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.stash-slot').forEach(slot => {
         setupStashDropZone(slot, 'stash-equip', slot.dataset.slot);
     });
+
+    const upgradeDropzone = document.getElementById('upgrade-dropzone');
+    const btnUpgrade = document.getElementById('btn-upgrade-item');
+    const stashSalvageDropzone = document.getElementById('stash-salvage-dropzone');
+
+    if (stashSalvageDropzone) {
+        stashSalvageDropzone.addEventListener('dragover', (e) => { e.preventDefault(); stashSalvageDropzone.classList.add('drag-over'); });
+        stashSalvageDropzone.addEventListener('dragleave', () => stashSalvageDropzone.classList.remove('drag-over'));
+        stashSalvageDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            stashSalvageDropzone.classList.remove('drag-over');
+
+            if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade'].includes(draggedItemSource.source)) return;
+
+            let sourceList = null;
+            let sourceItem = null;
+
+            if (draggedItemSource.source === 'upgrade') {
+                sourceItem = itemInUpgradeSlot.item;
+                itemInUpgradeSlot = null; // Remove from upgrade slot
+            } else {
+                sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
+                sourceItem = sourceList[draggedItemSource.id];
+            }
+
+            if (!sourceItem) return;
+
+            const value = UpgradeSystem.getSalvageValue(sourceItem);
+            scraps += value;
+
+            if (sourceList) {
+                sourceList[draggedItemSource.id] = null; // Remove item
+            }
+
+            saveStashData();
+            updateStashUI(); // Refresh UI
+        });
+    }
+
+    upgradeDropzone.addEventListener('dragover', (e) => { e.preventDefault(); upgradeDropzone.classList.add('drag-over'); });
+    upgradeDropzone.addEventListener('dragleave', () => upgradeDropzone.classList.remove('drag-over'));
+    upgradeDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        upgradeDropzone.classList.remove('drag-over');
+        
+        if (!draggedItemSource || !['stash', 'stash-equip'].includes(draggedItemSource.source)) return;
+        
+        let sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
+        let sourceItem = sourceList[draggedItemSource.id];
+        
+        if (!sourceItem) return;
+
+        // Move to upgrade slot (removing from source visually/temporarily)
+        // If there's an item in the upgrade slot already, put it back to source
+        let previousUpgradeItem = itemInUpgradeSlot ? itemInUpgradeSlot.item : null;
+        
+        itemInUpgradeSlot = { item: sourceItem, sourceId: draggedItemSource.id, sourceList: sourceList };
+        
+        // Clear from source array to avoid duplication, and swap the previous item
+        sourceList[draggedItemSource.id] = previousUpgradeItem;
+        
+        saveStashData();
+        updateStashUI(); // Refresh UI
+    });
+
+    btnUpgrade.addEventListener('click', () => {
+        if (!itemInUpgradeSlot) return;
+        const result = UpgradeSystem.upgradeItem(itemInUpgradeSlot.item, scraps);
+        if (result.success) {
+            scraps = result.remainingScraps;
+            saveStashData();
+            updateStashUI();
+        }
+    });
+
+    function refreshUpgradeUI() {
+        document.getElementById('scrap-counter').textContent = `Scraps: ${scraps}`;
+        
+        if (itemInUpgradeSlot) {
+            upgradeDropzone.innerHTML = '';
+            upgradeDropzone.appendChild(createDraggableItem(itemInUpgradeSlot.item, { source: 'upgrade', type: 'upgrade', id: 'upgrade' }));
+            
+            const cost = UpgradeSystem.getUpgradeCost(itemInUpgradeSlot.item);
+            if (cost !== null) {
+                btnUpgrade.textContent = `Upgrade (Cost: ${cost})`;
+                btnUpgrade.disabled = scraps < cost;
+            } else {
+                btnUpgrade.textContent = 'Max Level';
+                btnUpgrade.disabled = true;
+            }
+        } else {
+            upgradeDropzone.innerHTML = 'Drop Item';
+            btnUpgrade.textContent = 'Upgrade (Cost: --)';
+            btnUpgrade.disabled = true;
+        }
+    }
 
     function updateStashUI() {
         loadStashData();
@@ -132,6 +256,98 @@ document.addEventListener('DOMContentLoaded', () => {
                 slot.appendChild(createDraggableItem(item, { source: 'stash-equip', type: 'equipment', id: slotId }));
             }
         });
+
+        refreshUpgradeUI();
+    }
+
+    let currentLoot = [];
+
+    window.gloomvaultApp.setupExtraction = function(inventory) {
+        loadStashData();
+        currentLoot = [...inventory]; // Copy array
+        updateExtractionUI();
+    };
+
+    function updateExtractionUI() {
+        const lootGrid = document.getElementById('extract-loot-grid');
+        const stashExGrid = document.getElementById('extract-stash-grid');
+        
+        lootGrid.innerHTML = '';
+        for (let i = 0; i < 25; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'inventory-cell';
+            setupExtractDropZone(cell, 'extract-loot', i);
+            if (currentLoot[i]) {
+                cell.appendChild(createDraggableItem(currentLoot[i], { source: 'extract-loot', id: i }));
+            }
+            lootGrid.appendChild(cell);
+        }
+        
+        stashExGrid.innerHTML = '';
+        while(stashItems.length < 25) stashItems.push(null); // Fix bug: ensure standard size
+        for (let i = 0; i < stashItems.length; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'inventory-cell';
+            setupExtractDropZone(cell, 'extract-stash', i);
+            if (stashItems[i]) {
+                cell.appendChild(createDraggableItem(stashItems[i], { source: 'extract-stash', id: i }));
+            }
+            stashExGrid.appendChild(cell);
+        }
+        
+        document.getElementById('extract-scrap-counter').textContent = `Scraps: ${scraps}`;
+    }
+
+    function setupExtractDropZone(element, type, id) {
+        element.addEventListener('dragover', e => { e.preventDefault(); element.classList.add('drag-over'); });
+        element.addEventListener('dragleave', () => element.classList.remove('drag-over'));
+        element.addEventListener('drop', e => {
+            e.preventDefault(); element.classList.remove('drag-over');
+            if (!draggedItemSource || (draggedItemSource.source !== 'extract-loot' && draggedItemSource.source !== 'extract-stash')) return;
+            
+            let sourceList = draggedItemSource.source === 'extract-loot' ? currentLoot : stashItems;
+            let targetList = type === 'extract-loot' ? currentLoot : stashItems;
+            
+            let sourceItem = sourceList[draggedItemSource.id];
+            let targetItem = targetList[id];
+            if (!sourceItem) return;
+            
+            sourceList[draggedItemSource.id] = targetItem;
+            targetList[id] = sourceItem;
+            
+            saveStashData();
+            updateExtractionUI();
+        });
+    }
+
+    // Salvage logic
+    const salvageDropzone = document.getElementById('salvage-dropzone');
+    if(salvageDropzone) {
+        salvageDropzone.addEventListener('dragover', e => { e.preventDefault(); salvageDropzone.classList.add('drag-over'); });
+        salvageDropzone.addEventListener('dragleave', () => salvageDropzone.classList.remove('drag-over'));
+        salvageDropzone.addEventListener('drop', e => {
+            e.preventDefault(); salvageDropzone.classList.remove('drag-over');
+            if (!draggedItemSource || (draggedItemSource.source !== 'extract-loot' && draggedItemSource.source !== 'extract-stash')) return;
+            
+            let sourceList = draggedItemSource.source === 'extract-loot' ? currentLoot : stashItems;
+            let sourceItem = sourceList[draggedItemSource.id];
+            if (!sourceItem) return;
+            
+            const value = UpgradeSystem.getSalvageValue(sourceItem);
+            scraps += value;
+            sourceList[draggedItemSource.id] = null; // Remove item
+            
+            saveStashData();
+            updateExtractionUI();
+        });
+    }
+
+    // Finish button
+    const btnFinishExtraction = document.getElementById('btn-finish-extraction');
+    if(btnFinishExtraction) {
+        btnFinishExtraction.addEventListener('click', () => {
+            showScreen('main-menu');
+        });
     }
 
     // --- Inventory Overlay Logic ---
@@ -153,7 +369,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 Rarity: ${item.rarity}<br>
                 Gear Score: ${item.gearScore}
             </div>
-            ${item.modifiers.length > 0 ? `<div class="tooltip-stats" style="margin-top: 5px;">${item.modifiers.map(m => m.text).join('<br>')}</div>` : ''}
+            ${item.modifiers && item.modifiers.length > 0 ? `
+                <div class="modifier-list">
+                    ${item.modifiers.map(m => {
+                        let modClass = 'modifier-neutral';
+                        if (m.text.includes('+') || m.value > 0) modClass = 'modifier-positive';
+                        if (m.text.includes('-') || m.value < 0) modClass = 'modifier-negative';
+                        return '<div class="modifier-line ' + modClass + '">' + m.text + '</div>';
+                    }).join('')}
+                </div>
+            ` : ''}
+            ${item.activeAbility ? `
+                <div class="modifier-list" style="color: #ffeb3b; font-weight: bold; border-top: 1px solid #777;">
+                    Active Ability: ${item.activeAbility.name}<br>
+                    <span style="font-weight: normal; color: #fff;">${item.activeAbility.text}</span>
+                </div>
+            ` : ''}
         `;
         tooltip.style.left = `${e.clientX + 15}px`;
         tooltip.style.top = `${e.clientY + 15}px`;

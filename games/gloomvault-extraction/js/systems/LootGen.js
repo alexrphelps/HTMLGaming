@@ -28,6 +28,12 @@ class LootGen {
 
         this.prefixes = ['Rusty', 'Iron', 'Steel', 'Gloom', 'Shadow', 'Void', 'Blood'];
         this.suffixes = ['of the Bear', 'of Swiftness', 'of the Leech', 'of Power', 'of the Void'];
+        
+        this.trinketAbilities = [
+            { type: 'heal', value: 50, cooldown: 15, name: 'Healing Surge', text: 'Use to heal 50 HP (15s CD)' },
+            { type: 'nova', damage: 40, cooldown: 8, name: 'Arcane Nova', text: 'Fires 8 projectiles around you (8s CD)' },
+            { type: 'dash', speed: 800, time: 0.3, cooldown: 5, name: 'Phase Shift', text: 'A swift directional dash (5s CD)' }
+        ];
     }
 
     rollRarity() {
@@ -83,6 +89,11 @@ class LootGen {
              name += ` ${suffix}`;
         }
 
+        let activeAbility = null;
+        if (type.slot === 'trinket') {
+            activeAbility = this.trinketAbilities[Math.floor(Math.random() * this.trinketAbilities.length)];
+        }
+
         this.itemIdCounter++;
         return {
             id: `item_${this.itemIdCounter}`,
@@ -91,7 +102,9 @@ class LootGen {
             rarity: rarity.name,
             color: rarity.color,
             gearScore: gearScore,
-            modifiers: modifiers
+            modifiers: modifiers,
+            upgradeLevel: 0,
+            activeAbility: activeAbility
         };
     }
 }

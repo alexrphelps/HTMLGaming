@@ -28,6 +28,7 @@ class GameEngine {
         this.projectiles = [];
         this.droppedItems = [];
         this.combatFeedback = new CombatFeedback();
+        this.particleSystem = new ParticleSystem();
         this.lootGen = new LootGen();
 
         // Game State
@@ -78,6 +79,7 @@ class GameEngine {
         this.enemies = []; // Reset enemies
         this.droppedItems = []; // Reset dropped items
         this.combatFeedback = new CombatFeedback(); // Reset combat feedback
+        this.particleSystem = new ParticleSystem(); // Reset particles
 
         // Pre-populate entire map with enemies
         this.spawnManager.populateMap(
@@ -130,13 +132,13 @@ class GameEngine {
 
         // Update player
         if (this.player) {
-            const newProjectiles = this.player.update(dt, this.input, this.camera, this.mapGen);
+            const newProjectiles = this.player.update(dt, this.input, this.camera, this.mapGen, this.particleSystem);
             if (newProjectiles && newProjectiles.length > 0) {
                 this.projectiles.push(...newProjectiles);
             }
             
             // Update camera to follow player
-            this.camera.follow(this.player);
+            this.camera.follow(this.player, dt);
 
             // Check Death
             if (this.player.hp <= 0) {
@@ -144,6 +146,8 @@ class GameEngine {
                 return;
             }
         }
+
+        this.particleSystem.update(dt);
 
         // Update portal
         let nearPortal = false;
@@ -191,7 +195,9 @@ class GameEngine {
                 for (let e of this.enemies) {
                     if (Math.hypot(e.x - proj.x, e.y - proj.y) < (e.width/2 + proj.width/2)) {
                         e.takeDamage(proj.damage);
+                        this.camera.shake(3, 0.1); // Small shake for enemy hits
                         this.combatFeedback.addText(`-${proj.damage}`, e.x, e.y, '#ffffff', 14, 0.8);
+                        this.particleSystem.emitImpact(e.x, e.y, '#ffffff');
                         hit = true;
                         break;
                     }
@@ -200,7 +206,9 @@ class GameEngine {
                 // Check collision with player
                 if (Math.hypot(this.player.x - proj.x, this.player.y - proj.y) < (this.player.width/2 + proj.width/2)) {
                     this.player.takeDamage(proj.damage);
+                    this.camera.shake(8, 0.2); // Bigger shake for player taking damage
                     this.combatFeedback.addText(`-${proj.damage}`, this.player.x, this.player.y, '#ff0000', 16, 1.0);
+                    this.particleSystem.emitImpact(this.player.x, this.player.y, '#ff0000');
                     hit = true;
                 }
             }
@@ -208,6 +216,7 @@ class GameEngine {
             if (hit || proj.markedForDeletion) {
                 if (!hit && proj.timer < proj.lifetime) {
                     this.combatFeedback.addText('Block', proj.x, proj.y, '#aaaaaa', 12, 0.5);
+                    this.particleSystem.emitImpact(proj.x, proj.y, '#aaaaaa', 5);
                 }
                 this.projectiles.splice(i, 1);
             }
@@ -232,18 +241,17 @@ class GameEngine {
 
         const interactionHint = document.getElementById('interaction-hint');
         if (nearPortal) {
-            interactionHint.textContent = 'Press [E] to Extract';
+            interactionHint.textContent = 'Press [F] to Extract';
             interactionHint.classList.remove('hidden');
-            
-            if (this.input.isKeyDown('KeyE')) {
-                this.extract();
-                this.input.keys['KeyE'] = false;
+
+            if (this.input.isKeyDown('KeyF')) {
+                this.input.keys['KeyF'] = false;
             }
         } else if (closestItem) {
-            interactionHint.textContent = 'Press [E] to Pick Up';
+            interactionHint.textContent = 'Press [F] to Pick Up';
             interactionHint.classList.remove('hidden');
-            
-            if (this.input.isKeyDown('KeyE')) {
+
+            if (this.input.isKeyDown('KeyF')) {
                 // Attempt to add to inventory
                 if (this.player.addToInventory(closestItem.itemData)) {
                     this.combatFeedback.addText('Picked up', closestItem.x, closestItem.y, closestItem.itemData.color, 14, 1.0);
@@ -261,7 +269,7 @@ class GameEngine {
                 }
                 
                 // Clear key so we don't spam pickup
-                this.input.keys['KeyE'] = false;
+                this.input.keys['KeyF'] = false;
             }
         } else {
             interactionHint.classList.add('hidden');
@@ -335,6 +343,7 @@ class GameEngine {
         }
 
         // 6. Draw Combat Feedback
+        this.particleSystem.render(this.ctx, this.renderer);
         this.combatFeedback.render(this.ctx, this.renderer);
 
         // 7. Draw UI Overlay
@@ -354,32 +363,16 @@ class GameEngine {
         console.log('💎 Extracting!');
         this.stop();
 
-        // Load existing stash
-        let stash = [];
-        try {
-            stash = JSON.parse(localStorage.getItem('gloomvault_stash')) || [];
-        } catch (e) {
-            stash = [];
-        }
-
-        // Add inventory to stash
-        if (this.player && this.player.inventory) {
-            for (const item of this.player.inventory) {
-                if (item) {
-                    stash.push(item);
-                }
-            }
-        }
-        localStorage.setItem('gloomvault_stash', JSON.stringify(stash));
-
         // Save equipment
         if (this.player && this.player.equipment) {
             localStorage.setItem('gloomvault_equipment', JSON.stringify(this.player.equipment));
         }
 
-        // Transition to main menu
+        // Pass inventory to main.js to handle the extraction screen
         if (window.gloomvaultApp) {
-            window.gloomvaultApp.showScreen('main-menu');
+            // Trigger extraction screen setup
+            window.gloomvaultApp.setupExtraction(this.player.inventory);
+            window.gloomvaultApp.showScreen('extraction-screen');
         }
     }
 

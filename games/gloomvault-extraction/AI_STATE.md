@@ -13,29 +13,27 @@ A real-time top-down 3/4 perspective dungeon crawler with extraction mechanics a
 *   **World:** Procedurally generated continuous grid (Cluster Blob rooms, 2-tile wide wobbling cave corridors, and cellular automata smoothing) via `js/systems/MapGen.js`. Configurations are externalized in `js/config/MapConfig.js`.
 *   **Input:** WASD movement, Mouse aiming (relative to camera), Shift to dodge. Handled by `js/core/Input.js`.
 
-## 🟢 Current State (Phase 6 Completed)
+## 🟢 Current State (Phase 8 In Progress)
 *   **Menu Shell:** `index.html` and `style.css` implemented for screen switching, including Stash and Game Over screens.
 *   **Core Engine:** Active. Delta time, update/render loops, and AABB separated-axis wall collision are working perfectly.
-*   **Camera:** Follows the player and culls off-screen rendering.
-*   **Player:** Can move, dodge (with cooldown), aim, and has a fully functional inventory system with stat recalculation.
-*   **Combat:** Primary attack (Left Click) spawns projectiles with cooldowns. Projectiles collide with walls and disappear, spawning floating text feedback.
-*   **Map:** Dynamically generates organic cave/dungeon hybrids based on `MapConfig.js`.
-*   **Pathfinding & AI:** A* Pathfinding system active. Enemy base class implemented with Grunt (chase/flee), Ranged (kite/shoot), and Brute (telegraph/dash) behaviors. Support for elite modifiers (fast/vampiric).
-*   **Enemy Spawning:** Global Pre-population via `SpawnManager.js` (Option A). Entire map is populated with enemies based on floor size and difficulty level, keeping a strict 800-pixel safe zone around the player's spawn.
-*   **Combat Resolution:** Projectiles correctly filter collisions based on ownership (Player vs Enemy). Damage numbers pop up on hit, and dead enemies are removed.
-*   **Loot & Inventory:** Enemies have a chance to drop loot when killed. Dropped items can be picked up with 'E'. An HTML DOM-based inventory overlay handles dragging and dropping items between the backpack (5x5 grid) and equipment slots, correctly recalculating player stats on the fly.
-*   **Extraction & Persistence:** `ExtractionPortal` entity spawns in the deepest room of the dungeon. Interacting with it successfully extracts the player, saving equipped items to `gloomvault_equipment` and moving backpack items to the persistent `gloomvault_stash` in `localStorage`.
-*   **Death Penalty:** If the player dies, their active inventory and equipped items are permanently lost. The stash remains untouched. A "GAME OVER" screen effectively communicates the failure state.
-*   **🛠️ Recent Fixes:** Added safe checks for stash null items, updated grid rendering to correctly parse UI slots, properly updated HP.
+*   **Camera:** Follows the player, culls off-screen rendering, and supports screenshake effects on impact.
+*   **Player:** Can move, dodge (with dash trail particles), aim, and has a fully functional inventory system with stat recalculation. Supports animation states (Idle, Run, Attack) falling back to primitive shapes when sprites are missing.
+*   **Combat:** Primary attack spawns projectiles with cooldowns. Projectiles collide with walls and enemies, spawning floating text feedback and impact spark particles.
+*   **Map:** Dynamically generates organic cave/dungeon hybrids.
+*   **Pathfinding & AI:** A* Pathfinding active. Grunt, Ranged, and Brute enemy types. Enemies support animation states.
+*   **Loot & Extraction:** Enemies drop loot on death. Player extracts via an `ExtractionPortal` at the map's end. Dead means lost active inventory. New extraction exit screen added to salvage items or store them in the stash.
+*   **Upgrades & Scraps:** Integrated a new "Scraps" economy. Scraps can be used to upgrade items in the stash up to 5 times (boosting stats by 10% each time). Items can be salvaged for scraps upon extraction.
+*   **🛠️ Recent Fixes/Additions:** Added a high-performance ParticleSystem for juice (sparks and dash trails). Integrated sprite rendering logic gracefully falling back to Canvas primitives. Implemented Camera screenshake. Added Scrap economy, item upgrading via drag-and-drop in Stash, extraction screen and fixed stash overflow bug upon extracting.
 
 ---
 
 ## 🚀 Execution Roadmap for AI Agents
 When starting a new session, pick the lowest incomplete phase and execute it entirely.
 
-### 🎨 Phase 7: Polish & Game Feel
-1.  **Sprite Integration:** Update `js/core/Renderer.js` to replace rectangles with actual sprite sheets (Idle, Run, Attack).
-2.  **Juice:** Add camera screenshake on heavy hits, particle emitters for impacts, and dash trails.
+### 🎒 Phase 8: Advanced Loot & Abilities (Continued)
+1.  **Loot Modifiers Details:** Improve UI to show modifiers more clearly.
+2.  **Secondary Abilities:** Expand the `Weapon` class to support a Right Click secondary ability.
+3.  **Trinket Integration:** Map Trinket slots to Q/E active abilities.
 
 ### ✨ Additional Enhancements & Future Changes
 *   **Advanced Loot Generation:** Implement prefix/suffix system natively visible on item names.

@@ -9,6 +9,15 @@ class Camera {
         this.minY = 0;
         this.maxX = 10000;
         this.maxY = 10000;
+
+        // Screenshake
+        this.shakeIntensity = 0;
+        this.shakeDuration = 0;
+    }
+
+    shake(intensity, duration) {
+        this.shakeIntensity = intensity;
+        this.shakeDuration = duration;
     }
 
     updateDimensions(width, height) {
@@ -21,10 +30,17 @@ class Camera {
         this.maxY = maxY;
     }
 
-    follow(target) {
+    follow(target, dt) {
         // Center the camera on the target
         let targetX = target.x - this.width / 2;
         let targetY = target.y - this.height / 2;
+
+        // Apply Screenshake
+        if (this.shakeDuration > 0) {
+            targetX += (Math.random() - 0.5) * 2 * this.shakeIntensity;
+            targetY += (Math.random() - 0.5) * 2 * this.shakeIntensity;
+            this.shakeDuration -= dt || 0.016; // default 60fps dt if missing
+        }
 
         // Optional smooth follow (lerp)
         const lerpFactor = 0.1;

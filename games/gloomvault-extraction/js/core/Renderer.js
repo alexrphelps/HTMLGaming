@@ -29,6 +29,11 @@ class Renderer {
         this.ctx.fillRect(screenPos.x, screenPos.y, width, height);
     }
 
+    drawSpriteDirect(ctx, image, srcX, srcY, srcW, srcH, destX, destY, destW, destH) {
+        // Assume already translated/rotated
+        ctx.drawImage(image, srcX, srcY, srcW, srcH, destX, destY, destW, destH);
+    }
+
     drawSprite(image, srcX, srcY, srcW, srcH, destX, destY, destW, destH) {
         if (!this.camera) return;
         const screenPos = this.camera.worldToScreen(destX, destY);

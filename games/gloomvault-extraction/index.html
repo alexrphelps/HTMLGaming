@@ -44,7 +44,27 @@
                     </div>
                 </div>
             </div>
-            <button id="btn-stash-back" class="menu-btn secondary">Back to Menu</button>
+            
+            <div style="margin-top: 20px; display: flex; justify-content: space-between; width: 80%; align-items: flex-start; flex-direction: column; gap: 20px;">
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                    <div id="scrap-counter" style="font-size: 24px; color: #a0a0a0;">Scraps: 0</div>
+                    
+                    <div style="display: flex; gap: 20px;">
+                        <div class="upgrade-panel" style="border: 1px solid var(--color-danger); padding: 10px; display: flex; gap: 10px; align-items: center;">
+                            <span style="color: var(--color-danger);">Salvage:</span>
+                            <div class="equip-slot" id="stash-salvage-dropzone" data-slot="stash-salvage">Drop Here</div>
+                        </div>
+
+                        <div class="upgrade-panel" style="border: 1px solid var(--color-accent); padding: 10px; display: flex; gap: 10px; align-items: center;">
+                            <span>Upgrade Item:</span>
+                            <div class="equip-slot" id="upgrade-dropzone" data-slot="upgrade">Drop Item</div>
+                            <button id="btn-upgrade-item" class="menu-btn secondary" disabled>Upgrade (Cost: --)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-stash-back" class="menu-btn secondary" style="margin-top: 20px;">Back to Menu</button>
         </div>
 
         <!-- Game Over Screen -->
@@ -52,6 +72,31 @@
             <h1 class="game-title" style="color: var(--color-danger); text-shadow: 0 0 20px rgba(192, 57, 43, 0.5);">YOU DIED</h1>
             <p style="margin-bottom: 20px;">Your inventory and equipped gear have been lost.</p>
             <button id="btn-game-over-menu" class="menu-btn">Return to Menu</button>
+        </div>
+
+        <!-- Extraction Screen -->
+        <div id="extraction-screen" class="screen">
+            <h2>Extraction Successful</h2>
+            <div style="display: flex; gap: 20px; width: 90%; justify-content: center;">
+                <div class="backpack-panel">
+                    <h3>Loot (Drag to Stash or Salvage)</h3>
+                    <div class="inventory-grid" id="extract-loot-grid" style="display: grid; grid-template-columns: repeat(5, 1fr);"></div>
+                </div>
+                <div class="backpack-panel">
+                    <h3>Stash</h3>
+                    <div class="inventory-grid" id="extract-stash-grid" style="overflow-y: auto; max-height: 400px; display: grid; grid-template-columns: repeat(5, 1fr);"></div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 20px; align-items: center;">
+                <div class="upgrade-panel" style="border: 1px solid var(--color-danger); padding: 10px; display: flex; gap: 10px; align-items: center;">
+                    <span style="color: var(--color-danger);">Salvage for Scraps:</span>
+                    <div class="equip-slot" id="salvage-dropzone" data-slot="salvage">Drop Here</div>
+                </div>
+                <div id="extract-scrap-counter" style="font-size: 24px; color: #a0a0a0;">Scraps: 0</div>
+            </div>
+            
+            <button id="btn-finish-extraction" class="menu-btn" style="margin-top: 20px;">Finish & Return to Menu</button>
         </div>
 
         <!-- Game Screen Placeholder -->
@@ -105,12 +150,15 @@
     <script src="js/core/Camera.js"></script>
     <script src="js/core/Renderer.js"></script>
     <script src="js/config/MapConfig.js"></script>
+    <script src="js/config/UpgradeConfig.js"></script>
     <script src="js/systems/LootGen.js"></script>
     <script src="js/entities/Entity.js"></script>
     <script src="js/entities/DroppedItem.js"></script>
     <script src="js/entities/ExtractionPortal.js"></script>
     <script src="js/systems/MapGen.js"></script>
+    <script src="js/systems/UpgradeSystem.js"></script>
     <script src="js/systems/Weapon.js"></script>
+    <script src="js/systems/ParticleSystem.js"></script>
     <script src="js/systems/CombatFeedback.js"></script>
     <script src="js/entities/Enemy.js"></script>
     <script src="js/entities/Projectile.js"></script>
