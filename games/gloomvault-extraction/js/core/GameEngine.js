@@ -164,6 +164,24 @@ class GameEngine {
                 this.die();
                 return;
             }
+
+            // Update Minimap Fog of War
+            if (typeof MinimapConfig !== 'undefined') {
+                const pX = Math.floor(this.player.x / this.mapGen.tileSize);
+                const pY = Math.floor(this.player.y / this.mapGen.tileSize);
+                const vr = MinimapConfig.visionRadius;
+
+                for (let y = pY - vr; y <= pY + vr; y++) {
+                    for (let x = pX - vr; x <= pX + vr; x++) {
+                        if (x >= 0 && x < this.mapGen.cols && y >= 0 && y < this.mapGen.rows) {
+                            // Circular vision
+                            if (Math.hypot(x - pX, y - pY) <= vr) {
+                                this.mapGen.visitedGrid[y * this.mapGen.cols + x] = true;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         this.particleSystem.update(dt);
@@ -462,8 +480,13 @@ class GameEngine {
         // 7. Draw UI Overlay
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '16px monospace';
-        this.ctx.fillText(`FPS: ${Math.round(1 / (performance.now() - this.lastTime) * 1000)}`, 10, 20);
+        this.ctx.fillText(`FPS: ${Math.round(1 / dt)}`, 10, 20);
         this.ctx.fillText(`Player: (${Math.floor(this.player.x)}, ${Math.floor(this.player.y)})`, 10, 40);
+
+        // 8. Draw Minimap
+        if (typeof MinimapConfig !== 'undefined') {
+            this.renderer.renderMinimap(this.player, this.portal, this.mapGen, MinimapConfig);
+        }
     }
 
     isWallVisible(x, y) {

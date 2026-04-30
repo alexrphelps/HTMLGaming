@@ -108,6 +108,7 @@ function loadStashData() {
 
         element.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             element.classList.remove('drag-over');
             
             if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade'].includes(draggedItemSource.source)) return;
@@ -658,6 +659,7 @@ function loadStashData() {
 
         element.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             element.classList.remove('drag-over');
             
             if (!draggedItemSource || !engine.player || draggedItemSource.source !== 'game') return;

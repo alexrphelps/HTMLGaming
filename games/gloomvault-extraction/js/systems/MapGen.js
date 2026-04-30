@@ -5,11 +5,13 @@ class MapGen {
         this.rows = config.rows;
         this.tileSize = tileSize;
         this.grid = []; // 0 = wall, 1 = floor, 2 = door, 3 = hazard
+        this.visitedGrid = []; // true if tile has been revealed by player
         this.rooms = [];
     }
 
     generate() {
         this.grid = new Array(this.cols * this.rows).fill(0);
+        this.visitedGrid = new Array(this.cols * this.rows).fill(false);
         this.rooms = [];
 
         const numRooms = this.config.numRooms;
