@@ -67,6 +67,25 @@ class Weapon {
             this.meleeDamageMultiplier = 1.25;
         }
 
+        // Sub-type specific overrides (Rapier, Lance, etc.)
+        this.hasLunge = false;
+        this.lungeMultiplier = 1.0;
+        this.movementSpeedBonus = 0;
+
+        if (this.weaponType === 'melee_stab') {
+            this.hasLunge = true; // Default for stabs
+            if (this.itemData && this.itemData.name) {
+                const name = this.itemData.name.toLowerCase();
+                if (name.includes('rapier')) {
+                    this.hasLunge = false;
+                    this.baseCooldown = 0.3;
+                    this.movementSpeedBonus = 40;
+                } else if (name.includes('lance')) {
+                    this.lungeMultiplier = 1.25;
+                }
+            }
+        }
+
         this.damage = this.baseDamage;
         this.cooldown = this.baseCooldown;
         this.cooldownTimer = 0;

@@ -191,21 +191,26 @@ class Player extends Entity {
 
         this.speed = this.stats.speed * this.stats.movementSpeedMultiplier;
         
+        let weaponSpeedBonus = 0;
         
         if (this.weapon1) {
             this.weapon1.damage = Math.round(this.weapon1.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
             this.weapon1.cooldown = this.weapon1.baseCooldown / this.stats.attackSpeedMultiplier;
+            weaponSpeedBonus += this.weapon1.movementSpeedBonus || 0;
         }
         if (this.weapon2) {
             this.weapon2.damage = Math.round(this.weapon2.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
             this.weapon2.cooldown = this.weapon2.baseCooldown / this.stats.attackSpeedMultiplier;
+            weaponSpeedBonus += this.weapon2.movementSpeedBonus || 0;
         }
+        
+        this.speed += weaponSpeedBonus;
 
     }
 
-    triggerLunge(angle) {
+    triggerLunge(angle, multiplier = 1.0) {
         this.isLunging = true;
-        this.lungeTimer = this.lungeDuration;
+        this.lungeTimer = this.lungeDuration * multiplier;
         this.lungeAngle = angle;
     }
 
@@ -403,8 +408,8 @@ class Player extends Entity {
                 newProjectiles.push(...projs);
                 isAttacking = true;
                 
-                if (this.weapon1.weaponType === 'melee_stab') {
-                    this.triggerLunge(this.angle);
+                if (this.weapon1.hasLunge) {
+                    this.triggerLunge(this.angle, this.weapon1.lungeMultiplier || 1.0);
                 }
 
                 // Degrade weapon durability
@@ -422,8 +427,8 @@ class Player extends Entity {
                 newProjectiles.push(...projs);
                 isAttacking = true;
                 
-                if (this.weapon2.weaponType === 'melee_stab') {
-                    this.triggerLunge(this.angle);
+                if (this.weapon2.hasLunge) {
+                    this.triggerLunge(this.angle, this.weapon2.lungeMultiplier || 1.0);
                 }
 
                 // Degrade weapon2 durability
