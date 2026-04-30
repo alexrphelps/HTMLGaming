@@ -62,9 +62,24 @@ class LootGen {
         };
     }
 
+    generateItemWithRarityAndType(floor, forcedRarityName, forcedTypeSlot) {
+        const rarity = forcedRarityName && forcedRarityName !== 'Random' ? (this.rarities.find(r => r.name === forcedRarityName) || this.rarities[0]) : this.rollRarity();
+        return this._generateItemInternal(floor, rarity, forcedTypeSlot);
+    }
+
     generateItem(floor) {
         const rarity = this.rollRarity();
-        const type = this.rollType();
+        return this._generateItemInternal(floor, rarity);
+    }
+
+    _generateItemInternal(floor, rarity, forcedTypeSlot = null) {
+        let type = null;
+        if (forcedTypeSlot && forcedTypeSlot !== 'Random') {
+            type = this.types.find(t => t.slot === forcedTypeSlot);
+        }
+        if (!type) {
+            type = this.rollType();
+        }
         const slotConfig = LootConfig.slots[type.slot];
         
         // Gear Score Formula: Floor * 10 to Floor * 15

@@ -9,6 +9,11 @@ class SpawnManager {
         let enemyCountScale = typeof DifficultyConfig !== 'undefined' ? DifficultyConfig.enemyCountScale : 0.1;
         let totalEnemies = Math.floor(baseCount * (1 + (floorLevel * enemyCountScale)));
 
+        // Apply dev mode enemy count multiplier
+        if (typeof DevConfig !== 'undefined' && DevConfig.DEV_MODE_ENABLED) {
+            totalEnemies = Math.floor(totalEnemies * DevConfig.enemyCountMultiplier);
+        }
+
         // Find valid spawn tiles
         const validTiles = [];
         const safeZoneRadius = 800;
@@ -52,7 +57,15 @@ class SpawnManager {
             const hpMultiplier = 1 + (floorLevel * hpScale);
             const dmgMultiplier = 1 + (floorLevel * dmgScale);
 
-            const enemy = new Enemy(spawnPoint.x, spawnPoint.y, type, hpMultiplier, dmgMultiplier);
+            // Apply dev mode multipliers
+            let finalHpMult = hpMultiplier;
+            let finalDmgMult = dmgMultiplier;
+            if (typeof DevConfig !== 'undefined' && DevConfig.DEV_MODE_ENABLED) {
+                finalHpMult *= DevConfig.enemyHpMultiplier;
+                finalDmgMult *= DevConfig.enemyDmgMultiplier;
+            }
+
+            const enemy = new Enemy(spawnPoint.x, spawnPoint.y, type, finalHpMult, finalDmgMult);
             enemiesArray.push(enemy);
         }
 

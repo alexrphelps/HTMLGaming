@@ -56,6 +56,13 @@ class GameEngine {
         // Handle window resize
         window.addEventListener('resize', () => this.resizeCanvas());
         this.resizeCanvas();
+
+        // Dev Panel (only if dev mode is enabled)
+        this.devPanel = null;
+        if (typeof DevConfig !== 'undefined' && DevConfig.DEV_MODE_ENABLED) {
+            this.devPanel = new DevPanel(this);
+            console.log('🛠️ Dev Mode enabled - press ` to toggle panel');
+        }
     }
 
     resizeCanvas() {
@@ -90,6 +97,13 @@ class GameEngine {
         console.log(`Descending to floor ${this.currentFloor}`);
         this.generateFloor(true);
         this.combatFeedback.addText(`Floor ${this.currentFloor}`, this.player.x, this.player.y - 40, '#a335ee', 20, 2.0);
+    }
+
+    jumpToFloor(targetFloor) {
+        this.currentFloor = Math.max(1, targetFloor);
+        console.log(`🛠️ Jumping to floor ${this.currentFloor}`);
+        this.generateFloor(true);
+        this.combatFeedback.addText(`Floor ${this.currentFloor} (DEV)`, this.player.x, this.player.y - 40, '#ff8000', 20, 2.0);
     }
 
     generateFloor(isNextFloor) {
@@ -284,8 +298,9 @@ class GameEngine {
             if (enemy.hp <= 0) {
                 this.combatFeedback.addText('Dead', enemy.x, enemy.y, '#888888', 14, 2.0);
                 
-                // Roll for loot drop (20% chance)
-                if (Math.random() < 0.2) {
+                // Roll for loot drop (default 20%, overrideable by DevConfig)
+                const dropChance = (typeof DevConfig !== 'undefined' && DevConfig.DEV_MODE_ENABLED && this.devPanel && this.devPanel.visible) ? DevConfig.dropRate : 0.2;
+                if (Math.random() < dropChance) {
                     const effectiveFloorLevel = (this.currentFloor - 1) + (this.gearDifficultyFloor || 1);
                     const itemData = this.lootGen.generateItem(effectiveFloorLevel);
                     this.droppedItems.push(new DroppedItem(enemy.x, enemy.y, itemData));

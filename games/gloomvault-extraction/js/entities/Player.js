@@ -79,6 +79,11 @@ class Player extends Entity {
     }
 
     takeDamage(amount) {
+        // God mode: no damage taken
+        if (typeof DevConfig !== 'undefined' && DevConfig.godMode) {
+            return { total: 0, shield: 0, hp: 0 };
+        }
+
         // Use CombatConfig to calculate mitigated damage
         let finalDamage = amount;
         if (typeof CombatConfig !== 'undefined') {
