@@ -10,6 +10,10 @@ class Projectile extends Entity {
         this.timer = 0;
         this.markedForDeletion = false;
         
+        this.isMelee = (weaponType === 'melee_stab' || weaponType === 'melee_cleave');
+        this.pierce = this.isMelee; // melee projectiles pierce through enemies
+        this.hitEnemies = new Set(); // track already-hit enemies for pierce
+        
         if (this.weaponType === 'melee_cleave') {
             this.width = 30;
             this.height = 30;
