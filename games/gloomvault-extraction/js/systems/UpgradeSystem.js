@@ -1,0 +1,152 @@
+// UpgradeSystem.js
+class UpgradeSystem {
+    static getUpgradeCost(item) {
+        if (!item || item.upgradeLevel === undefined || item.upgradeLevel >= UpgradeConfig.maxUpgrades) return null;
+        const rarityConfig = UpgradeConfig.costs[item.rarity];
+        if (!rarityConfig) return null;
+        return rarityConfig.base + (rarityConfig.increment * item.upgradeLevel);
+    }
+
+    static getSalvageValue(item) {
+        if (item && item.isStarter) return 0;
+        if (!item) return 0;
+        const rarityConfig = UpgradeConfig.costs[item.rarity];
+        if (!rarityConfig) return 1;
+        // Base salvage value is half the base cost + fraction of upgrades
+        return Math.max(1, Math.floor(rarityConfig.base / 2) + ((item.upgradeLevel || 0) * Math.floor(rarityConfig.increment / 2)));
+    }
+
+    static upgradeItem(item, availableScraps) {
+        const cost = this.getUpgradeCost(item);
+        if (cost === null || availableScraps < cost) return { success: false, remainingScraps: availableScraps };
+
+        item.upgradeLevel = (item.upgradeLevel || 0) + 1;
+        const multiplier = 1 + UpgradeConfig.statBoostPerLevel;
+        
+        // Multiply base values
+        item.gearScore = Math.round(item.gearScore * multiplier);
+        
+        for (let mod of item.modifiers) {
+            mod.value = Math.round(mod.value * multiplier);
+            mod.text = `+${mod.value}${mod.type === 'percent' ? '%' : ''} ${mod.name}`;
+        }
+
+        // Upgrade trinket active ability
+        if (item.activeAbility) {
+            this.upgradeAbility(item.activeAbility);
+        }
+
+        // Update name to reflect upgrade
+        if (!item.name.includes('+')) {
+            item.name = `${item.name} +${item.upgradeLevel}`;
+        } else {
+            item.name = item.name.replace(/\+\d+/, `+${item.upgradeLevel}`);
+        }
+
+        // Upgrading fully repairs the item
+        if (item.maxDurability) {
+            item.durability = item.maxDurability;
+        }
+
+        return { success: true, remainingScraps: availableScraps - cost };
+    }
+
+    static upgradeAbility(ability) {
+        switch (ability.type) {
+            case 'heal':
+                ability.value += 10;
+                ability.text = `Use to heal ${ability.value} HP (${ability.cooldown}s CD)`;
+                break;
+            case 'nova':
+                ability.damage += 5;
+                ability.projectiles = (ability.projectiles || 8) + 1;
+                ability.text = `Fires ${ability.projectiles} projectiles around you (${ability.cooldown}s CD)`;
+                break;
+            case 'dash':
+                ability.speed += 50;
+                ability.text = `A swift directional dash at ${ability.speed} speed (${ability.cooldown}s CD)`;
+                break;
+            case 'hot':
+                ability.duration = Math.max(5, ability.duration - 2);
+                ability.text = `Restores ${ability.value} HP over ${ability.duration} seconds (${ability.cooldown}s CD)`;
+                break;
+            case 'scout':
+                ability.revealRadius = (ability.revealRadius || 22) + 2;
+                ability.text = `Reveals a wide area of the minimap (${ability.cooldown}s CD)`;
+                break;
+            case 'phase_tether':
+                ability.maxTiles = Math.min(10, (ability.maxTiles || 8) + 1);
+                ability.text = `Blink ${ability.minTiles || 5}-${ability.maxTiles} tiles toward your aim (${ability.cooldown}s CD)`;
+                break;
+            case 'element_bomb':
+                ability.damage = (ability.damage || 18) + 5;
+                ability.radius = (ability.radius || 120) + 8;
+                ability.text = `Throws a ${ability.element || 'elemental'} bomb that leaves a status cloud (${ability.cooldown}s CD)`;
+                break;
+            case 'lightning_strike':
+                ability.damage = (ability.damage || 48) + 8;
+                ability.text = `Strikes the nearest enemy and chains up to ${ability.chains || 3} times (${ability.cooldown}s CD)`;
+                break;
+            case 'target_dummy':
+                ability.radius = (ability.radius || 520) + 40;
+                ability.text = `Drops a decoy for ${ability.duration || 4} seconds that draws enemy aggro (${ability.cooldown}s CD)`;
+                break;
+            case 'soul_siphon':
+                ability.duration = Math.min(5, (ability.duration || 4) + 0.5);
+                ability.lifesteal = Math.min(0.75, (ability.lifesteal || 0.45) + 0.05);
+                ability.text = `Gain ${Math.round(ability.lifesteal * 100)}% lifesteal for ${ability.duration} seconds (${ability.cooldown}s CD)`;
+                break;
+        }
+    }
+
+    static simulateUpgrade(item) {
+        if (!item || item.upgradeLevel >= UpgradeConfig.maxUpgrades) return null;
+        
+        // Deep clone
+        const simulated = JSON.parse(JSON.stringify(item));
+        
+        // Apply one upgrade level logic manually to avoid modifying original
+        simulated.upgradeLevel = (simulated.upgradeLevel || 0) + 1;
+        const multiplier = 1 + UpgradeConfig.statBoostPerLevel;
+        
+        simulated.gearScore = Math.round(simulated.gearScore * multiplier);
+        
+        for (let mod of simulated.modifiers) {
+            mod.value = Math.round(mod.value * multiplier);
+            mod.text = `+${mod.value}${mod.type === 'percent' ? '%' : ''} ${mod.name}`;
+        }
+
+        if (simulated.activeAbility) {
+            this.upgradeAbility(simulated.activeAbility);
+        }
+
+        if (!simulated.name.includes('+')) {
+            simulated.name = `${simulated.name} +${simulated.upgradeLevel}`;
+        } else {
+            simulated.name = simulated.name.replace(/\+\d+/, `+${simulated.upgradeLevel}`);
+        }
+
+        return simulated;
+    }
+
+    static getRepairCost(item) {
+        if (!item || !item.maxDurability || item.durability >= item.maxDurability) return null;
+        if (item.isStarter) return null;
+        const costsConfig = typeof DurabilityConfig !== 'undefined' ? DurabilityConfig.repairCosts : null;
+        const rarityConfig = costsConfig ? costsConfig[item.rarity] : null;
+        if (!costsConfig || !rarityConfig) return null;
+        
+        const missingDurability = item.maxDurability - item.durability;
+        const gsScaling = Math.max(costsConfig.minCostPerPoint, item.gearScore * costsConfig.baseCostMultiplier);
+        const costPerPoint = gsScaling * rarityConfig.multiplier;
+        
+        return Math.max(1, Math.ceil(missingDurability * costPerPoint));
+    }
+
+    static repairItem(item, availableScraps) {
+        const cost = this.getRepairCost(item);
+        if (cost === null || availableScraps < cost) return { success: false, remainingScraps: availableScraps };
+        item.durability = item.maxDurability;
+        return { success: true, remainingScraps: availableScraps - cost };
+    }
+}

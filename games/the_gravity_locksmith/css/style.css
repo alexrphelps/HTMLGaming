@@ -1,0 +1,207 @@
+:root {
+  --bg: #070817;
+  --panel: rgba(10, 14, 35, 0.82);
+  --cyan: #55f7ff;
+  --gold: #ffd96a;
+  --red: #ff4d6d;
+  --purple: #9c6bff;
+  --green: #75ff9d;
+  --white: #edf7ff;
+  --page-pad: 24px;
+  --hint-gap: 68px;
+  --hud-gap: 16px;
+  --hud-height: 116px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 25% 20%, #182060 0%, transparent 28%),
+    radial-gradient(circle at 80% 75%, #351b62 0%, transparent 30%),
+    #050612;
+  color: var(--white);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#wrap {
+  width: 100vw;
+  height: 100vh;
+  padding: var(--page-pad);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hud-gap);
+  background: radial-gradient(circle at center, rgba(60, 80, 150, 0.15), transparent 60%);
+}
+
+#game-hud {
+  width: min(calc(100vw - (var(--page-pad) * 2)), calc((100vh - var(--hint-gap) - var(--hud-height) - var(--hud-gap)) * (16 / 9)));
+  max-width: calc(100vw - (var(--page-pad) * 2));
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.hud-panel {
+  min-height: var(--hud-height);
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(85, 247, 255, 0.18);
+  background: rgba(5, 8, 22, 0.68);
+  box-shadow: 0 0 22px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.hud-panel-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hud-panel-right {
+  flex: 0 0 320px;
+}
+
+.hud-room-title {
+  color: var(--white);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hud-room-stats,
+.hud-room-tip,
+.hud-room-jumps,
+.hud-charge-label,
+.hud-runes,
+.hud-gravity {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.hud-room-stats {
+  margin-top: 6px;
+  color: rgba(237, 247, 255, 0.76);
+}
+
+.hud-room-tip {
+  margin-top: 10px;
+  color: rgba(237, 247, 255, 0.58);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-room-jumps {
+  margin-top: 8px;
+  color: rgba(237, 247, 255, 0.74);
+}
+
+.hud-charge-label {
+  color: rgba(237, 247, 255, 0.82);
+}
+
+.hud-charge-track {
+  position: relative;
+  margin-top: 8px;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.hud-jump-label {
+  margin-top: 10px;
+}
+
+.hud-jump-fill {
+  background: var(--gold);
+  box-shadow: 0 0 16px rgba(255, 217, 106, 0.55);
+}
+
+.hud-charge-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: var(--cyan);
+  box-shadow: 0 0 16px rgba(85, 247, 255, 0.55);
+}
+
+.hud-charge-fill.is-overcharged {
+  background: linear-gradient(90deg, var(--cyan), var(--green), var(--gold));
+  box-shadow: 0 0 20px rgba(117, 255, 157, 0.72);
+}
+
+.hud-charge-count {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+.hud-charge-meta {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.hud-runes {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.hud-gravity {
+  color: var(--white);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+canvas {
+  display: block;
+  width: min(calc(100vw - (var(--page-pad) * 2)), calc((100vh - var(--hint-gap) - var(--hud-height) - var(--hud-gap)) * (16 / 9)));
+  height: auto;
+  max-width: calc(100vw - (var(--page-pad) * 2));
+  max-height: calc(100vh - var(--hint-gap) - var(--hud-height) - var(--hud-gap));
+  image-rendering: auto;
+  border-radius: 16px;
+  box-shadow:
+    0 0 40px rgba(85, 247, 255, 0.22),
+    inset 0 0 30px rgba(85, 247, 255, 0.08);
+  background: #080a1e;
+}
+
+#hint {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 40px);
+  color: rgba(237, 247, 255, 0.74);
+  background: rgba(5, 8, 22, 0.66);
+  border: 1px solid rgba(85, 247, 255, 0.18);
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+body:not(.hud-visible) #game-hud {
+  visibility: hidden;
+}

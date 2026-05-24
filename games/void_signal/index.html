@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VOID SIGNAL</title>
+
+<style>
+*{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#02040a;
+    font-family:Arial, Helvetica, sans-serif;
+    color:white;
+}
+
+canvas{
+    display:block;
+    background:
+        radial-gradient(circle at center, #0d1220 0%, #03060d 60%, #000 100%);
+}
+
+#ui{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    padding:14px;
+    pointer-events:none;
+    z-index:10;
+    text-shadow:0 0 10px rgba(255,255,255,0.5);
+}
+
+#topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    font-size:15px;
+}
+
+.panel{
+    background:rgba(0,0,0,0.35);
+    border:1px solid rgba(255,255,255,0.08);
+    padding:8px 12px;
+    border-radius:14px;
+    backdrop-filter:blur(4px);
+}
+
+#centerMessage{
+    position:fixed;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    z-index:20;
+    pointer-events:none;
+}
+
+#title{
+    font-size:72px;
+    letter-spacing:10px;
+    font-weight:900;
+    margin-bottom:10px;
+    color:#8ee8ff;
+    text-shadow:
+        0 0 10px #39d5ff,
+        0 0 30px #39d5ff,
+        0 0 60px #39d5ff;
+}
+
+#subtitle{
+    font-size:18px;
+    opacity:0.9;
+    line-height:1.7;
+}
+
+.key{
+    color:#8ee8ff;
+    font-weight:bold;
+}
+
+.damage-vignette{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:15;
+
+    background:
+        radial-gradient(
+            circle at center,
+            rgba(255,0,80,0) 40%,
+            rgba(255,0,80,0.06) 70%,
+            rgba(255,0,80,0.14) 100%
+        );
+
+    opacity:0;
+    transition:opacity 0.18s ease;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="ui">
+    <div id="topbar">
+
+        <div class="panel">
+            SCORE:
+            <span id="score">0</span>
+        </div>
+
+        <div class="panel">
+            STABILITY:
+            <span id="health">100</span>%
+        </div>
+
+        <div class="panel">
+            PHASE:
+            <span id="phase">1</span>
+        </div>
+
+        <div class="panel">
+            COMBO:
+            <span id="combo">x1</span>
+        </div>
+
+    </div>
+</div>
+
+<div id="centerMessage">
+    <div id="title">VOID SIGNAL</div>
+
+    <div id="subtitle">
+        You drift through a collapsing signal dimension.<br><br>
+
+        Match frequencies to survive.<br>
+        Absorb safe pulses. Avoid corrupted echoes.<br><br>
+
+        <span class="key">MOVE</span> — WASD / Arrow Keys<br>
+        <span class="key">SHIFT</span> — Phase Dash<br>
+        <span class="key">CLICK</span> — Fire Pulse<br><br>
+
+        Survive as long as possible.<br><br>
+
+        Press SPACE to begin
+    </div>
+</div>
+
+<div id="damageVignette" class="damage-vignette"></div>
+
+<script>
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resize();
+
+window.addEventListener("resize", resize);
+
+const scoreEl = document.getElementById("score");
+const healthEl = document.getElementById("health");
+const phaseEl = document.getElementById("phase");
+const comboEl = document.getElementById("combo");
+
+const centerMessage = document.getElementById("centerMessage");
+const subtitle = document.getElementById("subtitle");
+
+const damageVignette = document.getElementById("damageVignette");
+
+let keys = {};
+let mouse = {
+    x:0,
+    y:0
+};
+
+window.addEventListener("mousemove", e=>{
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+
+window.addEventListener("keydown", e=>{
+
+    keys[e.key.toLowerCase()] = true;
+
+    if(e.code === "Space" && !game.running){
+        startGame();
+    }
+});
+
+window.addEventListener("keyup", e=>{
+    keys[e.key.toLowerCase()] = false;
+});
+
+window.addEventListener("mousedown", ()=>{
+
+    if(game.running){
+        shoot();
+    }
+});
+
+const COLORS = {
+    blue:"#55d6ff",
+    red:"#ff4b6e",
+    gold:"#ffd95c",
+    purple:"#b86cff"
+};
+
+const game = {
+    running:false,
+    score:0,
+    phase:1,
+    combo:1,
+    comboTimer:0,
+    spawnTimer:0,
+    difficulty:1,
+    screenShake:0
+};
+
+const player = {
+    x:0,
+    y:0,
+    radius:18,
+    speed:4,
+    health:100,
+    cooldown:0,
+    dash:0,
+    angle:0
+};
+
+let particles = [];
+let enemies = [];
+let bullets = [];
+
+function startGame(){
+
+    game.running = true;
+    game.score = 0;
+    game.phase = 1;
+    game.combo = 1;
+    game.comboTimer = 0;
+    game.spawnTimer = 0;
+    game.difficulty = 1;
+
+    player.x = canvas.width/2;
+    player.y = canvas.height/2;
+    player.health = 100;
+
+    particles = [];
+    enemies = [];
+    bullets = [];
+
+    centerMessage.style.display = "none";
+}
+
+function gameOver(){
+
+    game.running = false;
+
+    centerMessage.style.display = "block";
+
+    document.getElementById("title").innerText = "SIGNAL LOST";
+
+    subtitle.innerHTML = `
+        Final Score:
+        <span style="color:#8ee8ff">
+            ${Math.floor(game.score)}
+        </span>
+        <br>
+
+        Highest Phase:
+        <span style="color:#ffd95c">
+            ${game.phase}
+        </span>
+
+        <br><br>
+
+        The void adapted to your pattern.
+
+        <br><br>
+
+        Press SPACE to try another timeline
+    `;
+}
+
+function shoot(){
+
+    if(player.cooldown > 0) return;
+
+    const angle = Math.atan2(
+        mouse.y - player.y,
+        mouse.x - player.x
+    );
+
+    bullets.push({
+        x:player.x,
+        y:player.y,
+        dx:Math.cos(angle) * 10,
+        dy:Math.sin(angle) * 10,
+        life:80
+    });
+
+    player.cooldown = 10;
+}
+
+function spawnEnemy(){
+
+    const side = Math.floor(Math.random()*4);
+
+    let x,y;
+
+    if(side===0){
+        x = Math.random()*canvas.width;
+        y = -40;
+    }
+
+    if(side===1){
+        x = canvas.width + 40;
+        y = Math.random()*canvas.height;
+    }
+
+    if(side===2){
+        x = Math.random()*canvas.width;
+        y = canvas.height + 40;
+    }
+
+    if(side===3){
+        x = -40;
+        y = Math.random()*canvas.height;
+    }
+
+    const typeRoll = Math.random();
+
+    let type = "hunter";
+
+    if(typeRoll < 0.15 + game.phase*0.01){
+        type = "mirror";
+    }
+    else if(typeRoll < 0.3){
+        type = "orbiter";
+    }
+
+    enemies.push({
+        x,
+        y,
+        radius:16 + Math.random()*10,
+        speed:1 + Math.random()*game.difficulty,
+        type,
+        hp:type==="mirror" ? 4 : 2,
+        pulse:Math.random()*100
+    });
+}
+
+function particle(x,y,color,count=10,speed=3){
+
+    for(let i=0;i<count;i++){
+
+        particles.push({
+            x,
+            y,
+            dx:(Math.random()-0.5)*speed,
+            dy:(Math.random()-0.5)*speed,
+            life:30 + Math.random()*30,
+            color
+        });
+    }
+}
+
+function damage(amount){
+
+    player.health -= amount;
+
+    damageVignette.style.opacity = 1;
+
+    setTimeout(()=>{
+        damageVignette.style.opacity = 0;
+    },120);
+
+    game.screenShake = 10;
+
+    if(player.health <= 0){
+        gameOver();
+    }
+}
+
+function update(){
+
+    if(!game.running) return;
+
+    game.score += 0.02 * game.combo;
+
+    game.spawnTimer++;
+
+    game.difficulty += 0.0005;
+
+    if(game.score > game.phase * 250){
+        game.phase++;
+    }
+
+    if(game.spawnTimer > Math.max(15, 60 - game.phase*2)){
+
+        game.spawnTimer = 0;
+
+        spawnEnemy();
+    }
+
+    let mx = 0;
+    let my = 0;
+
+    if(keys["w"] || keys["arrowup"]) my -= 1;
+    if(keys["s"] || keys["arrowdown"]) my += 1;
+    if(keys["a"] || keys["arrowleft"]) mx -= 1;
+    if(keys["d"] || keys["arrowright"]) mx += 1;
+
+    const len = Math.hypot(mx,my);
+
+    if(len){
+        mx /= len;
+        my /= len;
+    }
+
+    let moveSpeed = player.speed;
+
+    if(keys["shift"] && player.dash <= 0){
+        player.dash = 25;
+    }
+
+    if(player.dash > 0){
+
+        moveSpeed = 9;
+
+        player.dash--;
+
+        particle(
+            player.x,
+            player.y,
+            COLORS.blue,
+            1,
+            1
+        );
+    }
+
+    player.x += mx * moveSpeed;
+    player.y += my * moveSpeed;
+
+    player.x = Math.max(
+        player.radius,
+        Math.min(canvas.width-player.radius, player.x)
+    );
+
+    player.y = Math.max(
+        player.radius,
+        Math.min(canvas.height-player.radius, player.y)
+    );
+
+    player.angle = Math.atan2(
+        mouse.y-player.y,
+        mouse.x-player.x
+    );
+
+    if(player.cooldown > 0){
+        player.cooldown--;
+    }
+
+    for(let i=bullets.length-1;i>=0;i--){
+
+        const b = bullets[i];
+
+        b.x += b.dx;
+        b.y += b.dy;
+
+        b.life--;
+
+        if(b.life <= 0){
+
+            bullets.splice(i,1);
+
+            continue;
+        }
+
+        for(let j=enemies.length-1;j>=0;j--){
+
+            const e = enemies[j];
+
+            const dist = Math.hypot(
+                b.x-e.x,
+                b.y-e.y
+            );
+
+            if(dist < e.radius){
+
+                e.hp--;
+
+                bullets.splice(i,1);
+
+                particle(
+                    b.x,
+                    b.y,
+                    COLORS.gold,
+                    6,
+                    3
+                );
+
+                if(e.hp <= 0){
+
+                    particle(
+                        e.x,
+                        e.y,
+                        COLORS.red,
+                        20,
+                        6
+                    );
+
+                    game.score += 10 * game.combo;
+
+                    game.combo++;
+
+                    game.comboTimer = 180;
+
+                    enemies.splice(j,1);
+                }
+
+                break;
+            }
+        }
+    }
+
+    if(game.comboTimer > 0){
+        game.comboTimer--;
+    }
+    else{
+        game.combo = 1;
+    }
+
+    for(let i=enemies.length-1;i>=0;i--){
+
+        const e = enemies[i];
+
+        e.pulse += 0.05;
+
+        const angle = Math.atan2(
+            player.y-e.y,
+            player.x-e.x
+        );
+
+        if(e.type === "hunter"){
+
+            e.x += Math.cos(angle) * e.speed;
+            e.y += Math.sin(angle) * e.speed;
+        }
+
+        if(e.type === "orbiter"){
+
+            e.x += Math.cos(
+                angle + Math.sin(e.pulse)*1.5
+            ) * e.speed * 1.3;
+
+            e.y += Math.sin(
+                angle + Math.cos(e.pulse)*1.5
+            ) * e.speed * 1.3;
+        }
+
+        if(e.type === "mirror"){
+
+            const dx = player.x - canvas.width/2;
+            const dy = player.y - canvas.height/2;
+
+            e.x += (
+                (canvas.width/2)-dx - e.x
+            ) * 0.02;
+
+            e.y += (
+                (canvas.height/2)-dy - e.y
+            ) * 0.02;
+        }
+
+        const dist = Math.hypot(
+            player.x-e.x,
+            player.y-e.y
+        );
+
+        if(dist < player.radius + e.radius){
+
+            damage(0.35 + game.phase*0.05);
+
+            const push = Math.atan2(
+                player.y-e.y,
+                player.x-e.x
+            );
+
+            player.x += Math.cos(push)*10;
+            player.y += Math.sin(push)*10;
+        }
+    }
+
+    for(let i=particles.length-1;i>=0;i--){
+
+        const p = particles[i];
+
+        p.x += p.dx;
+        p.y += p.dy;
+
+        p.life--;
+
+        if(p.life <= 0){
+            particles.splice(i,1);
+        }
+    }
+
+    player.health += 0.01;
+
+    if(player.health > 100){
+        player.health = 100;
+    }
+
+    scoreEl.innerText = Math.floor(game.score);
+    healthEl.innerText = Math.floor(player.health);
+    phaseEl.innerText = game.phase;
+    comboEl.innerText = "x" + game.combo;
+}
+
+function drawBackgroundGrid(){
+
+    const time = performance.now() * 0.001;
+
+    ctx.save();
+
+    ctx.translate(
+        canvas.width/2,
+        canvas.height/2
+    );
+
+    for(let i=-20;i<20;i++){
+
+        ctx.beginPath();
+
+        const offset = (time*100)%40;
+
+        ctx.moveTo(
+            -canvas.width,
+            i*40 + offset
+        );
+
+        ctx.lineTo(
+            canvas.width,
+            i*40 + offset
+        );
+
+        ctx.strokeStyle =
+            "rgba(100,180,255,0.05)";
+
+        ctx.stroke();
+    }
+
+    for(let i=-20;i<20;i++){
+
+        ctx.beginPath();
+
+        const offset = (time*100)%40;
+
+        ctx.moveTo(
+            i*40 + offset,
+            -canvas.height
+        );
+
+        ctx.lineTo(
+            i*40 + offset,
+            canvas.height
+        );
+
+        ctx.strokeStyle =
+            "rgba(100,180,255,0.03)";
+
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function render(){
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    let shakeX = 0;
+    let shakeY = 0;
+
+    if(game.screenShake > 0){
+
+        game.screenShake *= 0.9;
+
+        shakeX =
+            (Math.random()-0.5)
+            * game.screenShake;
+
+        shakeY =
+            (Math.random()-0.5)
+            * game.screenShake;
+    }
+
+    ctx.save();
+
+    ctx.translate(shakeX, shakeY);
+
+    drawBackgroundGrid();
+
+    for(let i=0;i<80;i++){
+
+        const x =
+            (i*997)%canvas.width;
+
+        const y =
+            (i*431)%canvas.height;
+
+        ctx.fillStyle =
+            `rgba(255,255,255,${
+                0.1 +
+                Math.sin(
+                    i + performance.now()*0.001
+                )*0.1
+            })`;
+
+        ctx.fillRect(x,y,2,2);
+    }
+
+    particles.forEach(p=>{
+
+        ctx.globalAlpha = p.life/60;
+
+        ctx.fillStyle = p.color;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            p.x,
+            p.y,
+            2,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+
+        ctx.globalAlpha = 1;
+    });
+
+    bullets.forEach(b=>{
+
+        ctx.strokeStyle = COLORS.gold;
+
+        ctx.lineWidth = 3;
+
+        ctx.beginPath();
+
+        ctx.moveTo(b.x, b.y);
+
+        ctx.lineTo(
+            b.x-b.dx*1.5,
+            b.y-b.dy*1.5
+        );
+
+        ctx.stroke();
+    });
+
+    enemies.forEach(e=>{
+
+        const pulse =
+            Math.sin(e.pulse*3)*3;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            e.x,
+            e.y,
+            e.radius+pulse,
+            0,
+            Math.PI*2
+        );
+
+        if(e.type==="hunter"){
+            ctx.fillStyle = COLORS.red;
+        }
+
+        if(e.type==="orbiter"){
+            ctx.fillStyle = COLORS.purple;
+        }
+
+        if(e.type==="mirror"){
+            ctx.fillStyle = "#ffffff";
+        }
+
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = ctx.fillStyle;
+
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = "#000";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            e.x + Math.cos(e.pulse)*4,
+            e.y + Math.sin(e.pulse)*4,
+            3,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+    });
+
+    for(let i=0;i<5;i++){
+
+        ctx.beginPath();
+
+        ctx.arc(
+            player.x - Math.cos(player.angle)*i*6,
+            player.y - Math.sin(player.angle)*i*6,
+            player.radius - i*2,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle =
+            `rgba(85,214,255,${
+                0.15 - i*0.02
+            })`;
+
+        ctx.fill();
+    }
+
+    ctx.save();
+
+    ctx.translate(
+        player.x,
+        player.y
+    );
+
+    ctx.rotate(player.angle);
+
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = COLORS.blue;
+
+    ctx.fillStyle = COLORS.blue;
+
+    ctx.beginPath();
+
+    ctx.moveTo(24,0);
+    ctx.lineTo(-14,-12);
+    ctx.lineTo(-6,0);
+    ctx.lineTo(-14,12);
+
+    ctx.closePath();
+
+    ctx.fill();
+
+    ctx.restore();
+
+    ctx.restore();
+
+    requestAnimationFrame(loop);
+}
+
+function loop(){
+
+    update();
+
+    render();
+}
+
+loop();
+
+</script>
+
+</body>
+</html>

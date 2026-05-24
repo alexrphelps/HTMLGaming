@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameHub - Multi-Game Platform</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Emoji and symbol font support -->
+    <style>
+        * {
+            font-family: 'Inter', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+        }
+        .game-card-icon {
+            font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+            font-size: 2.5rem;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="logo">GameHub</div>
+            <div class="loading-bar">
+                <div class="loading-progress" id="loading-progress"></div>
+            </div>
+            <div class="loading-text" id="loading-text">Initializing platform...</div>
+        </div>
+    </div>
+
+    <!-- Main Game Container -->
+    <div id="app" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">GameHub</h1>
+                <nav class="nav">
+                    <button id="home-btn" class="nav-btn active">Home</button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Game Selection Screen -->
+            <div id="game-selector" class="screen active">
+                <div class="screen-header">
+                    <h2>Select a Game</h2>
+                    <p>Choose from our collection of games</p>
+                </div>
+                <div class="library-toolbar" aria-label="Game library controls">
+                    <input id="games-search" class="library-search" type="search" placeholder="Search games" aria-label="Search games">
+                    <select id="games-filter" class="library-select" aria-label="Filter games by category">
+                        <option value="all">All categories</option>
+                    </select>
+                    <select id="games-sort" class="library-select" aria-label="Sort games">
+                        <option value="original">Custom order</option>
+                        <option value="name">Name</option>
+                        <option value="category">Category</option>
+                        <option value="difficulty">Difficulty</option>
+                        <option value="playtime">Play time</option>
+                        <option value="rating">Rating</option>
+                        <option value="recent">Recently played</option>
+                    </select>
+                    <button id="games-reorder-toggle" class="toolbar-btn" type="button">Reorder</button>
+                    <button id="games-reset-order" class="toolbar-btn subtle" type="button">Reset</button>
+                </div>
+                <div id="games-grid" class="games-grid">
+                    <!-- Games will be populated here by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Game Play Screen -->
+            <div id="game-screen" class="screen">
+                <div class="game-header">
+                    <button id="back-to-menu" class="back-btn">&lt; Back to Menu</button>
+                    <span id="current-game-title" class="game-title"></span>
+                </div>
+                <div class="game-container"></div>
+            </div>
+        </main>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <!-- Simple game list for file:// and static hosting -->
+    <script src="games.config.js"></script>
+
+    <!-- Utility Scripts -->
+    <script src="utils/MathUtils.js"></script>
+    <script src="utils/AssetLoader.js"></script>
+    <script src="utils/EventEmitter.js"></script>
+    <script src="utils/Logger.js"></script>
+    <script src="utils/ManagedResource.js"></script>
+    <script src="utils/SafeStorage.js"></script>
+    <script src="utils/GameLoop.js"></script>
+    <script src="utils/GameMetadata.js"></script>
+
+    <!-- UI Scripts -->
+    <script src="ui/GameSelector.js"></script>
+    <script src="ui/GameScreen.js"></script>
+    <!-- Main Application -->
+    <script src="app.js"></script>
+</body>
+</html>

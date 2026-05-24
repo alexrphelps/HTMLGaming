@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Gravity Locksmith</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="game-hud" aria-live="polite">
+    <section class="hud-panel hud-panel-left" id="hud-room">
+      <div class="hud-room-title" id="hud-room-title"></div>
+      <div class="hud-room-stats" id="hud-room-stats"></div>
+      <div class="hud-room-tip" id="hud-room-tip"></div>
+      <div class="hud-room-jumps" id="hud-room-jumps"></div>
+    </section>
+    <section class="hud-panel hud-panel-right" id="hud-charge">
+      <div class="hud-charge-label">Gravity Charge</div>
+      <div class="hud-charge-track">
+        <div class="hud-charge-fill" id="hud-charge-fill"></div>
+        <div class="hud-charge-count" id="hud-charge-count">0/0</div>
+      </div>
+      <div class="hud-charge-label hud-jump-label">Double Jump Charge</div>
+      <div class="hud-charge-track">
+        <div class="hud-charge-fill hud-jump-fill" id="hud-jump-fill"></div>
+        <div class="hud-charge-count" id="hud-jump-count">0/0</div>
+      </div>
+      <div class="hud-charge-meta">
+        <span class="hud-runes" id="hud-runes"></span>
+        <span class="hud-gravity" id="hud-gravity"></span>
+      </div>
+    </section>
+  </div>
+  <canvas id="game" width="1920" height="1080"></canvas>
+</div>
+<div id="hint">Move: A/D or Left/Right - Jump: W/Space/Up - Double Jump in air - Shift: Flip Gravity - R: Restart</div>
+
+<script src="js/constants.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/roomSchema.js"></script>
+<script src="js/rooms.js"></script>
+<script src="js/factories.js"></script>
+<script src="js/systems.physics.js"></script>
+<script src="js/systems.effects.js"></script>
+<script src="js/systems.progression.js"></script>
+<script src="js/systems.enemies.js"></script>
+<script src="js/systems.player.js"></script>
+<script src="js/runtime.js"></script>
+<script src="js/input.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

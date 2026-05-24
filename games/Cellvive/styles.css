@@ -1,0 +1,1027 @@
+/* Cellvive Game Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: #fff;
+    overflow: hidden;
+    height: 100vh;
+}
+
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-canvas {
+    background: radial-gradient(circle at center, #0f3460, #1a1a2e);
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(74, 144, 226, 0.3);
+    cursor: crosshair;
+}
+
+/* Game HUD */
+#game-hud {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.hud-left, .hud-right, .hud-center {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 15px 20px;
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hud-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hud-right {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.hud-center {
+    text-align: center;
+}
+
+.score, .size, .health, .cells {
+    font-size: 18px;
+    font-weight: 600;
+    color: #4a90e2;
+}
+
+.instructions {
+    font-size: 16px;
+    color: #b0c4de;
+    font-style: italic;
+}
+
+/* Game Over Screen */
+#game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    backdrop-filter: blur(15px);
+    border: 2px solid #4a90e2;
+    box-shadow: 0 0 30px rgba(74, 144, 226, 0.5);
+    z-index: 20;
+}
+
+#game-over h2 {
+    color: #ff6b6b;
+    font-size: 32px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+}
+
+#game-over p {
+    font-size: 18px;
+    margin-bottom: 15px;
+    color: #b0c4de;
+}
+
+#death-cause {
+    color: #ffa500 !important;
+    font-weight: 600;
+    font-size: 20px;
+    margin-bottom: 25px !important;
+    text-shadow: 0 0 5px rgba(255, 165, 0, 0.5);
+}
+
+/* Tutorial Popup Styles */
+#tutorial-popup {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.tutorial-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.tutorial-content {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 2px solid #0f3460;
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    animation: tutorialSlideIn 0.3s ease-out;
+}
+
+@keyframes tutorialSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.tutorial-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    gap: 15px;
+}
+
+.tutorial-icon {
+    font-size: 48px;
+    text-shadow: 0 0 10px currentColor;
+    animation: tutorialPulse 2s infinite;
+}
+
+@keyframes tutorialPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.tutorial-title {
+    color: #e94560;
+    font-size: 28px;
+    font-weight: bold;
+    margin: 0;
+    text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+}
+
+.tutorial-visual {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 15px;
+    padding: 20px;
+    border: 2px solid #0f3460;
+}
+
+#tutorial-canvas {
+    border-radius: 10px;
+    background: rgba(15, 52, 96, 0.2);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.tutorial-description {
+    color: #b0c4de;
+    font-size: 18px;
+    line-height: 1.6;
+    margin-bottom: 30px;
+    text-align: left;
+    background: rgba(15, 52, 96, 0.3);
+    padding: 20px;
+    border-radius: 10px;
+    border-left: 4px solid #0f3460;
+}
+
+.tutorial-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.tutorial-btn {
+    background: linear-gradient(135deg, #e94560 0%, #f27121 100%);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 15px rgba(233, 69, 96, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.tutorial-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(233, 69, 96, 0.6);
+    background: linear-gradient(135deg, #f27121 0%, #e94560 100%);
+}
+
+.tutorial-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 3px 10px rgba(233, 69, 96, 0.4);
+}
+
+.tutorial-tip {
+    color: #87ceeb;
+    font-size: 14px;
+    font-style: italic;
+    opacity: 0.8;
+}
+
+#restart-btn {
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 18px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+}
+
+#restart-btn:hover {
+    background: linear-gradient(135deg, #357abd, #2c5aa0);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+}
+
+#restart-btn:active {
+    transform: translateY(0);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Responsive Design */
+@media (max-width: 1280px) {
+    #game-canvas {
+        width: 95vw;
+        height: 95vh;
+        max-width: 1200px;
+        max-height: 800px;
+    }
+    
+    #game-hud {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+    }
+    
+    .hud-left, .hud-right, .hud-center {
+        padding: 10px 15px;
+    }
+    
+    .score, .size, .health, .cells {
+        font-size: 16px;
+    }
+    
+    .instructions {
+        font-size: 14px;
+    }
+    
+    .pause-button {
+        right: 200px; /* Adjust for smaller screens */
+    }
+}
+
+@media (max-width: 768px) {
+    #game-hud {
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
+    
+    .hud-left, .hud-right, .hud-center {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .hud-right {
+        align-items: center;
+    }
+    
+    .pause-button {
+        right: 10px; /* Move to far right on mobile */
+        top: 10px;
+    }
+    
+    #game-over {
+        padding: 30px 20px;
+        margin: 20px;
+    }
+    
+    #game-over h2 {
+        font-size: 28px;
+    }
+    
+    #game-over p {
+        font-size: 18px;
+    }
+    
+    #testing-panel {
+        width: 200px;
+        max-height: 250px;
+        bottom: 10px;
+        left: 10px;
+    }
+}
+
+/* Testing Panel - Streamlined Design */
+#testing-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 280px;
+    max-height: 400px;
+    background: rgba(10, 10, 20, 0.95);
+    border: 2px solid #00ff88;
+    border-radius: 12px;
+    padding: 16px;
+    color: #ffffff;
+    font-size: 13px;
+    z-index: 1000;
+    overflow-y: auto;
+    box-shadow: 0 4px 30px rgba(0, 255, 136, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+#testing-panel h3 {
+    color: #00ff88;
+    margin: 0 0 12px 0;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+}
+
+/* Toggle Labels */
+.testing-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.debug-toggle {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    background: rgba(0, 255, 136, 0.05);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.debug-toggle:hover {
+    background: rgba(0, 255, 136, 0.1);
+    border-color: rgba(0, 255, 136, 0.3);
+}
+
+.debug-toggle input[type="checkbox"] {
+    margin: 0 10px 0 0;
+    width: 16px;
+    height: 16px;
+    accent-color: #00ff88;
+    cursor: pointer;
+}
+
+.debug-toggle span {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Collapsible Sections */
+.debug-section {
+    margin: 10px 0;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-radius: 6px;
+    background: rgba(0, 255, 136, 0.03);
+}
+
+.debug-section summary {
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+    font-size: 12px;
+    color: #00ff88;
+    list-style: none;
+    transition: all 0.2s ease;
+}
+
+.debug-section summary::-webkit-details-marker {
+    display: none;
+}
+
+.debug-section summary:hover {
+    background: rgba(0, 255, 136, 0.1);
+}
+
+.debug-section summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.2s ease;
+}
+
+.debug-section[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.debug-section[open] summary {
+    border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+    margin-bottom: 8px;
+}
+
+.debug-section .testing-controls {
+    padding: 8px;
+}
+
+/* Spawn Grid Layout */
+.spawn-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    padding: 8px;
+}
+
+/* Biome Spawn Section */
+.biome-spawn-section {
+    padding: 8px;
+    margin-top: 8px;
+    border-top: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.biome-spawn-section label {
+    display: block;
+    color: #00ff88;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.biome-select {
+    width: 100%;
+    background: rgba(0, 255, 136, 0.08);
+    color: #ffffff;
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.biome-select:hover {
+    background: rgba(0, 255, 136, 0.15);
+    border-color: rgba(0, 255, 136, 0.5);
+}
+
+.biome-select:focus {
+    outline: none;
+    border-color: #00ff88;
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+}
+
+.biome-select option {
+    background: #1a1a2e;
+    color: #ffffff;
+}
+
+.testing-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.testing-actions button {
+    flex: 1;
+    background: rgba(0, 255, 136, 0.08);
+    color: #00ff88;
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.testing-actions button:hover {
+    background: rgba(0, 255, 136, 0.15);
+    border-color: rgba(0, 255, 136, 0.5);
+    box-shadow: 0 2px 8px rgba(0, 255, 136, 0.2);
+}
+
+.testing-actions button:active {
+    background: rgba(0, 255, 136, 0.25);
+    transform: scale(0.98);
+}
+
+/* Object Spawner Styles */
+.object-spawner {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.object-spawner h4 {
+    color: #00ff00;
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    text-align: center;
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+}
+
+.spawn-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.spawn-group {
+    background: rgba(0, 255, 0, 0.05);
+    border: 1px solid rgba(0, 255, 0, 0.2);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.spawn-group h5 {
+    color: #00ff00;
+    margin: 0 0 8px 0;
+    font-size: 11px;
+    text-align: center;
+    text-shadow: 0 0 3px rgba(0, 255, 0, 0.3);
+}
+
+.spawn-btn {
+    display: block;
+    width: 100%;
+    background: rgba(0, 255, 136, 0.08);
+    color: #00ff88;
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.spawn-btn:hover {
+    background: rgba(0, 255, 136, 0.15);
+    border-color: rgba(0, 255, 136, 0.5);
+    box-shadow: 0 2px 8px rgba(0, 255, 136, 0.2);
+    transform: translateY(-1px);
+}
+
+.spawn-btn:active {
+    background: rgba(0, 255, 136, 0.25);
+    transform: translateY(0);
+}
+
+.spawn-btn.danger {
+    background: rgba(255, 70, 70, 0.08);
+    color: #ff6b6b;
+    border-color: rgba(255, 70, 70, 0.3);
+}
+
+.spawn-btn.danger:hover {
+    background: rgba(255, 70, 70, 0.15);
+    border-color: rgba(255, 70, 70, 0.5);
+    box-shadow: 0 2px 8px rgba(255, 70, 70, 0.2);
+}
+
+.spawn-btn.danger:active {
+    background: rgba(255, 70, 70, 0.25);
+}
+
+/* Enhanced Talent System Popup Styles */
+#talent-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+.talent-popup-content {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 3px solid #4A90E2;
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 800px;
+    width: 95%;
+    text-align: center;
+    box-shadow: 0 15px 40px rgba(74, 144, 226, 0.4);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.talent-popup-content h2 {
+    color: #4A90E2;
+    margin-bottom: 10px;
+    font-size: 28px;
+    text-shadow: 0 0 10px rgba(74, 144, 226, 0.5);
+}
+
+.talent-description {
+    color: #b0c4de;
+    margin-bottom: 25px;
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+/* Talent Grid Layout */
+.talent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+    margin: 25px 0;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 15px;
+    border: 1px solid #333;
+}
+
+/* Square Talent Boxes */
+.talent-box {
+    background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
+    border: 2px solid #555;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.talent-box:hover {
+    border-color: #4A90E2;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(74, 144, 226, 0.3);
+    background: linear-gradient(135deg, #333, #222);
+}
+
+.talent-box.selected {
+    border-color: #FFA500;
+    background: linear-gradient(135deg, #3a3a2a, #2a2a1a);
+    box-shadow: 0 8px 25px rgba(255, 165, 0, 0.4);
+}
+
+.talent-box.unavailable {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, #1a1a1a, #0a0a0a);
+}
+
+.talent-box.unavailable:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: #333;
+}
+
+.talent-box-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.talent-box-name {
+    color: #4A90E2;
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.talent-box-description {
+    color: #bbb;
+    font-size: 12px;
+    line-height: 1.3;
+    margin-bottom: 10px;
+    flex-grow: 1;
+}
+
+.talent-box-cost {
+    color: #FFA500;
+    font-size: 12px;
+    font-weight: bold;
+    background: rgba(255, 165, 0, 0.1);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.talent-box-category {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 10px;
+    color: #888;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Talent Info Panel */
+.talent-info-panel {
+    background: linear-gradient(135deg, #333, #222);
+    border: 2px solid #555;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 20px 0;
+    text-align: left;
+}
+
+.selected-talent-info h3 {
+    color: #4A90E2;
+    margin: 0 0 10px 0;
+    font-size: 20px;
+}
+
+.selected-talent-info p {
+    color: #ccc;
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.talent-cost {
+    color: #FFA500;
+    font-size: 14px;
+    font-weight: bold;
+    background: rgba(255, 165, 0, 0.1);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 165, 0, 0.3);
+    display: inline-block;
+}
+
+/* Talent Popup Actions */
+.talent-popup-actions {
+    margin-top: 25px;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.talent-select-btn {
+    background: linear-gradient(135deg, #666, #555);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.talent-select-btn.primary {
+    background: linear-gradient(135deg, #4A90E2, #357ABD);
+}
+
+.talent-select-btn.primary:not(:disabled):hover {
+    background: linear-gradient(135deg, #357ABD, #2E6BA8);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(74, 144, 226, 0.3);
+}
+
+.talent-select-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.talent-select-btn:not(:disabled):hover {
+    background: linear-gradient(135deg, #555, #444);
+    transform: translateY(-2px);
+}
+
+.talent-select-btn:active {
+    transform: translateY(0);
+}
+
+/* Biome-specific button styling */
+.spawn-btn[id*="biome-nutrient"] {
+    border-color: #90EE90;
+    color: #90EE90;
+}
+
+.spawn-btn[id*="biome-nutrient"]:hover {
+    background: rgba(144, 238, 144, 0.2);
+    box-shadow: 0 0 8px rgba(144, 238, 144, 0.3);
+}
+
+.spawn-btn[id*="biome-toxic"] {
+    border-color: #FF6B6B;
+    color: #FF6B6B;
+}
+
+.spawn-btn[id*="biome-toxic"]:hover {
+    background: rgba(255, 107, 107, 0.2);
+    box-shadow: 0 0 8px rgba(255, 107, 107, 0.3);
+}
+
+.spawn-btn[id*="biome-slow"] {
+    border-color: #87CEEB;
+    color: #87CEEB;
+}
+
+.spawn-btn[id*="biome-slow"]:hover {
+    background: rgba(135, 206, 235, 0.2);
+    box-shadow: 0 0 8px rgba(135, 206, 235, 0.3);
+}
+
+.spawn-btn[id*="biome-aggressive"] {
+    border-color: #FFA500;
+    color: #FFA500;
+}
+
+.spawn-btn[id*="biome-aggressive"]:hover {
+    background: rgba(255, 165, 0, 0.2);
+    box-shadow: 0 0 8px rgba(255, 165, 0, 0.3);
+}
+
+.spawn-btn[id*="biome-neutral"] {
+    border-color: #F0F8FF;
+    color: #F0F8FF;
+}
+
+.spawn-btn[id*="biome-neutral"]:hover {
+    background: rgba(240, 248, 255, 0.2);
+    box-shadow: 0 0 8px rgba(240, 248, 255, 0.3);
+}
+
+/* Spore-specific button styling */
+.spawn-btn.spore-green {
+    border-color: #90EE90;
+    color: #90EE90;
+}
+
+.spawn-btn.spore-green:hover {
+    background: rgba(144, 238, 144, 0.2);
+    box-shadow: 0 0 8px rgba(144, 238, 144, 0.3);
+}
+
+.spawn-btn.spore-yellow {
+    border-color: #FFD700;
+    color: #FFD700;
+}
+
+.spawn-btn.spore-yellow:hover {
+    background: rgba(255, 215, 0, 0.2);
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+.spawn-btn.spore-orange {
+    border-color: #FFA500;
+    color: #FFA500;
+}
+
+.spawn-btn.spore-orange:hover {
+    background: rgba(255, 165, 0, 0.2);
+    box-shadow: 0 0 8px rgba(255, 165, 0, 0.3);
+}
+
+/* Pause/Unpause Button */
+.pause-button {
+    position: absolute;
+    top: 20px;
+    right: 240px;  /* Position to the left of the right HUD panel */
+    width: 50px;
+    height: 50px;
+    border: 2px solid #4a90e2;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+    pointer-events: auto;
+}
+
+.pause-button:hover {
+    background: rgba(74, 144, 226, 0.2);
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(74, 144, 226, 0.5);
+    border-color: #6aa8ff;
+}
+
+.pause-button:active {
+    transform: scale(0.95);
+}
+
+.pause-icon,
+.play-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.pause-button.paused .pause-icon {
+    display: none;
+}
+
+.pause-button.paused .play-icon {
+    display: inline;
+}
+
+.pause-button:not(.paused) .play-icon {
+    display: none;
+}
+
+.pause-button:not(.paused) .pause-icon {
+    display: inline;
+}
+
+/* Talent Tree Button */
+.talent-tree-button {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    border: 3px solid #FFA500;
+    border-radius: 50%;
+    background: rgba(255, 165, 0, 0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    z-index: 200;
+    box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3);
+}
+
+.talent-tree-button:hover {
+    background: rgba(255, 165, 0, 0.2);
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(255, 165, 0, 0.5);
+}
+
+.talent-tree-button:active {
+    transform: scale(0.95);
+}
+
+.talent-tree-icon {
+    font-size: 24px;
+    color: #FFA500;
+    text-shadow: 0 0 10px rgba(255, 165, 0, 0.5);
+}

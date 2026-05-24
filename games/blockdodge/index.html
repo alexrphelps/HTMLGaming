@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Block Dodge - Survive the Falling Blocks!</title>
+    <style>
+        /* ==================== CSS STYLING ==================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: #1a1a2e;
+            border: 3px solid #16213e;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        #ui {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        #score, #highScore {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        #score {
+            color: #00ff88;
+        }
+
+        #highScore {
+            color: #ff6b6b;
+        }
+
+        .game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            border-radius: 20px;
+            z-index: 10;
+        }
+
+        .game-over-overlay.active {
+            display: flex;
+        }
+
+        .game-over-content {
+            text-align: center;
+            color: white;
+        }
+
+        .game-over-content h1 {
+            font-size: 64px;
+            color: #ff6b6b;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+        }
+
+        .game-over-content .final-score {
+            font-size: 32px;
+            margin: 20px 0;
+            color: #00ff88;
+        }
+
+        .game-over-content .restart-hint {
+            font-size: 24px;
+            color: #ccc;
+            margin-top: 30px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .new-high-score {
+            font-size: 28px;
+            color: #ffd93d;
+            margin: 15px 0;
+            text-shadow: 0 0 10px rgba(255, 217, 61, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div id="score">Score: 0</div>
+            <div id="highScore">High Score: 0</div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <!-- Game Over Overlay -->
+        <div class="game-over-overlay" id="gameOverOverlay">
+            <div class="game-over-content">
+                <h1>GAME OVER</h1>
+                <div class="final-score" id="finalScore">Score: 0</div>
+                <div class="new-high-score" id="newHighScore" style="display: none;">🎉 NEW HIGH SCORE! 🎉</div>
+                <div class="restart-hint">Press SPACE or Click to Restart</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==================== GAME CONFIGURATION ==================== */
+        const CONFIG = {
+            canvas: {
+                width: 800,
+                height: 600
+            },
+            player: {
+                width: 40,
+                height: 40,
+                speed: 6,
+                color: '#00ff88'
+            },
+            block: {
+                minWidth: 30,
+                maxWidth: 80,
+                minHeight: 30,
+                maxHeight: 60,
+                initialSpeed: 3,
+                speedIncrement: 0.5, // Speed increase every difficulty tier
+                colors: ['#ff6b6b', '#ee5a6f', '#f94144', '#f3722c', '#f8961e']
+            },
+            difficulty: {
+                spawnInterval: 1000, // Initial spawn interval in ms
+                minSpawnInterval: 200, // Minimum spawn interval
+                difficultyIncreaseTime: 10000, // Increase difficulty every 10 seconds
+                spawnIntervalDecrease: 50 // How much to decrease spawn interval each tier
+            },
+            fps: 60
+        };
+
+        /* ==================== GAME STATE ==================== */
+        const gameState = {
+            player: null,
+            blocks: [],
+            score: 0,
+            highScore: 0,
+            gameOver: false,
+            keys: {},
+            spawnTimer: 0,
+            currentSpawnInterval: CONFIG.difficulty.spawnInterval,
+            difficultyTimer: 0,
+            difficultyLevel: 0,
+            blockSpeed: CONFIG.block.initialSpeed,
+            availableDirections: ['down'], // Start with only downward blocks
+            directionUnlockLevels: {
+                'up': 3,      // Unlock upward blocks at level 3
+                'right': 6,   // Unlock rightward blocks at level 6
+                'left': 9     // Unlock leftward blocks at level 9
+            }
+        };
+
+        /* ==================== DOM ELEMENTS ==================== */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const highScoreElement = document.getElementById('highScore');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const finalScoreElement = document.getElementById('finalScore');
+        const newHighScoreElement = document.getElementById('newHighScore');
+
+        /* ==================== PLAYER CLASS ==================== */
+        class Player {
+            constructor() {
+                this.width = CONFIG.player.width;
+                this.height = CONFIG.player.height;
+                this.x = (CONFIG.canvas.width - this.width) / 2;
+                this.y = CONFIG.canvas.height - this.height - 20;
+                this.speed = CONFIG.player.speed;
+                this.color = CONFIG.player.color;
+            }
+
+            /**
+             * Update player position based on input
+             */
+            update() {
+                // Move left
+                if (gameState.keys['ArrowLeft'] || gameState.keys['a'] || gameState.keys['A']) {
+                    this.x -= this.speed;
+                }
+                // Move right
+                if (gameState.keys['ArrowRight'] || gameState.keys['d'] || gameState.keys['D']) {
+                    this.x += this.speed;
+                }
+                // Move up
+                if (gameState.keys['ArrowUp'] || gameState.keys['w'] || gameState.keys['W']) {
+                    this.y -= this.speed;
+                }
+                // Move down
+                if (gameState.keys['ArrowDown'] || gameState.keys['s'] || gameState.keys['S']) {
+                    this.y += this.speed;
+                }
+
+                // Keep player within canvas bounds
+                this.x = Math.max(0, Math.min(this.x, CONFIG.canvas.width - this.width));
+                this.y = Math.max(0, Math.min(this.y, CONFIG.canvas.height - this.height));
+            }
+
+            /**
+             * Render the player
+             */
+            draw() {
+                // Draw player with glow effect
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Draw inner highlight for depth
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(this.x + 5, this.y + 5, this.width - 10, 10);
+            }
+
+            /**
+             * Get player bounds for collision detection
+             */
+            getBounds() {
+                return {
+                    left: this.x,
+                    right: this.x + this.width,
+                    top: this.y,
+                    bottom: this.y + this.height
+                };
+            }
+        }
+
+        /* ==================== BLOCK CLASS ==================== */
+        class Block {
+            constructor(direction = 'down') {
+                // Random block dimensions
+                this.width = Math.random() * (CONFIG.block.maxWidth - CONFIG.block.minWidth) + CONFIG.block.minWidth;
+                this.height = Math.random() * (CONFIG.block.maxHeight - CONFIG.block.minHeight) + CONFIG.block.minHeight;
+                
+                // Set movement direction
+                this.direction = direction;
+                
+                // Set initial position based on direction
+                this.setInitialPosition();
+                
+                // Speed increases with difficulty
+                this.speed = gameState.blockSpeed;
+                
+                // Random color
+                this.color = CONFIG.block.colors[Math.floor(Math.random() * CONFIG.block.colors.length)];
+                
+                // Rotation for visual variety
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+            }
+            
+            /**
+             * Set initial position based on movement direction
+             */
+            setInitialPosition() {
+                switch (this.direction) {
+                    case 'down':
+                        // Spawn at top, fall down
+                        this.x = Math.random() * (CONFIG.canvas.width - this.width);
+                        this.y = -this.height;
+                        break;
+                    case 'up':
+                        // Spawn at bottom, move up
+                        this.x = Math.random() * (CONFIG.canvas.width - this.width);
+                        this.y = CONFIG.canvas.height;
+                        break;
+                    case 'right':
+                        // Spawn at left, move right
+                        this.x = -this.width;
+                        this.y = Math.random() * (CONFIG.canvas.height - this.height);
+                        break;
+                    case 'left':
+                        // Spawn at right, move left
+                        this.x = CONFIG.canvas.width;
+                        this.y = Math.random() * (CONFIG.canvas.height - this.height);
+                        break;
+                }
+            }
+
+            /**
+             * Update block position
+             */
+            update() {
+                // Move block based on direction
+                switch (this.direction) {
+                    case 'down':
+                        this.y += this.speed;
+                        break;
+                    case 'up':
+                        this.y -= this.speed;
+                        break;
+                    case 'right':
+                        this.x += this.speed;
+                        break;
+                    case 'left':
+                        this.x -= this.speed;
+                        break;
+                }
+                
+                this.rotation += this.rotationSpeed;
+            }
+
+            /**
+             * Render the block with rotation
+             */
+            draw() {
+                ctx.save();
+                
+                // Translate to block center for rotation
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                ctx.rotate(this.rotation);
+                
+                // Draw block with glow
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                
+                // Draw inner highlight
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillRect(-this.width / 2 + 3, -this.height / 2 + 3, this.width - 6, 8);
+                
+                ctx.restore();
+            }
+
+            /**
+             * Get block bounds for collision detection
+             */
+            getBounds() {
+                return {
+                    left: this.x,
+                    right: this.x + this.width,
+                    top: this.y,
+                    bottom: this.y + this.height
+                };
+            }
+
+            /**
+             * Check if block is off screen
+             */
+            isOffScreen() {
+                switch (this.direction) {
+                    case 'down':
+                        return this.y > CONFIG.canvas.height;
+                    case 'up':
+                        return this.y < -this.height;
+                    case 'right':
+                        return this.x > CONFIG.canvas.width;
+                    case 'left':
+                        return this.x < -this.width;
+                    default:
+                        return false;
+                }
+            }
+        }
+
+        /* ==================== COLLISION DETECTION ==================== */
+        /**
+         * Check if two rectangles collide using AABB collision detection
+         */
+        function checkCollision(rect1, rect2) {
+            return rect1.left < rect2.right &&
+                   rect1.right > rect2.left &&
+                   rect1.top < rect2.bottom &&
+                   rect1.bottom > rect2.top;
+        }
+
+        /* ==================== GAME INITIALIZATION ==================== */
+        /**
+         * Initialize or reset the game
+         */
+        function initGame() {
+            // Create player
+            gameState.player = new Player();
+            
+            // Reset game state
+            gameState.blocks = [];
+            gameState.score = 0;
+            gameState.gameOver = false;
+            gameState.spawnTimer = 0;
+            gameState.difficultyTimer = 0;
+            gameState.difficultyLevel = 0;
+            gameState.currentSpawnInterval = CONFIG.difficulty.spawnInterval;
+            gameState.blockSpeed = CONFIG.block.initialSpeed;
+            gameState.availableDirections = ['down']; // Reset to only downward blocks
+            
+            // Load high score from localStorage
+            const savedHighScore = localStorage.getItem('blockDodgeHighScore');
+            if (savedHighScore) {
+                gameState.highScore = parseInt(savedHighScore);
+            }
+            
+            // Update UI
+            updateScoreDisplay();
+            gameOverOverlay.classList.remove('active');
+            
+            console.log('🎮 Block Dodge initialized!');
+        }
+
+        /* ==================== GAME LOOP ==================== */
+        let lastTime = 0;
+        const deltaTime = 1000 / CONFIG.fps;
+
+        /**
+         * Main game loop - runs at 60 FPS
+         */
+        function gameLoop(currentTime) {
+            // Calculate delta time
+            const elapsed = currentTime - lastTime;
+            
+            if (elapsed >= deltaTime) {
+                lastTime = currentTime - (elapsed % deltaTime);
+                
+                if (!gameState.gameOver) {
+                    update(deltaTime);
+                    render();
+                }
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        /* ==================== UPDATE LOGIC ==================== */
+        /**
+         * Update game state
+         */
+        function update(dt) {
+            // Update player
+            gameState.player.update();
+            
+            // Update spawn timer
+            gameState.spawnTimer += dt;
+            if (gameState.spawnTimer >= gameState.currentSpawnInterval) {
+                spawnBlock();
+                gameState.spawnTimer = 0;
+            }
+            
+            // Update difficulty timer
+            gameState.difficultyTimer += dt;
+            if (gameState.difficultyTimer >= CONFIG.difficulty.difficultyIncreaseTime) {
+                increaseDifficulty();
+                gameState.difficultyTimer = 0;
+            }
+            
+            // Update blocks
+            for (let i = gameState.blocks.length - 1; i >= 0; i--) {
+                const block = gameState.blocks[i];
+                block.update();
+                
+                // Check collision with player
+                if (checkCollision(gameState.player.getBounds(), block.getBounds())) {
+                    endGame();
+                    return;
+                }
+                
+                // Remove blocks that are off screen and increase score
+                if (block.isOffScreen()) {
+                    gameState.blocks.splice(i, 1);
+                    gameState.score += 10;
+                    updateScoreDisplay();
+                }
+            }
+        }
+
+        /* ==================== RENDER LOGIC ==================== */
+        /**
+         * Render all game elements
+         */
+        function render() {
+            // Clear canvas
+            ctx.clearRect(0, 0, CONFIG.canvas.width, CONFIG.canvas.height);
+            
+            // Draw background grid for visual interest
+            drawBackground();
+            
+            // Draw all blocks
+            gameState.blocks.forEach(block => block.draw());
+            
+            // Draw player
+            gameState.player.draw();
+            
+            // Draw difficulty level indicator
+            drawDifficultyIndicator();
+        }
+
+        /**
+         * Draw subtle background grid
+         */
+        function drawBackground() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines
+            for (let x = 0; x < CONFIG.canvas.width; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, CONFIG.canvas.height);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let y = 0; y < CONFIG.canvas.height; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(CONFIG.canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        /**
+         * Draw difficulty level indicator
+         */
+        function drawDifficultyIndicator() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.font = '16px Segoe UI';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Level ${gameState.difficultyLevel}`, CONFIG.canvas.width - 10, 20);
+            ctx.textAlign = 'left';
+        }
+
+        /* ==================== GAME MECHANICS ==================== */
+        /**
+         * Spawn a new block
+         */
+        function spawnBlock() {
+            // Randomly select a direction from available directions
+            const randomDirection = gameState.availableDirections[
+                Math.floor(Math.random() * gameState.availableDirections.length)
+            ];
+            gameState.blocks.push(new Block(randomDirection));
+        }
+
+        /**
+         * Increase game difficulty
+         */
+        function increaseDifficulty() {
+            gameState.difficultyLevel++;
+            
+            // Increase block speed
+            gameState.blockSpeed += CONFIG.block.speedIncrement;
+            
+            // Decrease spawn interval (spawn blocks faster)
+            gameState.currentSpawnInterval = Math.max(
+                CONFIG.difficulty.minSpawnInterval,
+                gameState.currentSpawnInterval - CONFIG.difficulty.spawnIntervalDecrease
+            );
+            
+            // Unlock new block directions based on level
+            for (const [direction, unlockLevel] of Object.entries(gameState.directionUnlockLevels)) {
+                if (gameState.difficultyLevel >= unlockLevel && !gameState.availableDirections.includes(direction)) {
+                    gameState.availableDirections.push(direction);
+                    console.log(`🎯 New direction unlocked: ${direction} blocks!`);
+                }
+            }
+            
+            console.log(`💪 Difficulty increased! Level ${gameState.difficultyLevel}`);
+            console.log(`   Block speed: ${gameState.blockSpeed.toFixed(1)}`);
+            console.log(`   Spawn interval: ${gameState.currentSpawnInterval}ms`);
+            console.log(`   Available directions: ${gameState.availableDirections.join(', ')}`);
+        }
+
+        /**
+         * End the game
+         */
+        function endGame() {
+            gameState.gameOver = true;
+            
+            // Check for new high score
+            let isNewHighScore = false;
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('blockDodgeHighScore', gameState.highScore);
+                isNewHighScore = true;
+            }
+            
+            // Show game over screen
+            finalScoreElement.textContent = `Score: ${gameState.score}`;
+            newHighScoreElement.style.display = isNewHighScore ? 'block' : 'none';
+            gameOverOverlay.classList.add('active');
+            
+            updateScoreDisplay();
+            
+            console.log('💀 Game Over! Final Score:', gameState.score);
+        }
+
+        /**
+         * Restart the game
+         */
+        function restartGame() {
+            initGame();
+        }
+
+        /* ==================== UI UPDATES ==================== */
+        /**
+         * Update score display
+         */
+        function updateScoreDisplay() {
+            scoreElement.textContent = `Score: ${gameState.score}`;
+            highScoreElement.textContent = `High Score: ${gameState.highScore}`;
+        }
+
+        /* ==================== INPUT HANDLING ==================== */
+        /**
+         * Handle keyboard input
+         */
+        document.addEventListener('keydown', (e) => {
+            gameState.keys[e.key] = true;
+            
+            // Restart on space when game over
+            if (gameState.gameOver && e.key === ' ') {
+                restartGame();
+            }
+            
+            // Prevent arrow keys from scrolling the page
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            gameState.keys[e.key] = false;
+        });
+
+        /**
+         * Handle canvas click for restart
+         */
+        canvas.addEventListener('click', () => {
+            if (gameState.gameOver) {
+                restartGame();
+            }
+        });
+
+        /**
+         * Handle overlay click for restart
+         */
+        gameOverOverlay.addEventListener('click', () => {
+            if (gameState.gameOver) {
+                restartGame();
+            }
+        });
+
+        /* ==================== GAME START ==================== */
+        // Initialize game
+        initGame();
+
+        // Start game loop
+        requestAnimationFrame(gameLoop);
+
+        console.log('🎮 Block Dodge loaded successfully!');
+        console.log('Controls: Arrow Keys or WASD to move in all directions');
+        console.log('Goal: Dodge the falling blocks!');
+    </script>
+</body>
+</html>

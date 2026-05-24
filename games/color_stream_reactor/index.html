@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Color Reactor 3D</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="game">
+
+    <div id="menu">
+
+        <h1>COLOR REACTOR</h1>
+
+        <p>
+            Destroy the falling energy stream by shooting matching colors.<br><br>
+
+            Starts simple with 1 color... then escalates into a full neon overload.<br>
+            More colors unlock over time. Survive the chaos.
+        </p>
+
+        <button class="button" onclick="startGame()">
+            START GAME
+        </button>
+
+    </div>
+
+    <div id="hud">
+        <div>SCORE: <span id="score">0</span></div>
+        <div>COMBO: <span id="combo">0</span></div>
+        <div>LEVEL: <span id="level">1</span></div>
+        <div>BEST: <span id="best">0</span></div>
+    </div>
+
+    <div id="lane">
+        <div class="laneGlow"></div>
+    </div>
+
+    <div id="controls"></div>
+
+    <div id="gameOver">
+
+        <h2>GAME OVER</h2>
+
+        <div id="finalScore"></div>
+        <div id="highScore"></div>
+
+        <button class="button" onclick="restartGame()">
+            PLAY AGAIN
+        </button>
+
+    </div>
+
+</div>
+
+<script src="js/constants.js"></script>
+<script src="js/state.js"></script>
+<script src="js/game.js"></script>
+
+</body>
+</html>

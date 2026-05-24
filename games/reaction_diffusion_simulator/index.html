@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reaction Diffusion Simulator</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="menu-open">
+  <div class="menu-overlay" id="mainMenuOverlay" aria-hidden="false">
+    <div class="menu-shell">
+      <section class="menu-page" id="mainMenuPage">
+        <div class="menu-kicker">Reaction Diffusion Simulator</div>
+        <h1>Choose your lab bench</h1>
+        <p>Start simple, jump into the whole simulator, or tune the experience before the chemistry begins.</p>
+        <div class="menu-actions">
+          <button id="startLearningBtn">Start with learning</button>
+          <button class="secondary" id="startFullBtn">Start with everything</button>
+          <button class="secondary" id="openSettingsBtn">Settings</button>
+        </div>
+      </section>
+
+      <section class="settings-page" id="settingsPage">
+        <div class="settings-head">
+          <div>
+            <div class="menu-kicker">Settings</div>
+            <h2>Make the lab easier to read</h2>
+          </div>
+          <button class="secondary" id="closeSettingsBtn">Back</button>
+        </div>
+
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3>Comfort</h3>
+            <label class="setting-line"><input id="settingReducedMotion" type="checkbox" /> Reduced motion</label>
+            <label class="setting-line">UI density
+              <select id="settingDensity">
+                <option value="comfortable">Comfortable</option>
+                <option value="compact">Compact</option>
+              </select>
+            </label>
+            <label class="setting-line"><input id="settingAutoPause" type="checkbox" /> Auto-pause while menus are open</label>
+          </div>
+
+          <div class="settings-card">
+            <h3>Visual defaults</h3>
+            <label class="setting-line">Default palette
+              <select id="settingDefaultPalette">
+                <option value="neon">Neon Lab</option>
+                <option value="lava">Lava Core</option>
+                <option value="ice">Ice Bloom</option>
+                <option value="forest">Forest Mist</option>
+                <option value="mono">Scientific Mono</option>
+              </select>
+            </label>
+            <label class="setting-line">Default view
+              <select id="settingDefaultView">
+                <option value="beauty">Beauty / pigment</option>
+                <option value="u">u field</option>
+                <option value="v">v field</option>
+                <option value="reaction">Reaction intensity</option>
+                <option value="edge">Edge change</option>
+              </select>
+            </label>
+            <label class="setting-line">Default preset
+              <select id="settingDefaultPreset">
+                <option value="spots">Leopard Spots</option>
+                <option value="maze">Zebra Maze</option>
+                <option value="coral">Coral Bloom</option>
+                <option value="finger">Finger Swirl</option>
+                <option value="bubble">Bubble Cells</option>
+                <option value="crystal">Crystal Veins</option>
+                <option value="storm">Drift Storm</option>
+                <option value="chaos">Controlled Chaos</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="settings-card">
+            <h3>Startup + simulation</h3>
+            <label class="setting-line">Startup behavior
+              <select id="settingStartup">
+                <option value="menu">Always show main menu</option>
+                <option value="resume">Resume last mode</option>
+                <option value="learning">Start directly in learning</option>
+                <option value="full">Start directly with everything</option>
+              </select>
+            </label>
+            <label class="setting-line">Default frame speed
+              <input id="settingDefaultSpeed" type="range" min="1" max="16" step="1" value="2" />
+            </label>
+            <button class="secondary" id="resetDefaultsBtn">Reset recommended defaults</button>
+          </div>
+
+          <div class="settings-card">
+            <h3>Progress</h3>
+            <button class="secondary" id="resetLearningBtn">Reset learning progress</button>
+            <button class="secondary" id="resetMissionsBtn">Reset mission progress</button>
+            <button class="danger" id="resetAllBtn">Reset all simulator data</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- LEFT -->
+    <section class="panel left-panel">
+      <div class="panel-head">
+        <div class="title-row">
+          <div>
+            <h1>Reaction Diffusion Simulator</h1>
+            <div class="sub">A compact lab for painting, tuning, and studying generative chemical patterns.</div>
+          </div>
+          <div class="pill">Lab</div>
+        </div>
+      </div>
+
+      <div class="panel-body">
+        <div class="tabbar">
+          <button class="tab active" data-tab="core">Core</button>
+          <button class="tab" data-tab="dynamics">Dynamics</button>
+          <button class="tab" data-tab="brush">Brush</button>
+          <button class="tab" data-tab="analysis">Analysis</button>
+        </div>
+
+        <div class="mini-toolbar" id="runToolbar">
+          <button id="generateBtn">Generate</button>
+          <button class="secondary" id="pauseBtn">Pause</button>
+          <button class="warn" id="stepBtn">Step × 20</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-core">
+          <div class="card">
+            <div class="section-label">
+              <span>Model + View</span>
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="model">Formula model</label></div>
+              <select id="model">
+                <option value="classic">Classic Gray–Scott</option>
+                <option value="cubic">Cubic Reactor</option>
+                <option value="saturating">Saturating Reactor</option>
+              </select>
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="viewMode">Display view</label></div>
+              <select id="viewMode">
+                <option value="beauty">Beauty / pigment</option>
+                <option value="u">u field (background)</option>
+                <option value="v">v field (pattern)</option>
+                <option value="reaction">Reaction intensity</option>
+                <option value="edge">Edge change</option>
+              </select>
+            </div>
+
+            <div class="switch-row">
+              <span>Wrap edges</span>
+              <button type="button" class="toggle on" id="wrapToggle" aria-pressed="true" title="Toggle toroidal wrapping">Wrap edges</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-label"><span>Core reaction variables</span></div>
+
+            <div class="control">
+              <div class="label-row"><label for="feed">Feed rate F</label><span class="val" id="feedVal">0.036</span></div>
+              <input id="feed" type="range" min="0.010" max="0.090" step="0.001" value="0.036" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="kill">Kill rate K</label><span class="val" id="killVal">0.062</span></div>
+              <input id="kill" type="range" min="0.030" max="0.080" step="0.001" value="0.062" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="diffU">Diffusion Du</label><span class="val" id="diffUVal">1.00</span></div>
+              <input id="diffU" type="range" min="0.05" max="1.40" step="0.01" value="1.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="diffV">Diffusion Dv</label><span class="val" id="diffVVal">0.50</span></div>
+              <input id="diffV" type="range" min="0.05" max="0.80" step="0.01" value="0.50" />
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-dynamics">
+          <div class="card">
+            <div class="section-label"><span>Extended formula variables</span></div>
+
+            <div class="control">
+              <div class="label-row"><label for="gain">Reaction gain G</label><span class="val" id="gainVal">1.00</span></div>
+              <input id="gain" type="range" min="0.20" max="2.50" step="0.01" value="1.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="exp">Reaction exponent n</label><span class="val" id="expVal">2.00</span></div>
+              <input id="exp" type="range" min="1.20" max="4.00" step="0.05" value="2.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="sat">Saturation S</label><span class="val" id="satVal">0.00</span></div>
+              <input id="sat" type="range" min="0.00" max="4.00" step="0.05" value="0.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="noise">Noise injection</label><span class="val" id="noiseVal">0.0000</span></div>
+              <input id="noise" type="range" min="0.0000" max="0.0100" step="0.0001" value="0.0000" />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-label"><span>Motion + anisotropy</span></div>
+
+            <div class="control">
+              <div class="label-row"><label for="flowX">Horizontal drift</label><span class="val" id="flowXVal">0.00</span></div>
+              <input id="flowX" type="range" min="-0.30" max="0.30" step="0.01" value="0.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="flowY">Vertical drift</label><span class="val" id="flowYVal">0.00</span></div>
+              <input id="flowY" type="range" min="-0.30" max="0.30" step="0.01" value="0.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="anisotropy">Directional bias</label><span class="val" id="anisotropyVal">0.00</span></div>
+              <input id="anisotropy" type="range" min="0.00" max="0.60" step="0.01" value="0.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="diag">Diagonal weight</label><span class="val" id="diagVal">0.05</span></div>
+              <input id="diag" type="range" min="0.00" max="0.15" step="0.005" value="0.05" />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-label"><span>Time + speed</span></div>
+
+            <div class="control">
+              <div class="label-row"><label for="dt">Time step dt</label><span class="val" id="dtVal">1.00</span></div>
+              <input id="dt" type="range" min="0.20" max="1.40" step="0.05" value="1.00" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="speed">Frame speed</label><span class="val" id="speedVal">2x</span></div>
+              <input id="speed" type="range" min="1" max="16" step="1" value="2" />
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-brush">
+          <div class="card">
+            <div class="section-label"><span>Brush + seeding</span></div>
+
+            <div class="control">
+              <div class="label-row"><label for="seedDensity">Seed density</label><span class="val" id="seedDensityVal">30</span></div>
+              <input id="seedDensity" type="range" min="4" max="80" step="1" value="30" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="seedRadius">Seed radius</label><span class="val" id="seedRadiusVal">6</span></div>
+              <input id="seedRadius" type="range" min="1" max="14" step="1" value="6" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="brushSize">Brush size</label><span class="val" id="brushSizeVal">8</span></div>
+              <input id="brushSize" type="range" min="2" max="24" step="1" value="8" />
+            </div>
+
+            <div class="control">
+              <div class="label-row"><label for="palette">Color palette</label></div>
+              <select id="palette">
+                <option value="neon">Neon Lab</option>
+                <option value="lava">Lava Core</option>
+                <option value="ice">Ice Bloom</option>
+                <option value="forest">Forest Mist</option>
+                <option value="mono">Scientific Mono</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="compact-grid">
+            <button class="secondary" id="burstBtn">Center burst</button>
+            <button class="secondary" id="randomPulseBtn">Random pulse</button>
+            <button class="good" id="morphBtn">Morph current</button>
+            <button class="danger" id="clearBtn">Clear</button>
+          </div>
+
+          <div class="card">
+            <div class="section-label"><span>Quick tips</span></div>
+            <div class="tiny">
+              • Lower speed makes growth easier to study.<br>
+              • Small K shifts can change spots into stripes.<br>
+              • Drift bends patterns into windswept shapes.<br>
+              • Saturation + high gain can make bubble cells.<br>
+              • Paint on the canvas to kick the system into new states.
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-analysis">
+          <div class="card">
+            <div class="section-label"><span>Presets</span></div>
+            <div class="preset-grid">
+              <button data-preset="spots"><strong>Leopard Spots</strong><span>classic islands</span></button>
+              <button data-preset="maze"><strong>Zebra Maze</strong><span>striped networks</span></button>
+              <button data-preset="coral"><strong>Coral Bloom</strong><span>branchy growth</span></button>
+              <button data-preset="finger"><strong>Finger Swirl</strong><span>looping ridges</span></button>
+              <button data-preset="bubble"><strong>Bubble Cells</strong><span>rounded chambers</span></button>
+              <button data-preset="crystal"><strong>Crystal Veins</strong><span>hard energetic lines</span></button>
+              <button data-preset="storm"><strong>Drift Storm</strong><span>windswept patterns</span></button>
+              <button data-preset="chaos"><strong>Controlled Chaos</strong><span>high energy lab</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER -->
+    <section class="panel main-panel">
+      <div class="main-head">
+        <button class="secondary menu-return" id="backToMenuBtn">Menu</button>
+        <div>
+          <h2 id="mainTitle">Live Pattern Field</h2>
+          <div class="sub" id="mainSub">Slower defaults make the structure formation easier to see.</div>
+        </div>
+        <div class="badge-row">
+          <div class="badge" id="presetBadge">Preset: Leopard Spots</div>
+          <div class="badge mission-badge" id="missionBadge">Mission: First Culture</div>
+          <div class="badge" id="phaseBadge">Phase: Seeding</div>
+          <div class="badge" id="stabilityBadge">Stability: Forming</div>
+        </div>
+      </div>
+
+      <div class="canvas-stage">
+        <div class="canvas-wrap">
+          <canvas id="canvas" width="240" height="240"></canvas>
+          <div class="canvas-overlay">
+            <span>Drag to paint pattern chemical</span>
+            <span id="viewBadge">Beauty / pigment</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-stats">
+        <div class="stat"><strong id="stepsStat">0</strong><span>simulation steps</span></div>
+        <div class="stat"><strong id="fpsStat">0</strong><span>frames per second</span></div>
+        <div class="stat"><strong id="coverageStat">0%</strong><span>pattern coverage</span></div>
+        <div class="stat"><strong id="reactionStat">0.000</strong><span>avg reaction</span></div>
+        <div class="stat"><strong id="contrastStat">0.000</strong><span>contrast / texture</span></div>
+        <div class="stat"><strong id="driftStat">0.00</strong><span>drift magnitude</span></div>
+      </div>
+
+      <div class="analysis-strip" id="analysisStrip">
+        <div class="card meter-card">
+          <div class="section-label"><span>Live field meters</span></div>
+          <div class="meter-list meter-list-wide">
+            <div class="meter-row"><span>Avg u</span><div class="meter"><div class="fill" id="uFill"></div></div><span id="uAvg">0.00</span></div>
+            <div class="meter-row"><span>Avg v</span><div class="meter"><div class="fill" id="vFill"></div></div><span id="vAvg">0.00</span></div>
+            <div class="meter-row"><span>Reaction</span><div class="meter"><div class="fill" id="rFill"></div></div><span id="rAvg">0.00</span></div>
+            <div class="meter-row"><span>Change</span><div class="meter"><div class="fill" id="cFill"></div></div><span id="cAvg">0.00</span></div>
+          </div>
+        </div>
+
+        <div class="card formula-card">
+          <div class="section-label"><span>Formula currently in use</span></div>
+          <div class="formula" id="formulaBox"></div>
+        </div>
+
+        <div class="card insight-card">
+          <div class="section-label"><span>Pattern insight</span></div>
+          <div class="insight" id="insightBox">
+            Spots emerge when local growth beats nearby competition, while diffusion keeps them spaced apart.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <aside class="right-rail">
+      <section class="panel mission-panel">
+        <div class="panel-head">
+          <div class="title-row">
+            <div>
+              <h2>Missions</h2>
+              <div class="sub">Guided campaign objectives for the live field.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <div class="card mission-card">
+            <div class="section-label">
+              <span>Guided campaign</span>
+              <span class="mission-count" id="missionCount">1 / 10</span>
+            </div>
+            <div class="mission-title" id="missionTitle">First Culture</div>
+            <div class="mission-description" id="missionDescription">Seed the field and grow visible chemistry.</div>
+            <div class="mission-hold">
+              <div class="mission-progress-track"><div class="mission-progress-fill" id="missionHoldFill"></div></div>
+              <span id="missionHoldText">Hold progress 0%</span>
+            </div>
+            <div class="mission-requirements" id="missionRequirements"></div>
+            <div class="mission-reward" id="missionReward">Reward: Pattern missions unlocked</div>
+          </div>
+
+          <div class="compact-grid">
+            <button id="missionStartBtn">Start mission</button>
+            <button class="secondary" id="missionNextBtn">Next</button>
+            <button class="secondary" id="missionResetBtn">Reset mission</button>
+            <button class="good" id="missionFocusBtn">Open tools</button>
+          </div>
+          <button class="secondary learning-reveal" id="learningRevealBtn">Show all controls</button>
+        </div>
+      </section>
+
+    </aside>
+  </div>
+
+    <script src="js/config/ControlsConfig.js"></script>
+    <script src="js/config/Presets.js"></script>
+    <script src="js/config/Missions.js"></script>
+    <script src="js/config/LearningMissions.js"></script>
+    <script src="js/core/ReactionDiffusionState.js"></script>
+    <script src="js/core/ReactionDiffusionSimulation.js"></script>
+    <script src="js/core/MissionAnalyzer.js"></script>
+    <script src="js/core/MissionManager.js"></script>
+    <script src="js/core/ExperienceManager.js"></script>
+    <script src="js/render/Palette.js"></script>
+    <script src="js/render/CanvasRenderer.js"></script>
+    <script src="js/ui/SimulatorView.js"></script>
+    <script src="js/ui/SimulatorController.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

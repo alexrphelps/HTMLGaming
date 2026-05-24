@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Castlefall Valley</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div class="topbar">
+    <div class="panel resource-panel">
+      <strong>Your Castle</strong>
+      <div>Castle HP</div>
+      <div class="bar"><div id="playerHpBar" class="fill blue"></div></div>
+      <div>Morale</div>
+      <div class="bar"><div id="moraleBar" class="fill green"></div></div>
+      <div class="resource-row">
+        <span>Gold: <b id="goldText">0</b></span>
+        <span>Income: <b id="incomeText">0</b>/s</span>
+      </div>
+      <div class="resource-row">
+        <span>Command: <b id="commandText">Formation</b></span>
+        <span>Wave: <b id="waveText">1</b></span>
+      </div>
+    </div>
+
+    <div class="panel center-title">
+      <h1>Castlefall Valley</h1>
+      <small>Hybrid side-scroller battlefield siege</small>
+    </div>
+
+    <div class="panel enemy-panel">
+      <strong>Enemy Castle</strong>
+      <div>Castle HP</div>
+      <div class="bar"><div id="enemyHpBar" class="fill red"></div></div>
+      <div class="enemy-detail enemy-detail-frontline">Frontline Control</div>
+      <div class="bar"><div id="frontlineBar" class="fill gold"></div></div>
+      <div class="enemy-detail">Enemy pressure rises over time.</div>
+    </div>
+  </div>
+
+  <div id="message" class="message"></div>
+  <div id="armyStrip" class="panel army-strip"></div>
+
+  <div class="touch-controls">
+    <div class="touch-cluster">
+      <button id="touch_left" class="touch-btn" aria-label="Move left">A</button>
+      <button id="touch_jump" class="touch-btn" aria-label="Jump">W</button>
+      <button id="touch_right" class="touch-btn" aria-label="Move right">D</button>
+    </div>
+    <div class="touch-cluster">
+      <button id="touch_attack" class="touch-btn" aria-label="Attack">J</button>
+    </div>
+  </div>
+
+  <div class="panel help">
+    <b>Hero Controls</b><br/>
+    <kbd>A</kbd>/<kbd>D</kbd> move, <kbd>W</kbd>/<kbd>Space</kbd> jump, <kbd>J</kbd> attack<br/>
+    <kbd>1-5</kbd> spawn troops, <kbd>Z</kbd> rush, <kbd>X</kbd> formation, <kbd>C</kbd> retreat<br/>
+    <kbd>P</kbd> pause, <kbd>R</kbd> restart
+  </div>
+
+  <div class="bottom-ui">
+    <div class="panel">
+      <div class="section-title">Spawn Troops</div>
+      <div class="button-grid">
+        <button id="spawn_sword" class="unit-card"></button>
+        <button id="spawn_shield" class="unit-card"></button>
+        <button id="spawn_archer" class="unit-card"></button>
+        <button id="spawn_knight" class="unit-card"></button>
+        <button id="spawn_priest" class="unit-card"></button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Command Stance</div>
+      <div class="command-grid">
+        <button id="cmd_rush">Z Full Rush<br><span>maximum speed</span></button>
+        <button id="cmd_formation" class="active">X Formation<br><span>smart stacking</span></button>
+        <button id="cmd_retreat">C Retreat<br><span>fall back</span></button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Build & Fortify Base</div>
+      <div class="build-grid">
+        <button id="build_wall">Stone Wall<br><span>160g +HP</span></button>
+        <button id="build_barracks">Barracks<br><span>190g +income</span></button>
+        <button id="build_tower">Arrow Tower<br><span>220g auto-fire</span></button>
+        <button id="build_forge">Forge<br><span>240g +damage</span></button>
+        <button id="build_chapel">Chapel<br><span>210g morale</span></button>
+        <button id="build_repair">Fortify<br><span>120g repair</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="endOverlay" class="overlay-end">
+    <div class="end-card">
+      <h2 id="endTitle">Victory</h2>
+      <p id="endText">The valley has fallen.</p>
+      <button id="restartButton">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/systems.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/input.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

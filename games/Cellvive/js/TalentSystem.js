@@ -1,0 +1,374 @@
+class TalentSystem {
+    constructor(game) {
+        this.game = game;
+        this.player = game.player;
+
+        if (typeof CELLVIVE_CONSTANTS === 'undefined' || !CELLVIVE_CONSTANTS.TALENTS) {
+            console.error('CELLVIVE_CONSTANTS not available or TALENTS section missing');
+            this.talents = {};
+        } else {
+            this.talents = this.flattenTalentTree(CELLVIVE_CONSTANTS.TALENTS.TALENT_TREE);
+        }
+
+        this.selectedTalent = null;
+        this.playerTalents = new Set();
+        this.talentLevels = {};
+
+        this.popup = document.getElementById('talent-popup');
+        this.talentGrid = document.getElementById('talent-grid');
+        this.talentInfoPanel = document.getElementById('talent-info-panel');
+        this.selectBtn = document.getElementById('talent-select-btn');
+        this.cancelBtn = document.getElementById('talent-cancel-btn');
+
+        this.selectedTalentName = document.getElementById('selected-talent-name');
+        this.selectedTalentDescription = document.getElementById('selected-talent-description');
+        this.selectedTalentCost = document.getElementById('selected-talent-cost');
+
+        if (!this.popup || !this.talentGrid || !this.talentInfoPanel || !this.selectBtn || !this.cancelBtn) {
+            console.error('TalentSystem: Missing required HTML elements');
+        }
+
+        this.initEventListeners();
+    }
+
+    flattenTalentTree(talentTree) {
+        const flattened = {};
+        if (!talentTree || typeof talentTree !== 'object') return flattened;
+
+        Object.keys(talentTree).forEach(tierKey => {
+            const tier = talentTree[tierKey];
+            if (typeof tier === 'object' && tier !== null) {
+                Object.keys(tier).forEach(talentKey => {
+                    const talent = tier[talentKey];
+                    if (talent && talent.ID) {
+                        flattened[talentKey] = {
+                            ...talent,
+                            EFFECT: talent.EFFECT_PER_LEVEL || talent.EFFECT || {},
+                            COST: talent.COST_PER_LEVEL || talent.COST || 1
+                        };
+                    }
+                });
+            }
+        });
+        return flattened;
+    }
+
+    initEventListeners() {
+        if (this.cancelBtn) {
+            this.cancelBtn.addEventListener('click', () => this.hidePopup());
+        }
+        if (this.selectBtn) {
+            this.selectBtn.addEventListener('click', () => this.confirmSelection());
+        }
+        if (this.popup) {
+            this.popup.addEventListener('click', (e) => {
+                if (e.target === this.popup) this.hidePopup();
+            });
+        }
+    }
+
+    showPopup() {
+        if (!this.popup || !this.talentGrid) return;
+        this.popup.classList.remove('hidden');
+        this.populateTalentGrid();
+        this.hideInfoPanel();
+        if (this.game && this.game.pauseGame) {
+            this.game.pauseGame();
+        }
+    }
+
+    hidePopup() {
+        if (this.popup) {
+            this.popup.classList.add('hidden');
+            this.selectedTalent = null;
+            this.hideInfoPanel();
+            if (this.game && this.game.resumeGame) {
+                this.game.resumeGame();
+            }
+        }
+    }
+
+    populateTalentGrid() {
+        if (!this.talentGrid) return;
+        this.talentGrid.innerHTML = '';
+
+        const tiers = ['TIER_1', 'TIER_2', 'TIER_3'];
+        tiers.forEach(tierKey => {
+            const tierData = CELLVIVE_CONSTANTS.TALENTS.TALENT_TREE[tierKey];
+            if (!tierData) return;
+
+            const tierSection = document.createElement('div');
+            tierSection.className = 'talent-tier-section';
+
+            const tierLabel = document.createElement('div');
+            tierLabel.className = 'talent-tier-label';
+            const tierNames = { TIER_1: 'Cellular Foundation', TIER_2: 'Specialized Adaptation', TIER_3: 'Apex Evolution' };
+            tierLabel.textContent = tierNames[tierKey] || tierKey;
+            tierSection.appendChild(tierLabel);
+
+            const tierGrid = document.createElement('div');
+            tierGrid.className = 'talent-tier-grid';
+
+            Object.keys(tierData).forEach(key => {
+                const talent = tierData[key];
+                if (!talent || !talent.ID) return;
+                const flatKey = Object.keys(this.talents).find(k => this.talents[k] && this.talents[k].ID === talent.ID);
+                const box = this.createTalentBox(talent, flatKey);
+                tierGrid.appendChild(box);
+            });
+
+            tierSection.appendChild(tierGrid);
+            this.talentGrid.appendChild(tierSection);
+        });
+    }
+
+    createTalentBox(talent, flatKey) {
+        const box = document.createElement('div');
+        box.className = 'talent-box';
+        box.dataset.talentId = talent.ID;
+
+        const currentLevel = this.talentLevels[talent.ID] || 0;
+        const maxLevel = talent.MAX_LEVEL || 1;
+        const isMaxed = currentLevel >= maxLevel;
+        const isLocked = !this.isTalentAvailable(talent);
+
+        if (isMaxed) box.classList.add('maxed');
+        if (isLocked) box.classList.add('locked');
+
+        box.innerHTML = `
+            <div class="talent-box-icon">${talent.ICON}</div>
+            <div class="talent-box-name">${talent.NAME}</div>
+            <div class="talent-box-level">${isMaxed ? 'MAX' : 'Lv.' + currentLevel + '/' + maxLevel}</div>
+            <div class="talent-box-cost">${isMaxed ? '—' : talent.COST_PER_LEVEL + ' spore(s)'}</div>
+        `;
+
+        if (!isMaxed && !isLocked) {
+            box.addEventListener('click', () => this.selectTalentBox(talent));
+        }
+
+        return box;
+    }
+
+    isTalentAvailable(talent) {
+        const prereqs = talent.PREREQUISITES || [];
+        if (prereqs.length === 0) return true;
+
+        for (const prereq of prereqs) {
+            if (prereq === 'tier_1_complete') {
+                const t1 = CELLVIVE_CONSTANTS.TALENTS.TALENT_TREE.TIER_1;
+                const anyMaxed = Object.keys(t1).some(key => {
+                    const t = t1[key];
+                    return t && (this.talentLevels[t.ID] || 0) >= (t.MAX_LEVEL || 1);
+                });
+                if (!anyMaxed) return false;
+            }
+            if (prereq === 'tier_2_complete') {
+                const t2 = CELLVIVE_CONSTANTS.TALENTS.TALENT_TREE.TIER_2;
+                const anyMaxed = Object.keys(t2).some(key => {
+                    const t = t2[key];
+                    return t && (this.talentLevels[t.ID] || 0) >= (t.MAX_LEVEL || 1);
+                });
+                if (!anyMaxed) return false;
+            }
+        }
+        return true;
+    }
+
+    selectTalentBox(talent) {
+        this.talentGrid.querySelectorAll('.talent-box.selected').forEach(box => {
+            box.classList.remove('selected');
+        });
+
+        const talentBox = this.talentGrid.querySelector(`[data-talent-id="${talent.ID}"]`);
+        if (talentBox) talentBox.classList.add('selected');
+
+        this.selectedTalent = talent;
+        this.showInfoPanel(talent);
+    }
+
+    showInfoPanel(talent) {
+        if (!this.talentInfoPanel) return;
+        if (this.selectedTalentName) this.selectedTalentName.textContent = talent.NAME;
+        if (this.selectedTalentDescription) this.selectedTalentDescription.textContent = talent.DESCRIPTION;
+        if (this.selectedTalentCost) this.selectedTalentCost.textContent = talent.COST_PER_LEVEL;
+        this.talentInfoPanel.style.display = 'block';
+        if (this.selectBtn) this.selectBtn.disabled = false;
+    }
+
+    hideInfoPanel() {
+        if (this.talentInfoPanel) this.talentInfoPanel.style.display = 'none';
+        if (this.selectBtn) this.selectBtn.disabled = true;
+    }
+
+    confirmSelection() {
+        if (!this.selectedTalent) return;
+
+        const talentId = this.selectedTalent.ID;
+        const currentLevel = this.talentLevels[talentId] || 0;
+        const maxLevel = this.selectedTalent.MAX_LEVEL || 1;
+
+        if (currentLevel >= maxLevel) return;
+
+        this.talentLevels[talentId] = currentLevel + 1;
+        this.playerTalents.add(talentId);
+        this.applyTalentEffect(this.selectedTalent);
+
+        GameLogger.debug(`Talent ${this.selectedTalent.NAME} upgraded to level ${this.talentLevels[talentId]}`);
+        
+        if (this.game.audioManager) this.game.audioManager.playTalentUnlock();
+        
+        this.hidePopup();
+    }
+
+    applyTalentEffect(talent) {
+        if (!this.game.player) return;
+        const player = this.game.player;
+        const level = this.talentLevels[talent.ID] || 1;
+        const effect = talent.EFFECT;
+
+        switch (talent.ID) {
+            case 'efficient_metabolism':
+                player.hasEfficientMetabolism = true;
+                player.growthMultiplier = 1.0 + (effect.VALUE || 0.3) * level;
+                GameLogger.debug(`Efficient Metabolism: growth x${player.growthMultiplier}`);
+                break;
+
+            case 'thick_membrane':
+                player.hasThickMembrane = true;
+                player.maxHealth = CELLVIVE_CONSTANTS.PLAYER.STARTING_MAX_HEALTH + (effect.MAX_HEALTH || 25) * level;
+                player.damageReduction = (effect.DAMAGE_REDUCTION || 0.15) * level;
+                if (player.health > player.maxHealth) player.health = player.maxHealth;
+                GameLogger.debug(`Thick Membrane: maxHealth=${player.maxHealth}, dmgReduction=${Math.round(player.damageReduction * 100)}%`);
+                break;
+
+            case 'rapid_movement':
+                player.hasRapidMovement = true;
+                player.speedMultiplier = 1.0 + (effect.VALUE || 0.2) * level;
+                player.updateMaxSpeed();
+                GameLogger.debug(`Rapid Movement: speed x${player.speedMultiplier}`);
+                break;
+
+            case 'photosynthesis':
+                player.hasPhotosynthesis = true;
+                player.regenRate = (effect.VALUE || 5) * level;
+                GameLogger.debug(`Photosynthesis: regen ${player.regenRate} hp/s`);
+                break;
+
+            case 'magnetic_organelle':
+                player.hasMagneticOrganelle = true;
+                player.sporeAttractionRadius = (effect.RADIUS || 100) * level;
+                player.sporeAttractionStrength = (effect.STRENGTH || 0.15) * level;
+                GameLogger.debug(`Magnetic Organelle: radius=${player.sporeAttractionRadius}, strength=${player.sporeAttractionStrength}`);
+                break;
+
+            case 'adaptive_size':
+                player.hasAdaptiveSize = true;
+                player.speedPenaltyReduction = (effect.VALUE || 0.3) * level;
+                player.updateMaxSpeed();
+                GameLogger.debug(`Adaptive Size: penalty reduced by ${Math.round(player.speedPenaltyReduction * 100)}%`);
+                break;
+
+            case 'toxic_resistance':
+                player.hasToxicResistance = true;
+                player.toxicDamageReduction = (effect.VALUE || 0.5) * level;
+                GameLogger.debug(`Toxic Resistance: ${Math.round(player.toxicDamageReduction * 100)}% resist`);
+                break;
+
+            case 'predatory_instinct':
+                player.hasPredatoryInstinct = true;
+                player.eatSizeModifier = 1.0 + (effect.VALUE || 0.10) * level;
+                GameLogger.debug(`Predatory Instinct: eat ${Math.round((player.eatSizeModifier - 1) * 100)}% larger`);
+                break;
+
+            case 'cellular_division':
+                player.hasCellularDivision = true;
+                player.passiveGrowthRate = (effect.VALUE || 0.5) * level;
+                GameLogger.debug(`Cellular Division: +${player.passiveGrowthRate} radius/s passive`);
+                break;
+
+            case 'symbiotic_shield':
+                player.hasSymbioticShield = true;
+                player.phaseShiftTriggerHealth = effect.TRIGGER_HEALTH || 0.80;
+                player.phaseShiftDuration = (effect.DURATION || 2000) * level;
+                player.phaseShiftCooldown = effect.COOLDOWN || 15000;
+                player.phaseShiftLastUsed = 0;
+                GameLogger.debug(`Symbiotic Shield: triggers at ${Math.round(player.phaseShiftTriggerHealth * 100)}%, lasts ${player.phaseShiftDuration}ms`);
+                break;
+
+            case 'evolutionary_leap':
+                player.hasEvolutionaryLeap = true;
+                player.maxHealth += (effect.HEALTH || 50) * level;
+                player.regenRate += (effect.REGEN || 3) * level;
+                player.speedMultiplier += (effect.SPEED || 0.5) * level;
+                player.growthMultiplier += (effect.GROWTH || 0.5) * level;
+                if (player.health > player.maxHealth) player.health = player.maxHealth;
+                player.updateMaxSpeed();
+                GameLogger.debug(`Evolutionary Leap: all stats boosted`);
+                break;
+
+            default:
+                console.warn(`Unknown talent ID: ${talent.ID}`);
+        }
+    }
+
+    hasTalent(talentId) {
+        return this.playerTalents.has(talentId);
+    }
+
+    getTalentLevel(talentId) {
+        return this.talentLevels[talentId] || 0;
+    }
+
+    getUnlockedTalents() {
+        return Array.from(this.playerTalents);
+    }
+
+    addTalentPoints(amount) {
+        if (this.player) {
+            this.player.talentPoints += amount;
+            GameLogger.debug(`+${amount} talent point(s) (total: ${this.player.talentPoints})`);
+        }
+    }
+
+    resetTalents() {
+        this.playerTalents.clear();
+        this.talentLevels = {};
+        if (this.game.player) {
+            const p = this.game.player;
+            p.hasEfficientMetabolism = false;
+            p.hasThickMembrane = false;
+            p.hasRapidMovement = false;
+            p.hasPhotosynthesis = false;
+            p.hasMagneticOrganelle = false;
+            p.hasAdaptiveSize = false;
+            p.hasToxicResistance = false;
+            p.hasPredatoryInstinct = false;
+            p.hasCellularDivision = false;
+            p.hasSymbioticShield = false;
+            p.hasEvolutionaryLeap = false;
+
+            p.growthMultiplier = 1.0;
+            p.speedMultiplier = 1.0;
+            p.eatSizeModifier = 1.0;
+            p.speedPenaltyReduction = 0;
+            p.damageReduction = 0;
+            p.toxicDamageReduction = 0;
+            p.regenRate = 0;
+            p.passiveGrowthRate = 0;
+            p.sporeAttractionRadius = 0;
+            p.sporeAttractionStrength = 0;
+            p.maxHealth = CELLVIVE_CONSTANTS.PLAYER.STARTING_MAX_HEALTH;
+            p.health = Math.min(p.health, p.maxHealth);
+
+            p.phaseShiftTriggerHealth = 0.25;
+            p.phaseShiftDuration = 3000;
+            p.phaseShiftCooldown = 30000;
+            p.phaseShiftLastUsed = 0;
+            p.isPhaseShifted = false;
+
+            p.updateMaxSpeed();
+        }
+    }
+}
+
+window.TalentSystem = TalentSystem;
