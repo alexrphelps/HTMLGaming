@@ -56,6 +56,12 @@ class GloomvaultExtraction {
     cleanup() {
         console.log('🧹 Cleaning up Gloomvault Extraction');
         if (this.iframe) {
+            try {
+                const app = this.iframe.contentWindow && this.iframe.contentWindow.gloomvaultApp;
+                if (app && app.destroy) app.destroy();
+            } catch (error) {
+                console.warn('Gloomvault iframe cleanup skipped app destroy:', error);
+            }
             this.iframe.remove();
             this.iframe = null;
         }

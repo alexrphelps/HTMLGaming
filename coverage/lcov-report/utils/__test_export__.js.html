@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">42.85% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/14</span>
+                <span class='fraction'>6/14</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -91,44 +91,44 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// This file re-exports MathUtils and Vector2 for testing without modifying the
 // original library usage in the app. It avoids changing global assignments.
 // Re-export selected classes for tests. Some files set globals on window and do not
 // export via module.exports; this adapter imports the files directly and exports
 // their classes for test use without changing runtime behavior.
 &nbsp;
-const math = <span class="cstat-no" title="statement not covered" >require('./MathUtils');</span>
+const math = require('./MathUtils');
 // Some modules attach to window and do not export; require() will execute them
 // but return {}. Fallback to global/window where necessary.
-<span class="cstat-no" title="statement not covered" >require('./AssetLoader');</span>
-<span class="cstat-no" title="statement not covered" >require('./EventEmitter');</span>
+require('./AssetLoader');
+require('./EventEmitter');
 &nbsp;
-const MathUtils = <span class="cstat-no" title="statement not covered" >math.MathUtils || math;</span>
-const Vector2 = <span class="cstat-no" title="statement not covered" >math.Vector2 || math.Vector2;</span>
-const AssetLoader = <span class="cstat-no" title="statement not covered" >(typeof global.AssetLoader !== 'undefined' &amp;&amp; global.AssetLoader) ||</span>
-                   (typeof window !== 'undefined' &amp;&amp; window.AssetLoader) ||
-                   null;
-const EventEmitter = <span class="cstat-no" title="statement not covered" >(typeof global.EventEmitter !== 'undefined' &amp;&amp; global.EventEmitter) ||</span>
-                     (typeof window !== 'undefined' &amp;&amp; window.EventEmitter) ||
-                     null;
+const MathUtils = math.MathUtils || <span class="branch-1 cbranch-no" title="branch not covered" >math;</span>
+const Vector2 = math.Vector2 || <span class="branch-1 cbranch-no" title="branch not covered" >math.Vector2;</span>
+const AssetLoader = (typeof global.AssetLoader !== 'undefined' &amp;&amp; global.AssetLoader) ||
+                   (<span class="branch-2 cbranch-no" title="branch not covered" >typeof window !== 'undefined' </span>&amp;&amp; <span class="branch-3 cbranch-no" title="branch not covered" >window.AssetLoader)</span> ||
+<span class="branch-4 cbranch-no" title="branch not covered" >                   null;</span>
+const EventEmitter = (typeof global.EventEmitter !== 'undefined' &amp;&amp; global.EventEmitter) ||
+                     (<span class="branch-2 cbranch-no" title="branch not covered" >typeof window !== 'undefined' </span>&amp;&amp; <span class="branch-3 cbranch-no" title="branch not covered" >window.EventEmitter)</span> ||
+<span class="branch-4 cbranch-no" title="branch not covered" >                     null;</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >module.exports = { MathUtils, Vector2, AssetLoader, EventEmitter };</span>
+module.exports = { MathUtils, Vector2, AssetLoader, EventEmitter };
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -136,7 +136,7 @@ const EventEmitter = <span class="cstat-no" title="statement not covered" >(type
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-05-23T22:24:47.452Z
+                at 2026-05-24T09:10:17.550Z
             </div>
         <script src="../prettify.js"></script>
         <script>

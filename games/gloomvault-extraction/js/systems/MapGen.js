@@ -70,42 +70,57 @@ class MapGen {
             }
 
             if (!bestState || summary.score < bestState.score || (summary.score === bestState.score && summary.roomCount > bestState.roomCount)) {
-                bestState = {
-                    score: summary.score,
-                    roomCount: summary.roomCount,
-                    grid: [...this.grid],
-                    visitedGrid: [...this.visitedGrid],
-                    rooms: this.rooms.map(room => ({
-                        ...room,
-                        center: room.center ? { ...room.center } : room.center,
-                        rects: room.rects ? room.rects.map(rect => ({ ...rect })) : room.rects
-                    })),
-                    bossRoom: this.bossRoom ? {
-                        ...this.bossRoom,
-                        room: this.bossRoom.room ? {
-                            ...this.bossRoom.room,
-                            center: this.bossRoom.room.center ? { ...this.bossRoom.room.center } : this.bossRoom.room.center,
-                            rects: this.bossRoom.room.rects ? this.bossRoom.room.rects.map(rect => ({ ...rect })) : this.bossRoom.room.rects
-                        } : this.bossRoom.room,
-                        entranceTile: this.bossRoom.entranceTile ? { ...this.bossRoom.entranceTile } : this.bossRoom.entranceTile,
-                        entranceWorld: this.bossRoom.entranceWorld ? { ...this.bossRoom.entranceWorld } : this.bossRoom.entranceWorld,
-                        bossSpawn: this.bossRoom.bossSpawn ? { ...this.bossRoom.bossSpawn } : this.bossRoom.bossSpawn,
-                        chestSpawn: this.bossRoom.chestSpawn ? { ...this.bossRoom.chestSpawn } : this.bossRoom.chestSpawn,
-                        chestSpawns: this.bossRoom.chestSpawns ? this.bossRoom.chestSpawns.map(pos => ({ ...pos })) : this.bossRoom.chestSpawns,
-                        buttonPositions: this.bossRoom.buttonPositions ? this.bossRoom.buttonPositions.map(pos => ({ ...pos })) : this.bossRoom.buttonPositions
-                    } : null,
-                    mainReachableFloor: new Set(this.mainReachableFloor)
-                };
+                bestState = this.cloneGenerationState(summary);
             }
         }
 
         if (bestState) {
-            this.grid = bestState.grid;
-            this.visitedGrid = bestState.visitedGrid;
-            this.rooms = bestState.rooms;
-            this.bossRoom = bestState.bossRoom;
-            this.mainReachableFloor = bestState.mainReachableFloor;
+            this.restoreGenerationState(bestState);
         }
+    }
+
+    cloneRoom(room) {
+        if (!room) return room;
+        return {
+            ...room,
+            center: room.center ? { ...room.center } : room.center,
+            rects: room.rects ? room.rects.map(rect => ({ ...rect })) : room.rects
+        };
+    }
+
+    cloneBossRoom(bossRoom) {
+        if (!bossRoom) return null;
+        return {
+            ...bossRoom,
+            room: this.cloneRoom(bossRoom.room),
+            entranceTile: bossRoom.entranceTile ? { ...bossRoom.entranceTile } : bossRoom.entranceTile,
+            entranceWorld: bossRoom.entranceWorld ? { ...bossRoom.entranceWorld } : bossRoom.entranceWorld,
+            bossSpawn: bossRoom.bossSpawn ? { ...bossRoom.bossSpawn } : bossRoom.bossSpawn,
+            chestSpawn: bossRoom.chestSpawn ? { ...bossRoom.chestSpawn } : bossRoom.chestSpawn,
+            chestSpawns: bossRoom.chestSpawns ? bossRoom.chestSpawns.map(pos => ({ ...pos })) : bossRoom.chestSpawns,
+            buttonPositions: bossRoom.buttonPositions ? bossRoom.buttonPositions.map(pos => ({ ...pos })) : bossRoom.buttonPositions
+        };
+    }
+
+    cloneGenerationState(summary = {}) {
+        return {
+            score: summary.score || 0,
+            roomCount: summary.roomCount || 0,
+            grid: [...this.grid],
+            visitedGrid: [...this.visitedGrid],
+            rooms: this.rooms.map(room => this.cloneRoom(room)),
+            bossRoom: this.cloneBossRoom(this.bossRoom),
+            mainReachableFloor: new Set(this.mainReachableFloor)
+        };
+    }
+
+    restoreGenerationState(state) {
+        if (!state) return;
+        this.grid = [...state.grid];
+        this.visitedGrid = [...state.visitedGrid];
+        this.rooms = state.rooms.map(room => this.cloneRoom(room));
+        this.bossRoom = this.cloneBossRoom(state.bossRoom);
+        this.mainReachableFloor = new Set(state.mainReachableFloor);
     }
 
     runGenerationPass() {
@@ -116,19 +131,15 @@ class MapGen {
         this.mainReachableFloor = new Set();
 
         const layoutType = this.config.layoutType || 'sequential';
-        if (layoutType === 'hub') {
-            this.generateHubLayout();
-        } else if (layoutType === 'linear') {
-            this.generateLinearLayout();
-        } else if (layoutType === 'cluster') {
-            this.generateClusterLayout();
-        } else if (layoutType === 'ring') {
-            this.generateRingLayout();
-        } else if (layoutType === 'structured') {
-            this.generateStructuredLayout();
-        } else {
-            this.generateSequentialLayout();
-        }
+        const layoutGenerators = {
+            hub: () => this.generateHubLayout(),
+            linear: () => this.generateLinearLayout(),
+            cluster: () => this.generateClusterLayout(),
+            ring: () => this.generateRingLayout(),
+            structured: () => this.generateStructuredLayout(),
+            sequential: () => this.generateSequentialLayout()
+        };
+        (layoutGenerators[layoutType] || layoutGenerators.sequential)();
 
         // Apply a single pass of cellular automata to smooth out some sharp edges while keeping others
         if (this.config.smoothingPasses > 0) {
@@ -1360,64 +1371,55 @@ class MapGen {
     }
 
     pickLargeObjectPositions(validTiles, count, excludePositions, minDistance) {
+        return this.pickPositionsByDistance(
+            validTiles,
+            count,
+            excludePositions,
+            minDistance,
+            tile => ({ x: tile.worldX, y: tile.worldY, tileX: tile.x, tileY: tile.y })
+        );
+    }
+
+    pickWithDistance(validTiles, count, excludePositions, minDistance) {
+        return this.pickPositionsByDistance(
+            validTiles,
+            count,
+            excludePositions,
+            minDistance,
+            tile => ({
+                x: tile.x * this.tileSize + this.tileSize / 2,
+                y: tile.y * this.tileSize + this.tileSize / 2
+            })
+        );
+    }
+
+    pickPositionsByDistance(validTiles, count, excludePositions, minDistance, toPosition) {
         const res = [];
         const copy = [...validTiles];
         const allExclusions = [...excludePositions];
+        const minDistanceSq = minDistance * minDistance;
 
         while (res.length < count && copy.length > 0) {
             const idx = Math.floor(Math.random() * copy.length);
             const candidateTile = copy.splice(idx, 1)[0];
-            const px = candidateTile.worldX;
-            const py = candidateTile.worldY;
+            const pos = toPosition(candidateTile);
 
             let tooClose = false;
             for (const ep of allExclusions) {
-                const dx = ep.x - px;
-                const dy = ep.y - py;
-                if (dx * dx + dy * dy < minDistance * minDistance) {
+                const dx = ep.x - pos.x;
+                const dy = ep.y - pos.y;
+                if (dx * dx + dy * dy < minDistanceSq) {
                     tooClose = true;
                     break;
                 }
             }
 
             if (!tooClose) {
-                const pos = { x: px, y: py, tileX: candidateTile.x, tileY: candidateTile.y };
                 res.push(pos);
                 allExclusions.push(pos);
             }
         }
 
-        return res;
-    }
-
-    pickWithDistance(validTiles, count, excludePositions, minDistance) {
-        let res = [];
-        let copy = [...validTiles];
-        let allExclusions = [...excludePositions];
-
-        while (res.length < count && copy.length > 0) {
-            let idx = Math.floor(Math.random() * copy.length);
-            let candidateTile = copy.splice(idx, 1)[0];
-            
-            let px = candidateTile.x * this.tileSize + this.tileSize / 2;
-            let py = candidateTile.y * this.tileSize + this.tileSize / 2;
-
-            let tooClose = false;
-            for (let ep of allExclusions) {
-                let dx = ep.x - px;
-                let dy = ep.y - py;
-                if (dx*dx + dy*dy < minDistance * minDistance) {
-                    tooClose = true;
-                    break;
-                }
-            }
-
-            if (!tooClose) {
-                let pos = {x: px, y: py};
-                res.push(pos);
-                allExclusions.push(pos);
-            }
-        }
         return res;
     }
 

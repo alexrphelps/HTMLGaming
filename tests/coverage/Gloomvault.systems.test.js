@@ -2108,6 +2108,74 @@ describe('Gloomvault MapGen', () => {
     expect([map.countAdjacentWalls(0, 0), picked]).toEqual([8, [{ x: 35, y: 35 }]]);
   });
 
+  test('generation state clone and restore preserve nested room data', () => {
+    const context = createBrowserContext();
+    const { MapGen } = loadGloomvault('systems/MapGen.js', ['MapGen'], context);
+    const map = new MapGen({ cols: 8, rows: 8 }, 10);
+    map.grid = [1, 0, 1];
+    map.visitedGrid = [true, false, true];
+    map.rooms = [{
+      x: 1,
+      y: 2,
+      width: 3,
+      height: 4,
+      center: { x: 2, y: 3 },
+      rects: [{ x: 1, y: 2, width: 3, height: 4 }]
+    }];
+    map.bossRoom = {
+      room: map.rooms[0],
+      entranceTile: { x: 5, y: 6 },
+      entranceWorld: { x: 50, y: 60 },
+      bossSpawn: { x: 70, y: 80 },
+      chestSpawns: [{ x: 90, y: 100 }],
+      buttonPositions: [{ x: 110, y: 120 }]
+    };
+    map.mainReachableFloor = new Set(['1,2']);
+
+    const state = map.cloneGenerationState({ score: 2, roomCount: 1 });
+    map.grid = [];
+    map.visitedGrid = [];
+    map.rooms = [];
+    map.bossRoom = null;
+    map.mainReachableFloor = new Set();
+    map.restoreGenerationState(state);
+
+    expect([
+      map.grid,
+      map.visitedGrid,
+      map.rooms[0].center,
+      map.rooms[0].rects[0],
+      map.bossRoom.entranceTile,
+      map.bossRoom.chestSpawns[0],
+      map.mainReachableFloor.has('1,2'),
+      map.rooms[0] === state.rooms[0]
+    ]).toEqual([
+      [1, 0, 1],
+      [true, false, true],
+      { x: 2, y: 3 },
+      { x: 1, y: 2, width: 3, height: 4 },
+      { x: 5, y: 6 },
+      { x: 90, y: 100 },
+      true,
+      false
+    ]);
+  });
+
+  test('large object and tile distance pickers preserve their public result shapes', () => {
+    const context = createBrowserContext();
+    const { MapGen } = loadGloomvault('systems/MapGen.js', ['MapGen'], context);
+    const map = new MapGen({ cols: 5, rows: 5 }, 10);
+    jest.spyOn(Math, 'random').mockReturnValue(0);
+
+    const large = map.pickLargeObjectPositions([{ x: 2, y: 3, worldX: 20, worldY: 30 }], 1, [], 1);
+    const tile = map.pickWithDistance([{ x: 2, y: 3 }], 1, [], 1);
+
+    expect([large, tile]).toEqual([
+      [{ x: 20, y: 30, tileX: 2, tileY: 3 }],
+      [{ x: 25, y: 35 }]
+    ]);
+  });
+
   test('door and hole queries return tile-centred positions', () => {
     const context = createBrowserContext();
     const { MapGen } = loadGloomvault('systems/MapGen.js', ['MapGen'], context);
@@ -3657,6 +3725,369 @@ describe('Gloomvault GameEngine map selection', () => {
   });
 });
 
+// Behaviour under test: equipment defaults and save-state migrations stay centralized and save-compatible.
+describe('Gloomvault equipment and inventory services', () => {
+  test('starter equipment fills only missing starter slots', () => {
+    const context = createBrowserContext();
+    const { EquipmentService } = loadGloomvault('systems/EquipmentService.js', ['EquipmentService'], context);
+    const customWeapon = { id: 'rare_weapon', type: 'weapon', gearScore: 50 };
+    const equipment = EquipmentService.createEmptyEquipment();
+    equipment.weapon = customWeapon;
+
+    const migrated = EquipmentService.ensureStarterEquipment(equipment);
+
+    expect([
+      migrated.weapon,
+      migrated.weapon2.id,
+      migrated.trinket1.activeAbility.name,
+      migrated.trinket2.id,
+      Object.keys(migrated)
+    ]).toEqual([
+      customWeapon,
+      'starter_wep2',
+      'Minor Heal',
+      'starter_tr2',
+      ['helm', 'chest', 'pants', 'boots', 'weapon', 'weapon2', 'trinket1', 'trinket2']
+    ]);
+  });
+
+  test('inventory load handles missing and malformed save data', () => {
+    const context = createBrowserContext({
+      localStorage: {
+        getItem: jest.fn(key => (key === 'gloomvault_equipment' ? '{bad json' : null)),
+        setItem: jest.fn(),
+        removeItem: jest.fn()
+      }
+    });
+    loadGloomvault('systems/EquipmentService.js', ['EquipmentService'], context);
+    const { InventoryStore } = loadGloomvault('systems/InventoryStore.js', ['InventoryStore'], context);
+
+    const loaded = InventoryStore.load();
+
+    expect([
+      loaded.stashItems,
+      loaded.scraps,
+      loaded.equipment.weapon.id,
+      loaded.equipment.trinket1.activeAbility.cooldown
+    ]).toEqual([[], 0, 'starter_wep1', 15]);
+  });
+
+  test('inventory store normalizes stash size and loads equipment directly', () => {
+    const context = createBrowserContext({
+      localStorage: {
+        getItem: jest.fn(key => {
+          if (key === 'gloomvault_stash') return JSON.stringify([{ id: 'gem' }]);
+          if (key === 'gloomvault_equipment') return JSON.stringify({ weapon: { id: 'wand', type: 'weapon', gearScore: 12 } });
+          return null;
+        }),
+        setItem: jest.fn(),
+        removeItem: jest.fn()
+      }
+    });
+    loadGloomvault('systems/EquipmentService.js', ['EquipmentService'], context);
+    const { InventoryStore } = loadGloomvault('systems/InventoryStore.js', ['InventoryStore'], context);
+
+    const loaded = InventoryStore.load({ minStashSlots: 3 });
+    const equipment = InventoryStore.loadEquipment();
+
+    expect([
+      loaded.stashItems.length,
+      loaded.stashItems[0].id,
+      loaded.stashItems[1],
+      equipment.weapon.id,
+      equipment.weapon2.id
+    ]).toEqual([3, 'gem', null, 'wand', 'starter_wep2']);
+  });
+
+  test('durability migration skips starter gear and trinkets but migrates normal gear', () => {
+    const context = createBrowserContext();
+    const { EquipmentService } = loadGloomvault('systems/EquipmentService.js', ['EquipmentService'], context);
+    const durabilityConfig = { calculateMaxDurability: jest.fn(() => 42) };
+    const starter = { type: 'weapon', isStarter: true };
+    const trinket = { type: 'trinket' };
+    const armor = { type: 'chest', rarity: 'Common', gearScore: 12 };
+
+    [starter, trinket, armor].forEach(item => EquipmentService.migrateDurability(item, durabilityConfig));
+
+    expect([
+      starter.durability,
+      trinket.durability,
+      armor.durability,
+      armor.maxDurability,
+      durabilityConfig.calculateMaxDurability.mock.calls.length
+    ]).toEqual([undefined, undefined, 42, 42, 1]);
+  });
+});
+
+// Behaviour under test: shared event registries make browser-global listeners removable.
+describe('Gloomvault lifecycle cleanup services', () => {
+  test('EventRegistry removes every registered listener once', () => {
+    const context = createBrowserContext();
+    const { EventRegistry } = loadGloomvault('systems/EventRegistry.js', ['EventRegistry'], context);
+    const target = { addEventListener: jest.fn(), removeEventListener: jest.fn() };
+    const handler = jest.fn();
+    const registry = new EventRegistry();
+
+    registry.add(target, 'resize', handler);
+    registry.removeAll();
+    registry.removeAll();
+
+    expect([
+      target.addEventListener.mock.calls,
+      target.removeEventListener.mock.calls
+    ]).toEqual([
+      [['resize', handler, undefined]],
+      [['resize', handler, undefined]]
+    ]);
+  });
+
+  test('Input destroy removes keyboard and canvas listeners', () => {
+    const context = createBrowserContext({
+      window: {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+      }
+    });
+    context.window.window = context.window;
+    context.window.globalThis = context;
+    const { EventRegistry } = loadGloomvault('systems/EventRegistry.js', ['EventRegistry'], context);
+    const { Input } = loadGloomvault('core/Input.js', ['Input'], context);
+    const canvas = {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn()
+    };
+    const input = new Input({ eventRegistry: new EventRegistry() });
+
+    input.attach(canvas);
+    input.destroy();
+    input.destroy();
+
+    expect([
+      context.window.addEventListener.mock.calls.map(call => call[0]),
+      context.window.removeEventListener.mock.calls.map(call => call[0]),
+      canvas.removeEventListener.mock.calls.map(call => call[0]),
+      input.keys
+    ]).toEqual([
+      ['keydown', 'keyup'],
+      ['keyup', 'keydown'],
+      ['mousemove', 'mousedown', 'mouseup', 'contextmenu'],
+      {}
+    ]);
+  });
+
+  test('GameEngine destroy is idempotent and releases resize and input resources', () => {
+    const canvas = {
+      width: 800,
+      height: 600,
+      parentElement: { getBoundingClientRect: () => ({ width: 800, height: 600 }) },
+      getContext: jest.fn(() => ({}))
+    };
+    const input = { destroy: jest.fn(), detach: jest.fn() };
+    const context = createBrowserContext({
+      document: {
+        getElementById: jest.fn(id => (id === 'game-canvas' ? canvas : null))
+      },
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      cancelAnimationFrame: jest.fn(),
+      Input: class Input {},
+      Camera: class Camera {
+        constructor(width, height) { Object.assign(this, { width, height }); }
+        updateDimensions(width, height) { Object.assign(this, { width, height }); }
+        setZoom(zoom) { this.zoom = zoom; }
+      },
+      Renderer: class Renderer { setCamera() {} },
+      MapConfigs: { default: { cols: 10, rows: 10 } },
+      MapGen: class MapGen { constructor(config) { this.config = config; } },
+      Pathfinder: class Pathfinder {},
+      SpawnManager: class SpawnManager {},
+      CombatFeedback: class CombatFeedback {},
+      ParticleSystem: class ParticleSystem {},
+      LootGen: class LootGen {}
+    });
+    loadGloomvault('systems/EventRegistry.js', ['EventRegistry'], context);
+    const { GameEngine } = loadGloomvault('core/GameEngine.js', ['GameEngine'], context);
+    const engine = new GameEngine('game-canvas', { input });
+    engine._animationFrameId = 77;
+
+    engine.destroy();
+    engine.destroy();
+
+    expect([
+      context.addEventListener.mock.calls.map(call => call[0]),
+      context.removeEventListener.mock.calls.map(call => call[0]),
+      context.cancelAnimationFrame.mock.calls,
+      input.destroy.mock.calls.length,
+      engine._animationFrameId,
+      engine.state
+    ]).toEqual([
+      ['resize'],
+      ['resize'],
+      [[77]],
+      1,
+      null,
+      'MENU'
+    ]);
+  });
+});
+
+// Behaviour under test: UI controllers own DOM mutation without forcing gameplay code to know DOM details.
+describe('Gloomvault HUD and screen controllers', () => {
+  test('HudController avoids redundant text writes and toggles interaction hints', () => {
+    document.body.innerHTML = '<div id="interaction-hint" class="hidden"></div>';
+    const context = createBrowserContext();
+    const { HudController } = loadGloomvault('ui/HudController.js', ['HudController'], context);
+    const controller = new HudController();
+    const hint = document.getElementById('interaction-hint');
+    const textSpy = jest.spyOn(hint, 'textContent', 'set');
+
+    controller.showInteractionHint('Press [F]');
+    controller.showInteractionHint('Press [F]');
+    controller.hideInteractionHint();
+
+    expect([
+      hint.classList.contains('hidden'),
+      textSpy.mock.calls.length
+    ]).toEqual([true, 1]);
+  });
+
+  test('HudController renders boss rows for multiple visible encounters', () => {
+    document.body.innerHTML = `
+      <div id="boss-health-bar-container" class="hidden">
+        <div id="boss-health-bar-rows">
+          <div class="boss-health-bar-row">
+            <div id="boss-health-bar-fill" class="boss-health-bar-fill"></div>
+            <div id="boss-health-bar-text" class="boss-health-bar-text"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    const context = createBrowserContext();
+    const { HudController } = loadGloomvault('ui/HudController.js', ['HudController'], context);
+    const controller = new HudController();
+
+    controller.updateBossHud([
+      { hp: 40, maxHp: 80, isBoss: true, displayName: 'Warden' },
+      { hp: 10, maxHp: 20, bossTier: 'floorGuardian', getBossHudText: () => 'Guardian 10 / 20' }
+    ]);
+
+    expect([
+      document.getElementById('boss-health-bar-container').classList.contains('hidden'),
+      document.querySelectorAll('.boss-health-bar-row').length,
+      document.querySelectorAll('.boss-health-bar-fill')[1].style.width,
+      document.querySelectorAll('.boss-health-bar-text')[1].textContent
+    ]).toEqual([false, 2, '50%', 'Guardian 10 / 20']);
+  });
+
+  test('ScreenController starts, stops, and renders map selections', () => {
+    document.body.innerHTML = `
+      <div id="main-menu" class="screen active"></div>
+      <div id="play-screen" class="screen"></div>
+      <div id="stash-screen" class="screen"></div>
+      <div id="map-select-screen" class="screen"></div>
+      <button id="btn-start"></button>
+      <button id="btn-map-select-back"></button>
+      <button id="btn-map-random"></button>
+      <button id="btn-stash"></button>
+      <button id="btn-stash-back"></button>
+      <button id="btn-game-over-menu"></button>
+      <div id="map-select-grid"></div>
+    `;
+    const context = createBrowserContext();
+    const { ScreenController } = loadGloomvault('ui/ScreenController.js', ['ScreenController'], context);
+    const engine = { start: jest.fn(), stop: jest.fn(), setRunMapSelection: jest.fn() };
+    const onShowStash = jest.fn();
+    const onHideExpandedMinimap = jest.fn();
+    const controller = new ScreenController({
+      engine,
+      mapConfigs: { default: { displayName: 'Hybrid Vault', progressionTier: 1, layoutType: 'sequential' } },
+      onShowStash,
+      onHideExpandedMinimap
+    });
+
+    controller.showScreen('play-screen');
+    controller.showScreen('stash-screen');
+    controller.showScreen('main-menu');
+    document.querySelector('.map-select-btn').click();
+
+    expect([
+      engine.start.mock.calls.length,
+      engine.stop.mock.calls.length,
+      onShowStash.mock.calls.length,
+      engine.setRunMapSelection.mock.calls[0][0],
+      onHideExpandedMinimap.mock.calls.length
+    ]).toEqual([2, 1, 1, 'default', 4]);
+  });
+
+  test('InventoryUiController facade exposes stable methods and destroy removes owned UI', () => {
+    const makeElement = () => {
+      const element = {
+        style: { setProperty: jest.fn() },
+        dataset: {},
+        children: [],
+        classList: {
+          add: jest.fn(),
+          remove: jest.fn(),
+          contains: jest.fn(() => true),
+          toggle: jest.fn()
+        },
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        appendChild: jest.fn(child => {
+          element.children.push(child);
+          return child;
+        }),
+        querySelector: jest.fn(() => makeElement()),
+        querySelectorAll: jest.fn(() => []),
+        getContext: jest.fn(() => ({ clearRect: jest.fn() })),
+        getBoundingClientRect: jest.fn(() => ({ width: 100, height: 100 })),
+        closest: jest.fn(() => null),
+        remove: jest.fn()
+      };
+      return element;
+    };
+    const body = makeElement();
+    const fakeDocument = {
+      body,
+      createElement: jest.fn(() => makeElement()),
+      getElementById: jest.fn(() => makeElement()),
+      querySelectorAll: jest.fn(() => [])
+    };
+    const context = createBrowserContext({ document: fakeDocument });
+    loadGloomvault('systems/EventRegistry.js', ['EventRegistry'], context);
+    const { InventoryUiController } = loadGloomvault('ui/InventoryUiController.js', ['InventoryUiController'], context);
+    const controller = new InventoryUiController({
+      engine: { state: 'MENU', getInventoryPaneLayout: jest.fn() },
+      expandedMinimapCanvas: makeElement()
+    });
+
+    controller.destroy();
+    controller.destroy();
+
+    expect([
+      typeof controller.updateStashUI,
+      typeof controller.updateInventoryUI,
+      typeof controller.updateDurabilityHUD,
+      typeof controller.hideExpandedMinimap,
+      typeof controller.renderExpandedInventoryMinimap,
+      typeof controller.setupExtraction,
+      typeof controller.destroy,
+      body.children.length,
+      body.children.every(child => child.remove.mock.calls.length === 1)
+    ]).toEqual([
+      'function',
+      'function',
+      'function',
+      'function',
+      'function',
+      'function',
+      'function',
+      2,
+      true
+    ]);
+  });
+});
+
 // Behaviour under test: LootGen rarity, floor scaling, and chest guarantees keep early loot progression controlled.
 describe('Gloomvault Loot progression', () => {
   afterEach(() => jest.restoreAllMocks());
@@ -3783,6 +4214,24 @@ describe('Gloomvault Loot progression', () => {
       later.rarity,
       lootGen.generateItemWithRarityAndType.mock.calls.map(call => call[1])
     ]).toEqual(['Uncommon', 'Epic', ['Uncommon', 'Epic']]);
+  });
+
+  test('loot chest high-rarity generation delegates to LootGen chest policy when available', () => {
+    const context = createBrowserContext();
+    loadGloomvault('entities/Entity.js', ['Entity'], context);
+    const { LootChest } = loadGloomvault('entities/LootChest.js', ['LootChest'], context);
+    const lootGen = {
+      getChestGuaranteedMinimumRarity: jest.fn(() => 'Epic'),
+      generateGuaranteedRarityItem: jest.fn(() => ({ rarity: 'Epic' }))
+    };
+
+    const item = LootChest.generateHighRarityItem(lootGen, 7);
+
+    expect([
+      item.rarity,
+      lootGen.getChestGuaranteedMinimumRarity.mock.calls[0][0],
+      lootGen.generateGuaranteedRarityItem.mock.calls[0]
+    ]).toEqual(['Epic', 7, [7, 'Epic', 'Random']]);
   });
 
   test('loot chest variant stays stable and resolves matching closed/opened sprite keys', () => {

@@ -118,10 +118,23 @@ class LootChest extends Entity {
     }
 
     static getGuaranteedRarities(floor) {
-        return floor >= 5 ? ['Epic', 'Legendary'] : ['Uncommon', 'Epic'];
+        const minimumRarity = LootChest.getGuaranteedMinimumRarity(null, floor);
+        return minimumRarity === 'Epic' ? ['Epic', 'Legendary'] : ['Uncommon', 'Epic'];
+    }
+
+    static getGuaranteedMinimumRarity(lootGen, floor) {
+        if (lootGen && lootGen.getChestGuaranteedMinimumRarity) {
+            return lootGen.getChestGuaranteedMinimumRarity(floor);
+        }
+        return floor >= 5 ? 'Epic' : 'Uncommon';
     }
 
     static generateHighRarityItem(lootGen, floor) {
+        const minimumRarity = LootChest.getGuaranteedMinimumRarity(lootGen, floor);
+        if (lootGen && lootGen.generateGuaranteedRarityItem) {
+            return lootGen.generateGuaranteedRarityItem(floor, minimumRarity, 'Random');
+        }
+
         let item;
         let attempts = 0;
         const guaranteedRarities = LootChest.getGuaranteedRarities(floor);
@@ -129,12 +142,9 @@ class LootChest extends Entity {
             item = lootGen.generateItem(floor);
             attempts++;
         } while (!guaranteedRarities.includes(item.rarity) && attempts < 100);
-        
-        if (!guaranteedRarities.includes(item.rarity)) {
-            const forcedRarity = floor >= 5 ? 'Epic' : 'Uncommon';
-            item = lootGen.generateItemWithRarityAndType(floor, forcedRarity, 'Random');
-        }
-        return item;
+
+        if (guaranteedRarities.includes(item.rarity)) return item;
+        return lootGen.generateItemWithRarityAndType(floor, minimumRarity, 'Random');
     }
 
     render(ctx, renderer) {

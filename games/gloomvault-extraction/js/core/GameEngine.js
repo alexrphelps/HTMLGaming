@@ -1,26 +1,13 @@
-
-    function ensureStarterEquipment(eq) {
-        if (!eq.weapon) {
-            eq.weapon = { id: 'starter_wep1', name: 'Apprentice Wand', type: 'weapon', weaponType: 'pistol', element: 'arcane', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true };
-        }
-        if (!eq.weapon2) {
-            eq.weapon2 = { id: 'starter_wep2', name: 'Splintered Staff', type: 'weapon', weaponType: 'shotgun', element: 'frost', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true };
-        }
-        const minorHeal = { type: 'heal', value: 25, cooldown: 15, name: 'Minor Heal', text: 'Use to heal 25 HP (15s CD)' };
-        if (!eq.trinket1) {
-            eq.trinket1 = { id: 'starter_tr1', name: 'Health Potion', type: 'trinket', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true, activeAbility: minorHeal };
-        }
-        if (!eq.trinket2) {
-            eq.trinket2 = { id: 'starter_tr2', name: 'Health Potion', type: 'trinket', rarity: 'Common', color: '#a0a0a0', gearScore: 5, modifiers: [], upgradeLevel: 0, isStarter: true, activeAbility: minorHeal };
-        }
-    }
 class GameEngine {
-    constructor(canvasId) {
+    constructor(canvasId, options = {}) {
+        this.eventRegistry = options.eventRegistry || (typeof EventRegistry !== 'undefined' ? new EventRegistry() : null);
+        this._destroyed = false;
+        this._boundResizeCanvas = () => this.resizeCanvas();
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d', { alpha: false }); // optimize for opaque background
         
         // Systems
-        this.input = new Input();
+        this.input = options.input || new Input();
         this.camera = new Camera(this.canvas.width, this.canvas.height);
         this.renderer = new Renderer(this.canvas, this.ctx);
         this.renderer.setCamera(this.camera);
@@ -65,10 +52,15 @@ class GameEngine {
         this._animationFrameId = null;
         this._hudElements = null;
         this._hudState = {};
+        this.hud = typeof HudController !== 'undefined' ? new HudController() : null;
         this._playerRangedProjectiles = [];
 
         // Handle window resize
-        window.addEventListener('resize', () => this.resizeCanvas());
+        if (this.eventRegistry) {
+            this.eventRegistry.add(window, 'resize', this._boundResizeCanvas);
+        } else if (typeof window !== 'undefined' && window.addEventListener) {
+            window.addEventListener('resize', this._boundResizeCanvas);
+        }
         this.resizeCanvas();
 
         // Dev Panel (only if dev mode is enabled)
@@ -115,6 +107,8 @@ class GameEngine {
     }
 
     getHudElements() {
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) return this.hud.getElements();
         if (!this._hudState) this._hudState = {};
         if (this._hudElements) return this._hudElements;
 
@@ -159,6 +153,8 @@ class GameEngine {
     }
 
     ensureBossHudRows(count) {
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) return this.hud.ensureBossRows(count);
         const hud = this.getHudElements();
         const rowHost = hud.bossRows || hud.bossContainer;
         if (!rowHost || !rowHost.children || !document || !document.createElement) return [];
@@ -187,6 +183,11 @@ class GameEngine {
     }
 
     setHudText(key, element, value) {
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) {
+            this.hud.setText(key, element, value);
+            return;
+        }
         if (!element) return;
         if (!this._hudState) this._hudState = {};
         const nextValue = String(value);
@@ -196,6 +197,11 @@ class GameEngine {
     }
 
     setHudStyle(key, element, property, value) {
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) {
+            this.hud.setStyle(key, element, property, value);
+            return;
+        }
         if (!element) return;
         if (!this._hudState) this._hudState = {};
         const nextValue = String(value);
@@ -205,6 +211,11 @@ class GameEngine {
     }
 
     setHudItemIcon(slotKey, element, item, fallbackText, fallbackColor) {
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) {
+            this.hud.setItemIcon(slotKey, element, item, fallbackText, fallbackColor);
+            return;
+        }
         if (!element) return;
         const assets = typeof window !== 'undefined' ? window.gloomvaultAssets : null;
         const icon = assets && assets.getLootIcon ? assets.getLootIcon(item) : null;
@@ -226,6 +237,11 @@ class GameEngine {
     }
 
     setHudHidden(key, element, hidden) {
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) {
+            this.hud.setHidden(key, element, hidden);
+            return;
+        }
         if (!element || !element.classList) return;
         if (!this._hudState) this._hudState = {};
         const nextValue = Boolean(hidden);
@@ -241,14 +257,13 @@ class GameEngine {
     }
 
     showInteractionHint(text) {
-        const hint = this.getHudElements().interactionHint;
-        if (!hint) return;
-        this.setHudText('interactionHintText', hint, text);
-        this.setHudHidden('interactionHintHidden', hint, false);
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) this.hud.showInteractionHint(text);
     }
 
     hideInteractionHint() {
-        this.setHudHidden('interactionHintHidden', this.getHudElements().interactionHint, true);
+        if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
+        if (this.hud) this.hud.hideInteractionHint();
     }
 
     getPlayerRangedProjectiles() {
@@ -326,35 +341,29 @@ class GameEngine {
             this.player = new Player(startPos.x, startPos.y);
             // Load equipment
             try {
-                let savedEq = JSON.parse(localStorage.getItem('gloomvault_equipment'));
-                if (!savedEq) {
+                let savedEq = null;
+                if (typeof InventoryStore !== 'undefined') {
+                    savedEq = InventoryStore.loadEquipment();
+                }
+                if (typeof EquipmentService !== 'undefined') {
+                    savedEq = EquipmentService.ensureStarterEquipment(savedEq || EquipmentService.createEmptyEquipment());
+                    EquipmentService.migrateEquipmentDurability(savedEq, typeof DurabilityConfig !== 'undefined' ? DurabilityConfig : null);
+                } else if (!savedEq) {
                     savedEq = { helm: null, chest: null, pants: null, boots: null, weapon: null, weapon2: null, trinket1: null, trinket2: null };
                 }
-                ensureStarterEquipment(savedEq);
                 this.player.equipment = savedEq;
-                
-                // Migrate existing items that lack durability
-                if (typeof DurabilityConfig !== 'undefined') {
-                    for (const slot in savedEq) {
-                        const item = savedEq[slot];
-                        if (!item || item.isStarter || item.type === 'trinket') continue;
-                        if (item.maxDurability === undefined && DurabilityConfig.baseBySlot[item.type]) {
-                            const baseDur = DurabilityConfig.baseBySlot[item.type];
-                            const rarityMult = DurabilityConfig.rarityMultiplier[item.rarity] || 1.0;
-                            const gsBonus = Math.floor((item.gearScore || 0) * DurabilityConfig.gsScaling);
-                            item.maxDurability = Math.max(1, Math.floor(baseDur * rarityMult) + gsBonus);
-                            item.durability = item.maxDurability;
-                        }
-                    }
-                }
                 
                 this.player.recalculateStats();
 
                 // Calculate starting floor based on gear score
-                let totalGS = 0;
-                for (let slot in this.player.equipment) {
-                    if (this.player.equipment[slot] && this.player.equipment[slot].gearScore) {
-                        totalGS += this.player.equipment[slot].gearScore;
+                let totalGS = typeof EquipmentService !== 'undefined'
+                    ? EquipmentService.calculateGearScore(this.player.equipment)
+                    : 0;
+                if (typeof EquipmentService === 'undefined') {
+                    for (let slot in this.player.equipment) {
+                        if (this.player.equipment[slot] && this.player.equipment[slot].gearScore) {
+                            totalGS += this.player.equipment[slot].gearScore;
+                        }
                     }
                 }
                 this.playerGearScore = totalGS;
@@ -758,6 +767,29 @@ class GameEngine {
         this.pauseLoop();
         if (this.input && this.input.detach) {
             this.input.detach();
+        }
+        this.state = 'MENU';
+    }
+
+    destroy() {
+        if (this._destroyed) return;
+        this._destroyed = true;
+        this.pauseLoop();
+        if (this.input && this.input.destroy) {
+            this.input.destroy();
+        } else if (this.input && this.input.detach) {
+            this.input.detach();
+        }
+        if (this.eventRegistry) {
+            this.eventRegistry.removeAll();
+        } else if (typeof window !== 'undefined' && window.removeEventListener) {
+            window.removeEventListener('resize', this._boundResizeCanvas);
+        }
+        this._hudElements = null;
+        this._hudState = {};
+        if (this.hud) {
+            this.hud._elements = null;
+            this.hud._state = {};
         }
         this.state = 'MENU';
     }
@@ -2016,6 +2048,11 @@ class GameEngine {
     }
 
     updateBossHealthBarUI() {
+        if (this.hud && this.hud.updateBossHud) {
+            this.hud.updateBossHud(this.getVisibleBossEncounters());
+            return;
+        }
+
         const hud = this.getHudElements();
         if (!hud.bossContainer || !hud.bossFill || !hud.bossText) return;
 
@@ -2546,7 +2583,9 @@ class GameEngine {
 
         // Save equipment
         if (this.player && this.player.equipment) {
-            localStorage.setItem('gloomvault_equipment', JSON.stringify(this.player.equipment));
+            if (typeof InventoryStore !== 'undefined') {
+                InventoryStore.saveEquipment(this.player.equipment);
+            }
         }
 
         // Pass inventory to main.js to handle the extraction screen
@@ -2562,7 +2601,9 @@ class GameEngine {
         this.stop();
 
         // Wipe equipment (penalty)
-        localStorage.removeItem('gloomvault_equipment');
+        if (typeof InventoryStore !== 'undefined') {
+            InventoryStore.clearEquipment();
+        }
         // Keep stash untouched
 
         // Transition to game over

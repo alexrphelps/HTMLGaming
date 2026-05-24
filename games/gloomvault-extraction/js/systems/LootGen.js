@@ -279,6 +279,10 @@ class LootGen {
         return this.generateItemWithRarityAndType(floor, fallbackRarity, forcedTypeSlot);
     }
 
+    getChestGuaranteedMinimumRarity(floor) {
+        return floor >= 5 ? 'Epic' : 'Uncommon';
+    }
+
     _generateItemInternal(floor, rarity, forcedTypeSlot = null, options = {}) {
         let type = null;
         if (forcedTypeSlot && forcedTypeSlot !== 'Random') {
