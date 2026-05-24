@@ -4,6 +4,9 @@ const zlib = require('zlib');
 const { createBrowserContext, loadBrowserScript } = require('../helpers/browserScriptHarness');
 
 function loadGloomvault(relativePath, exportNames, context = createBrowserContext()) {
+  if (relativePath === 'core/GameEngine.js' && !context.FloorOrchestrator) {
+    loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/FloorOrchestrator.js', ['FloorOrchestrator']);
+  }
   return loadBrowserScript(context, `games/gloomvault-extraction/js/${relativePath}`, exportNames);
 }
 
@@ -178,6 +181,22 @@ describe('Gloomvault GameEngine loop and debug safeguards', () => {
     ]).toEqual([1, false, 1, 'PLAYING']);
   });
 
+  test('generateFloor has a single orchestrator path', () => {
+    const context = createBrowserContext();
+    const { GameEngine } = loadGloomvault('core/GameEngine.js', ['GameEngine'], context);
+    const floorOrchestrator = { generateFloor: jest.fn(() => ({ generated: true })) };
+    const engine = Object.assign(Object.create(GameEngine.prototype), { floorOrchestrator });
+
+    const result = engine.generateFloor(true);
+
+    expect([
+      result,
+      floorOrchestrator.generateFloor.mock.calls.length,
+      floorOrchestrator.generateFloor.mock.calls[0][0],
+      floorOrchestrator.generateFloor.mock.calls[0][1]
+    ]).toEqual([{ generated: true }, 1, engine, true]);
+  });
+
   test('pauseLoop and resumeLoop are idempotent around overlay open and close', () => {
     const requestAnimationFrame = jest.fn(() => 202);
     const cancelAnimationFrame = jest.fn();
@@ -320,6 +339,93 @@ describe('Gloomvault GameEngine loop and debug safeguards', () => {
     const second = engine.getPlayerRangedProjectiles();
 
     expect([first === second, second]).toEqual([true, [playerShot]]);
+  });
+
+  test('ProjectileCombatResolver handles player hits, pierce, lifesteal, and enemy hits', () => {
+    const context = createBrowserContext({
+      CombatConfig: { caps: { lifesteal: 0.35 } }
+    });
+    const { ProjectileCombatResolver } = loadGloomvault('systems/ProjectileCombatResolver.js', ['ProjectileCombatResolver'], context);
+    const resolver = new ProjectileCombatResolver();
+    const enemy = {
+      x: 10,
+      y: 0,
+      width: 20,
+      height: 20,
+      hp: 40,
+      takeDamage: jest.fn(amount => ({ hp: amount, shield: 0 })),
+      applyKnockback: jest.fn()
+    };
+    const owner = {
+      x: 40,
+      y: 0,
+      takeDamage: jest.fn()
+    };
+    const playerProjectile = {
+      x: 10,
+      y: 0,
+      width: 10,
+      damage: 20,
+      color: '#fff',
+      isPlayerOwned: true,
+      isMelee: true,
+      weaponType: 'melee_stab',
+      pierce: true,
+      hitEnemies: new Set(),
+      update: jest.fn()
+    };
+    const enemyProjectile = {
+      x: 0,
+      y: 0,
+      width: 10,
+      damage: 12,
+      isPlayerOwned: false,
+      owner,
+      update: jest.fn()
+    };
+    const engine = {
+      mapGen: {},
+      enemies: [enemy],
+      projectiles: [playerProjectile, enemyProjectile],
+      player: {
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 20,
+        hp: 50,
+        maxHp: 60,
+        stats: { lifesteal: 0.25, lifestealCapBonus: 0, thorns: 3 },
+        takeDamage: jest.fn(amount => ({ hp: amount, shield: 0 }))
+      },
+      particleSystem: { emitImpact: jest.fn() },
+      combatFeedback: { addText: jest.fn() },
+      camera: { shake: jest.fn() },
+      getDamageTakenMultiplier: jest.fn(() => 1),
+      applyElementalHit: jest.fn(),
+      handleAbilityProjectileEnd: jest.fn()
+    };
+
+    resolver.updateProjectiles(engine, 0.1);
+
+    expect([
+      engine.projectiles,
+      enemy.takeDamage.mock.calls[0][0],
+      playerProjectile.hitEnemies.has(enemy),
+      engine.player.hp,
+      enemy.applyKnockback.mock.calls.length,
+      engine.player.takeDamage.mock.calls[0][0],
+      owner.takeDamage.mock.calls[0][0],
+      engine.handleAbilityProjectileEnd.mock.calls.length
+    ]).toEqual([
+      [playerProjectile],
+      20,
+      true,
+      57,
+      1,
+      12,
+      3,
+      1
+    ]);
   });
 
   test('god mode blocks player status-effect HP loss while enemies still take it', () => {
@@ -2983,6 +3089,7 @@ describe('Gloomvault GameEngine map selection', () => {
     context.window = context;
     context.globalThis = context;
     loadGloomvault('config/MapConfig.js', ['MapConfigs'], context);
+    loadGloomvault('systems/FloorOrchestrator.js', ['FloorOrchestrator'], context);
     const { GameEngine } = loadGloomvault('core/GameEngine.js', ['GameEngine'], context);
     return { engine: new GameEngine('game-canvas'), MapConfigs: context.MapConfigs };
   }
@@ -3905,6 +4012,43 @@ describe('Gloomvault equipment and inventory services', () => {
       localStorage.removeItem.mock.calls.some(call => call[0] === 'gloomvault_equipment')
     ]).toEqual(['wand', 'starter_wep2', 27, 2, 1, 'gloomvault_equipment', true]);
   });
+
+  test('InventoryTransferService swaps, validates equipment slots, stashes, and salvages', () => {
+    const context = createBrowserContext();
+    const { InventoryTransferService } = loadGloomvault('systems/InventoryTransferService.js', ['InventoryTransferService'], context);
+    const service = new InventoryTransferService();
+    const inventory = [{ id: 'wand', type: 'weapon' }, { id: 'boots', type: 'boots', rarity: 'Common' }];
+    const equipment = { weapon: null, boots: null, trinket1: null };
+    const stash = [null, null];
+    const upgradeSystem = { getSalvageValue: jest.fn(() => 7) };
+
+    const validEquip = service.swap(inventory, 0, equipment, 'weapon', { validateEquip: true });
+    const invalidEquip = service.swap(inventory, 1, equipment, 'trinket1', { validateEquip: true });
+    const stashed = service.moveToFirstEmpty(inventory, 1, stash);
+    const salvaged = service.salvage(stash, 0, upgradeSystem);
+
+    expect([
+      validEquip,
+      invalidEquip,
+      stashed,
+      salvaged,
+      equipment.weapon.id,
+      equipment.trinket1,
+      inventory,
+      stash,
+      upgradeSystem.getSalvageValue.mock.calls.length
+    ]).toEqual([
+      true,
+      false,
+      true,
+      { salvaged: true, value: 7, item: { id: 'boots', type: 'boots', rarity: 'Common' } },
+      'wand',
+      null,
+      [null, null],
+      [null, null],
+      1
+    ]);
+  });
 });
 
 // Behaviour under test: shared event registries make browser-global listeners removable.
@@ -3926,6 +4070,38 @@ describe('Gloomvault lifecycle cleanup services', () => {
     ]).toEqual([
       [['resize', handler, undefined]],
       [['resize', handler, undefined]]
+    ]);
+  });
+
+  test('DropZoneBinder registers removable drag lifecycle handlers', () => {
+    const context = createBrowserContext();
+    const { EventRegistry } = loadGloomvault('systems/EventRegistry.js', ['EventRegistry'], context);
+    const { DropZoneBinder } = loadGloomvault('systems/DropZoneBinder.js', ['DropZoneBinder'], context);
+    const registry = new EventRegistry();
+    const element = {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      classList: { add: jest.fn(), remove: jest.fn() }
+    };
+    const onDrop = jest.fn();
+    const binder = new DropZoneBinder({ eventRegistry: registry });
+
+    binder.bind(element, onDrop);
+    const handlers = Object.fromEntries(element.addEventListener.mock.calls.map(call => [call[0], call[1]]));
+    handlers.dragover({ preventDefault: jest.fn() });
+    handlers.drop({ preventDefault: jest.fn(), stopPropagation: jest.fn() });
+    registry.removeAll();
+
+    expect([
+      element.addEventListener.mock.calls.map(call => call[0]),
+      element.classList.add.mock.calls[0][0],
+      onDrop.mock.calls.length,
+      element.removeEventListener.mock.calls.map(call => call[0])
+    ]).toEqual([
+      ['dragover', 'dragleave', 'drop'],
+      'drag-over',
+      1,
+      ['drop', 'dragleave', 'dragover']
     ]);
   });
 

@@ -23,13 +23,17 @@ Current gameplay loop:
 - `GloomvaultExtraction.js`: GameHub wrapper. Creates/removes iframe and focuses it on start.
 - `index.html`: All screen markup and script load order. Contains main menu, map select, stash, extraction, play canvas, inventory overlay, dungeon service overlay, action bar, stacked boss health rows, durability HUD, and minimap canvas.
 - `css/style.css`: Full standalone UI and game overlay styling.
-- `js/main.js`: DOM coordinator. Owns screen switching, map select UI, stash/equipment persistence, extraction screen, inventory drag/drop, item tooltips/comparison, durability HUD updates, and exposes `window.gloomvaultApp`.
-- `js/core/GameEngine.js`: Runtime orchestrator. Owns canvas loop, map selection, floor generation, entity arrays, dungeon service spawning/interactions, enemy/projectile collision, extraction/death, boss-room flow, guardian spawn flow, borrowed boss powers, minimap render call, health/action/boss UI updates, and dev helpers.
-- `js/core/Input.js`: Keyboard and mouse state. Attached to canvas by the engine. No cleanup method currently exists.
+- `js/main.js`: DOM coordinator. Creates the engine, asset manager, screen controller, inventory UI controller, and exposes `window.gloomvaultApp`.
+- `js/core/GameEngine.js`: Runtime orchestrator. Owns canvas loop, map selection state, entity arrays, dungeon service spawning/interactions, extraction/death, boss-room flow, guardian spawn flow, borrowed boss powers, minimap render call, health/action/boss UI updates, and dev helpers.
+- `js/core/Input.js`: Keyboard and mouse state. Attached to canvas by the engine, with idempotent `attach()`, `detach()`, and `destroy()` cleanup.
 - `js/core/Camera.js`: Fixed world-space viewport, browser-DPR backing canvas handling, zoom for dev mode, map clamping, screenshake, and world/screen transforms.
 - `js/core/Renderer.js`: Drawing helpers and minimap rendering.
 - `js/systems/MapGen.js`: Procedural map generation, layout families, connectivity repair, boss-room placement, floor lookup helpers, 2x2 service-object placement helpers, and transition position queries.
 - `js/systems/SpawnManager.js`: Enemy population from map size, effective floor, safe-zone, and difficulty/dev multipliers.
+- `js/systems/FloorOrchestrator.js`: Single floor-generation path. Selects map config, creates `MapGen`, prepares/keeps player loadout, resets floor entities, populates enemies, and places portals, chests, transitions, services, guardians, and boss-room entities through engine APIs.
+- `js/systems/ProjectileCombatResolver.js`: Projectile update/collision service for player/enemy projectile hits, lifesteal, thorns, stagger/knockback, ability projectile cleanup, and impact feedback.
+- `js/systems/InventoryTransferService.js` and `js/systems/DropZoneBinder.js`: Shared inventory movement/salvage rules and reusable drag/drop binding for stash, extraction, dungeon service, and run inventory UI.
+- `js/systems/EnemyFactory.js`: Data-driven enemy base stat and weapon setup used by `Enemy`.
 - `js/systems/Pathfinder.js`: A* tile pathing for enemy chase/wander behavior.
 - `js/systems/LootGen.js`: Item generation, rarity, affixes, implicits, weapon subtypes, trinket active abilities, traits, durability initialization, and guaranteed minimum-rarity encounter rewards.
 - `js/config/BossConfig.js`: Data-driven boss/guardian registry. Defines boss identities, AI overrides, thresholds, modifiers, borrowed powers, and encounter tags.
@@ -74,7 +78,7 @@ Important item shape:
 }
 ```
 
-The starter equipment migration exists in both `main.js` and `GameEngine.js` as `ensureStarterEquipment`. If starter loadout changes, update both or consolidate first.
+Starter equipment migration is centralized through `EquipmentService`, `InventoryStore`, and `LoadoutService`. New loadout defaults should be changed there rather than in UI or engine code.
 
 ## Current Gameplay Systems
 
@@ -159,9 +163,10 @@ The starter equipment migration exists in both `main.js` and `GameEngine.js` as 
 ## High-Risk Couplings And Maintenance Notes
 
 - Script order is dependency order. If converting to modules, plan the migration instead of moving tags casually.
-- `main.js` is very large and mixes UI, persistence, inventory rules, extraction, tooltip rendering, and HUD updates. Future work should prefer extracting small helpers rather than adding more global UI state there.
+- `InventoryUiController.js` remains large and mixes stash, extraction, service overlays, tooltip rendering, and inventory HUD updates. Future UI work should prefer extracting focused controllers/services rather than adding more closure state.
 - `GameEngine.start()` always calls `generateFloor(false)`. Re-entering play from menu starts a new run. Avoid adding menu transitions that accidentally call it twice.
-- `Input.attach()` adds mouse listeners every time it is called and has no detach/cleanup. Repeated engine starts can stack listeners unless this is fixed.
+- `GameEngine.generateFloor()` intentionally delegates only to `FloorOrchestrator`; avoid reintroducing fallback floor-generation logic in the engine.
+- `Input.attach()` is idempotent and `destroy()` removes keyboard/canvas listeners. Keep new input listeners behind `Input` or `EventRegistry` so iframe cleanup stays reliable.
 - Camera intentionally caps visible world space and scales to the canvas backing size. Do not change canvas resize/zoom logic without checking browser zoom cannot reveal extra dungeon area.
 - Minimap and inventory minimap depend on `Renderer.renderMinimap()` and `mapGen.visitedGrid`.
 - Boss room locked entrances are represented by wall tiles until opened. Connectivity/pruning code must not delete or prematurely open these.
@@ -191,9 +196,8 @@ Manual smoke test:
 
 ## Future Work Backlog
 
-- Consolidate duplicated starter-equipment migration.
-- Add input cleanup or idempotent listener attachment.
-- Split `main.js` into stash, extraction, inventory, tooltip, and screen modules.
+- Continue splitting `InventoryUiController.js` into stash, extraction, service, inventory, and tooltip modules.
+- Consider extracting enemy AI role behaviors from `Enemy.js` once additional enemy types are added.
 - Decide whether weapon slot 2 is intended to remain a second weapon attack or become a true secondary ability system.
 - Add richer boss mechanics beyond current chase/cleave boss.
 - Add quick-equip/unequip and better inventory quality-of-life.

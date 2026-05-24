@@ -38,6 +38,8 @@ class InventoryUiController {
         const eventRegistry = options.eventRegistry || (typeof EventRegistry !== 'undefined' ? new EventRegistry() : null);
         const stashController = options.stashController || new StashController();
         const extractionController = options.extractionController || new ExtractionController();
+        const transferService = options.transferService || (typeof InventoryTransferService !== 'undefined' ? new InventoryTransferService() : null);
+        const dropZoneBinder = options.dropZoneBinder || (typeof DropZoneBinder !== 'undefined' ? new DropZoneBinder({ eventRegistry }) : null);
         const ownedElements = [];
         let expandedMinimapRenderer = null;
     function removeOwnedElements() {
@@ -54,6 +56,34 @@ class InventoryUiController {
             ctx.clearRect(0, 0, expandedMinimapCanvas.width, expandedMinimapCanvas.height);
         }
         expandedMinimapCanvas.classList.add('hidden');
+    }
+
+    function bindDropZone(element, onDrop, options = {}) {
+        if (!dropZoneBinder) return;
+        dropZoneBinder.bind(element, onDrop, options);
+    }
+
+    function swapItems(sourceList, sourceId, targetList, targetId, options = {}) {
+        if (transferService) {
+            return transferService.swap(sourceList, sourceId, targetList, targetId, options);
+        }
+        const sourceItem = sourceList[sourceId];
+        if (!sourceItem) return false;
+        if (options.validateEquip && sourceItem.type !== String(targetId).replace(/[0-9]/g, '')) return false;
+        sourceList[sourceId] = targetList[targetId] || null;
+        targetList[targetId] = sourceItem;
+        return true;
+    }
+
+    function salvageItem(sourceList, sourceId) {
+        if (transferService) {
+            return transferService.salvage(sourceList, sourceId, UpgradeSystem);
+        }
+        const sourceItem = sourceList && sourceList[sourceId];
+        if (!sourceItem) return { salvaged: false, value: 0, item: null };
+        const value = UpgradeSystem.getSalvageValue(sourceItem);
+        sourceList[sourceId] = null;
+        return { salvaged: true, value, item: sourceItem };
     }
 
     function updateInventoryPaneLayout() {
@@ -155,20 +185,7 @@ function loadStashData() {
     }
 
     function setupStashDropZone(element, type, id) {
-        element.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            element.classList.add('drag-over');
-        });
-
-        element.addEventListener('dragleave', (e) => {
-            element.classList.remove('drag-over');
-        });
-
-        element.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            element.classList.remove('drag-over');
-            
+        bindDropZone(element, () => {
             if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade', 'repair'].includes(draggedItemSource.source)) return;
 
             let sourceList = null;
@@ -189,8 +206,8 @@ function loadStashData() {
             if (!sourceItem) return;
 
             if (type === 'stash-equip') {
-                const targetSlotType = id.replace(/[0-9]/g, '');
-                if (sourceItem.type !== targetSlotType) return;
+                if (transferService && !transferService.canEquip(sourceItem, id)) return;
+                if (!transferService && sourceItem.type !== id.replace(/[0-9]/g, '')) return;
             }
 
             if (draggedItemSource.source === 'upgrade') {
@@ -210,6 +227,8 @@ function loadStashData() {
 
             saveStashData();
             updateStashUI();
+        }, {
+            useEventRegistry: false
         });
     }
 
@@ -223,12 +242,7 @@ function loadStashData() {
     const stashSalvageDropzone = document.getElementById('stash-salvage-dropzone');
 
     if (stashSalvageDropzone) {
-        stashSalvageDropzone.addEventListener('dragover', (e) => { e.preventDefault(); stashSalvageDropzone.classList.add('drag-over'); });
-        stashSalvageDropzone.addEventListener('dragleave', () => stashSalvageDropzone.classList.remove('drag-over'));
-        stashSalvageDropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            stashSalvageDropzone.classList.remove('drag-over');
-
+        bindDropZone(stashSalvageDropzone, () => {
             if (!draggedItemSource || !['stash', 'stash-equip', 'upgrade', 'repair'].includes(draggedItemSource.source)) return;
 
             let sourceList = null;
@@ -247,11 +261,12 @@ function loadStashData() {
 
             if (!sourceItem) return;
 
-            const value = UpgradeSystem.getSalvageValue(sourceItem);
-            scraps += value;
-
             if (sourceList) {
-                sourceList[draggedItemSource.id] = null; // Remove item
+                const result = salvageItem(sourceList, draggedItemSource.id);
+                if (!result.salvaged) return;
+                scraps += result.value;
+            } else {
+                scraps += UpgradeSystem.getSalvageValue(sourceItem);
             }
 
             saveStashData();
@@ -259,12 +274,7 @@ function loadStashData() {
         });
     }
 
-    upgradeDropzone.addEventListener('dragover', (e) => { e.preventDefault(); upgradeDropzone.classList.add('drag-over'); });
-    upgradeDropzone.addEventListener('dragleave', () => upgradeDropzone.classList.remove('drag-over'));
-    upgradeDropzone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        upgradeDropzone.classList.remove('drag-over');
-        
+    bindDropZone(upgradeDropzone, () => {
         if (!draggedItemSource || !['stash', 'stash-equip'].includes(draggedItemSource.source)) return;
         
         let sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
@@ -312,12 +322,7 @@ function loadStashData() {
     const btnRepair = document.getElementById('btn-repair-item');
 
     if (repairDropzone) {
-        repairDropzone.addEventListener('dragover', (e) => { e.preventDefault(); repairDropzone.classList.add('drag-over'); });
-        repairDropzone.addEventListener('dragleave', () => repairDropzone.classList.remove('drag-over'));
-        repairDropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            repairDropzone.classList.remove('drag-over');
-
+        bindDropZone(repairDropzone, () => {
             if (!draggedItemSource || !['stash', 'stash-equip'].includes(draggedItemSource.source)) return;
 
             let sourceList = draggedItemSource.source === 'stash' ? stashItems : stashEquipment;
@@ -612,43 +617,31 @@ function loadStashData() {
     }
 
     function setupExtractDropZone(element, type, id) {
-        element.addEventListener('dragover', e => { e.preventDefault(); element.classList.add('drag-over'); });
-        element.addEventListener('dragleave', () => element.classList.remove('drag-over'));
-        element.addEventListener('drop', e => {
-            e.preventDefault(); element.classList.remove('drag-over');
+        bindDropZone(element, () => {
             if (!draggedItemSource || (draggedItemSource.source !== 'extract-loot' && draggedItemSource.source !== 'extract-stash')) return;
             
             let sourceList = draggedItemSource.source === 'extract-loot' ? currentLoot : stashItems;
             let targetList = type === 'extract-loot' ? currentLoot : stashItems;
             
-            let sourceItem = sourceList[draggedItemSource.id];
-            let targetItem = targetList[id];
-            if (!sourceItem) return;
-            
-            sourceList[draggedItemSource.id] = targetItem;
-            targetList[id] = sourceItem;
-            
+            if (!swapItems(sourceList, draggedItemSource.id, targetList, id)) return;
+
             saveStashData();
             updateExtractionUI();
+        }, {
+            useEventRegistry: false
         });
     }
 
     // Salvage logic
     const salvageDropzone = document.getElementById('salvage-dropzone');
     if(salvageDropzone) {
-        salvageDropzone.addEventListener('dragover', e => { e.preventDefault(); salvageDropzone.classList.add('drag-over'); });
-        salvageDropzone.addEventListener('dragleave', () => salvageDropzone.classList.remove('drag-over'));
-        salvageDropzone.addEventListener('drop', e => {
-            e.preventDefault(); salvageDropzone.classList.remove('drag-over');
+        bindDropZone(salvageDropzone, () => {
             if (!draggedItemSource || (draggedItemSource.source !== 'extract-loot' && draggedItemSource.source !== 'extract-stash')) return;
             
             let sourceList = draggedItemSource.source === 'extract-loot' ? currentLoot : stashItems;
-            let sourceItem = sourceList[draggedItemSource.id];
-            if (!sourceItem) return;
-            
-            const value = UpgradeSystem.getSalvageValue(sourceItem);
-            scraps += value;
-            sourceList[draggedItemSource.id] = null; // Remove item
+            const result = salvageItem(sourceList, draggedItemSource.id);
+            if (!result.salvaged) return;
+            scraps += result.value;
             
             saveStashData();
             updateExtractionUI();
@@ -659,22 +652,9 @@ function loadStashData() {
     const btnStashAll = document.getElementById('btn-stash-all');
     if(btnStashAll) {
         btnStashAll.addEventListener('click', () => {
-            let movedAny = false;
-            for (let i = 0; i < 25; i++) {
-                if (currentLoot[i]) {
-                    let emptyIndex = -1;
-                    for (let k = 0; k < stashItems.length; k++) {
-                        if (!stashItems[k]) { emptyIndex = k; break; }
-                    }
-                    if (emptyIndex !== -1) {
-                        stashItems[emptyIndex] = currentLoot[i];
-                        currentLoot[i] = null;
-                        movedAny = true;
-                    } else {
-                        break; // Stash is full
-                    }
-                }
-            }
+            const movedAny = transferService
+                ? transferService.stashAll(currentLoot, stashItems, 25)
+                : false;
             if (movedAny) {
                 saveStashData();
                 updateExtractionUI();
@@ -687,17 +667,11 @@ function loadStashData() {
     const btnSalvageAllCommon = document.getElementById('btn-salvage-all-common');
     if (btnSalvageAllCommon) {
         btnSalvageAllCommon.addEventListener('click', () => {
-            let salvagedAny = false;
-            for (let i = 0; i < currentLoot.length; i++) {
-                const item = currentLoot[i];
-                if (item && item.rarity === 'Common') {
-                    const value = UpgradeSystem.getSalvageValue(item);
-                    scraps += value;
-                    currentLoot[i] = null; // Remove item
-                    salvagedAny = true;
-                }
-            }
-            if (salvagedAny) {
+            const result = transferService
+                ? transferService.salvageWhere(currentLoot, item => item.rarity === 'Common', UpgradeSystem)
+                : { salvagedAny: false, scraps: 0 };
+            scraps += result.scraps;
+            if (result.salvagedAny) {
                 saveStashData();
                 updateExtractionUI();
                 hideTooltip();
@@ -1089,6 +1063,7 @@ function loadStashData() {
     }
 
     function findFirstEmpty(list) {
+        if (transferService) return transferService.findFirstEmpty(list);
         for (let i = 0; i < list.length; i++) {
             if (!list[i]) return i;
         }
@@ -1172,16 +1147,7 @@ function loadStashData() {
         if (!element) return;
         if (element.dataset.serviceDropSetup === `${targetType}:${id}`) return;
         element.dataset.serviceDropSetup = `${targetType}:${id}`;
-        element.addEventListener('dragover', (e) => {
-            if (!activeServiceMode) return;
-            e.preventDefault();
-            element.classList.add('drag-over');
-        });
-        element.addEventListener('dragleave', () => element.classList.remove('drag-over'));
-        element.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            element.classList.remove('drag-over');
+        bindDropZone(element, () => {
             if (!activeServiceMode || !draggedItemSource) return;
 
             const source = getServiceSource(draggedItemSource);
@@ -1197,8 +1163,8 @@ function loadStashData() {
             if (targetType === 'stash' && activeServiceMode !== 'bank') return;
 
             if (targetType === 'equipment') {
-                const targetSlotType = id.replace(/[0-9]/g, '');
-                if (sourceItem.type !== targetSlotType) return;
+                if (transferService && !transferService.canEquip(sourceItem, id)) return;
+                if (!transferService && sourceItem.type !== id.replace(/[0-9]/g, '')) return;
             }
 
             const targetItem = targetList[id];
@@ -1209,20 +1175,15 @@ function loadStashData() {
 
             persistRunEquipment();
             refreshServiceUI();
+        }, {
+            canAccept: () => Boolean(activeServiceMode),
+            useEventRegistry: false
         });
     }
 
     function setupServiceCraftingDropzone(element, slotType) {
         if (!element) return;
-        element.addEventListener('dragover', (e) => {
-            if (!activeServiceMode) return;
-            e.preventDefault();
-            element.classList.add('drag-over');
-        });
-        element.addEventListener('dragleave', () => element.classList.remove('drag-over'));
-        element.addEventListener('drop', (e) => {
-            e.preventDefault();
-            element.classList.remove('drag-over');
+        bindDropZone(element, () => {
             if (!activeServiceMode || !draggedItemSource) return;
             const source = getServiceSource(draggedItemSource);
             if (!source || !source.list) return;
@@ -1239,20 +1200,14 @@ function loadStashData() {
 
             persistRunEquipment();
             refreshServiceUI();
+        }, {
+            canAccept: () => Boolean(activeServiceMode)
         });
     }
 
     function setupServiceSalvageDropzone() {
         if (!serviceSalvageDropzone) return;
-        serviceSalvageDropzone.addEventListener('dragover', (e) => {
-            if (!activeServiceMode) return;
-            e.preventDefault();
-            serviceSalvageDropzone.classList.add('drag-over');
-        });
-        serviceSalvageDropzone.addEventListener('dragleave', () => serviceSalvageDropzone.classList.remove('drag-over'));
-        serviceSalvageDropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            serviceSalvageDropzone.classList.remove('drag-over');
+        bindDropZone(serviceSalvageDropzone, () => {
             if (!activeServiceMode || !draggedItemSource) return;
             const source = getServiceSource(draggedItemSource);
             if (!source) return;
@@ -1265,6 +1220,8 @@ function loadStashData() {
             else source.list[source.id] = null;
             persistRunEquipment();
             refreshServiceUI();
+        }, {
+            canAccept: () => Boolean(activeServiceMode)
         });
     }
 
@@ -1367,21 +1324,12 @@ function loadStashData() {
 
     const playScreen = document.getElementById('play-screen');
 
-    playScreen.addEventListener('dragover', (e) => {
-        // Allow dropping anywhere on play-screen that is outside inventory slots
-        if (!e.target.closest('.inventory-cell') && !e.target.closest('.equip-slot')) {
-            e.preventDefault();
-        }
-    });
-
-    playScreen.addEventListener('drop', (e) => {
+    bindDropZone(playScreen, (e) => {
         // Ignore if dropped on an inventory cell or equip slot (handled by those specifically)
         if (e.target.closest('.inventory-cell') || e.target.closest('.equip-slot')) {
             return;
         }
-        
-        e.preventDefault();
-        
+
         if (!draggedItemSource || !engine.player || draggedItemSource.source !== 'game') return;
 
         let sourceList = draggedItemSource.type === 'inventory' ? engine.player.inventory : engine.player.equipment;
@@ -1407,45 +1355,20 @@ function loadStashData() {
         updateInventoryUI();
         
         draggedItemSource = null;
+    }, {
+        canAccept: (e) => !e.target.closest('.inventory-cell') && !e.target.closest('.equip-slot'),
+        stopPropagation: false
     });
 
     function setupDropZone(element, type, id) {
-        element.addEventListener('dragover', (e) => {
-            e.preventDefault(); // allow drop
-            element.classList.add('drag-over');
-        });
-
-        element.addEventListener('dragleave', (e) => {
-            element.classList.remove('drag-over');
-        });
-
-        element.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            element.classList.remove('drag-over');
-            
+        bindDropZone(element, () => {
             if (!draggedItemSource || !engine.player || draggedItemSource.source !== 'game') return;
 
             // Extract item data
             let sourceList = draggedItemSource.type === 'inventory' ? engine.player.inventory : engine.player.equipment;
             let targetList = type === 'inventory' ? engine.player.inventory : engine.player.equipment;
 
-            let sourceItem = sourceList[draggedItemSource.id];
-            let targetItem = targetList[id];
-
-            if (!sourceItem) return;
-
-            // Validate target slot
-            if (type === 'equipment') {
-                const targetSlotType = id.replace(/[0-9]/g, '');
-                if (sourceItem.type !== targetSlotType) {
-                    return; // invalid slot type
-                }
-            }
-
-            // Swap logic
-            sourceList[draggedItemSource.id] = targetItem;
-            targetList[id] = sourceItem;
+            if (!swapItems(sourceList, draggedItemSource.id, targetList, id, { validateEquip: type === 'equipment' })) return;
 
             engine.player.recalculateStats();
             updateInventoryUI();

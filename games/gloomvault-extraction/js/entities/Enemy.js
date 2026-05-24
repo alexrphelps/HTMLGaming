@@ -3,29 +3,12 @@ class Enemy extends Entity {
         const bossProfile = options.bossProfile || null;
         const baseType = bossProfile && bossProfile.baseType ? bossProfile.baseType : type;
         const bossStats = bossProfile && bossProfile.baseStats ? bossProfile.baseStats : null;
-        let width = 30, height = 30, hp = 50, speed = 100, color = '#ff0000';
         const dmgMult = damageMultiplier !== null ? damageMultiplier : hpMultiplier;
-
-        if (baseType === 'brown_grunt') {
-            hp = 60; color = '#b39b54';
-        } else if (baseType === 'ranged') {
-            hp = 30; speed = 80; color = '#ff8800';
-        } else if (baseType === 'brute') {
-            hp = 150; speed = 60; width = 40; height = 40; color = '#880000';
-        } else if (baseType === 'boss') {
-            hp = 500; speed = 55; width = 72; height = 72; color = '#4b0f0f';
-        }
-
-        if (bossStats) {
-            hp = bossStats.hp !== undefined ? bossStats.hp : hp;
-            speed = bossStats.speed !== undefined ? bossStats.speed : speed;
-            width = bossStats.width !== undefined ? bossStats.width : width;
-            height = bossStats.height !== undefined ? bossStats.height : height;
-            color = bossStats.color || color;
-        }
-
-        hp = Math.floor(hp * hpMultiplier);
-        super(x, y, width, height, hp);
+        const enemyFactory = typeof EnemyFactory !== 'undefined' ? EnemyFactory : Enemy.fallbackFactory;
+        const enemyStats = enemyFactory
+            ? enemyFactory.getStats(baseType, bossStats, hpMultiplier)
+            : { width: 30, height: 30, hp: Math.floor(50 * hpMultiplier), speed: 100, color: '#ff0000' };
+        super(x, y, enemyStats.width, enemyStats.height, enemyStats.hp);
 
         this.type = baseType;
         this.enemyId = options.enemyId || `enemy-${Math.floor(Math.random() * 1e9)}`;
@@ -35,9 +18,9 @@ class Enemy extends Entity {
         this.isBoss = this.isBossTier ? this.bossTier === 'mainBoss' : baseType === 'boss';
         this.hasTakenPlayerDamage = false;
         this.isAggroed = false;
-        this.baseSpeed = speed;
-        this.speed = speed;
-        this.color = color;
+        this.baseSpeed = enemyStats.speed;
+        this.speed = enemyStats.speed;
+        this.color = enemyStats.color;
         this.displayName = bossProfile && bossProfile.displayName ? bossProfile.displayName : (this.isBoss ? 'Vault Warden' : null);
         this.homeX = x;
         this.homeY = y;
@@ -64,56 +47,9 @@ class Enemy extends Entity {
         this.angle = 0;
         this.strafeDirection = Math.random() > 0.5 ? 1 : -1;
 
-        this.weapon = null;
-        if (this.type === 'ranged') {
-            this.weapon = new Weapon({ weaponType: 'pistol' }, false);
-            this.weapon.baseCooldown = 1.5;
-            this.weapon.cooldown = 1.5;
-            this.weapon.baseDamage = Math.floor(15 * dmgMult);
-            this.weapon.damage = this.weapon.baseDamage;
-            this.weapon.projectileSpeed = 300;
-        } else if (this.isGruntLike()) {
-            this.weapon = new Weapon({ weaponType: 'melee_stab' }, false);
-            this.weapon.baseCooldown = 1.0;
-            this.weapon.cooldown = 1.0;
-            this.weapon.baseDamage = Math.floor(10 * dmgMult);
-            this.weapon.damage = this.weapon.baseDamage;
-        } else if (this.type === 'brute') {
-            this.weapon = new Weapon({ weaponType: 'melee_cleave' }, false);
-            this.weapon.baseCooldown = 2.0;
-            this.weapon.cooldown = 2.0;
-            this.weapon.baseDamage = Math.floor(40 * dmgMult);
-            this.weapon.damage = this.weapon.baseDamage;
-        } else if (this.type === 'boss') {
-            this.weapon = new Weapon({ weaponType: 'melee_cleave' }, false);
-            this.weapon.baseCooldown = 1.6;
-            this.weapon.cooldown = 1.6;
-            this.weapon.baseDamage = Math.floor(55 * dmgMult);
-            this.weapon.damage = this.weapon.baseDamage;
-        }
-
-        if (this.weapon && bossStats) {
-            if (bossStats.weaponType) {
-                this.weapon = new Weapon({ weaponType: bossStats.weaponType }, false);
-            }
-            if (bossStats.weaponCooldown !== undefined) {
-                this.weapon.baseCooldown = bossStats.weaponCooldown;
-                this.weapon.cooldown = bossStats.weaponCooldown;
-            }
-            if (bossStats.weaponDamage !== undefined) {
-                this.weapon.baseDamage = Math.floor(bossStats.weaponDamage * dmgMult);
-                this.weapon.damage = this.weapon.baseDamage;
-            }
-            if (bossStats.projectileSpeed !== undefined) {
-                this.weapon.projectileSpeed = bossStats.projectileSpeed;
-            }
-            if (bossStats.projectileCount !== undefined) {
-                this.weapon.projectileCount = bossStats.projectileCount;
-            }
-            if (bossStats.spread !== undefined) {
-                this.weapon.spread = bossStats.spread;
-            }
-        }
+        this.weapon = enemyFactory
+            ? enemyFactory.applyBossWeaponStats(enemyFactory.createWeapon(this.type, enemyStats, dmgMult), bossStats, dmgMult)
+            : null;
 
         this.dashTarget = null;
         this.dashSpeed = bossStats && bossStats.dashSpeed !== undefined ? bossStats.dashSpeed : (this.isBossTier ? 260 : 400);
@@ -1156,3 +1092,57 @@ class Enemy extends Entity {
         ctx.stroke();
     }
 }
+
+Enemy.fallbackFactory = typeof EnemyFactory !== 'undefined'
+    ? EnemyFactory
+    : {
+        getStats(type, bossStats = null, hpMultiplier = 1) {
+            const statsByType = {
+                grunt: { width: 30, height: 30, hp: 50, speed: 100, color: '#ff0000', weaponType: 'melee_stab', weaponCooldown: 1.0, weaponDamage: 10 },
+                brown_grunt: { width: 30, height: 30, hp: 60, speed: 100, color: '#b39b54', weaponType: 'melee_stab', weaponCooldown: 1.0, weaponDamage: 10 },
+                ranged: { width: 30, height: 30, hp: 30, speed: 80, color: '#ff8800', weaponType: 'pistol', weaponCooldown: 1.5, weaponDamage: 15, projectileSpeed: 300 },
+                brute: { width: 40, height: 40, hp: 150, speed: 60, color: '#880000', weaponType: 'melee_cleave', weaponCooldown: 2.0, weaponDamage: 40 },
+                boss: { width: 72, height: 72, hp: 500, speed: 55, color: '#4b0f0f', weaponType: 'melee_cleave', weaponCooldown: 1.6, weaponDamage: 55 }
+            };
+            const stats = { ...(statsByType[type] || statsByType.grunt) };
+            if (bossStats) {
+                ['hp', 'speed', 'width', 'height'].forEach(key => {
+                    if (bossStats[key] !== undefined) stats[key] = bossStats[key];
+                });
+                if (bossStats.color) stats.color = bossStats.color;
+            }
+            stats.hp = Math.floor(stats.hp * hpMultiplier);
+            return stats;
+        },
+
+        createWeapon(type, stats, damageMultiplier) {
+            if (!stats || !stats.weaponType || typeof Weapon === 'undefined') return null;
+            const weapon = new Weapon({ weaponType: stats.weaponType }, false);
+            weapon.baseCooldown = stats.weaponCooldown;
+            weapon.cooldown = stats.weaponCooldown;
+            weapon.baseDamage = Math.floor(stats.weaponDamage * damageMultiplier);
+            weapon.damage = weapon.baseDamage;
+            if (stats.projectileSpeed !== undefined) weapon.projectileSpeed = stats.projectileSpeed;
+            return weapon;
+        },
+
+        applyBossWeaponStats(weapon, bossStats, damageMultiplier) {
+            if (!weapon || !bossStats) return weapon;
+            let nextWeapon = weapon;
+            if (bossStats.weaponType && typeof Weapon !== 'undefined') {
+                nextWeapon = new Weapon({ weaponType: bossStats.weaponType }, false);
+            }
+            if (bossStats.weaponCooldown !== undefined) {
+                nextWeapon.baseCooldown = bossStats.weaponCooldown;
+                nextWeapon.cooldown = bossStats.weaponCooldown;
+            }
+            if (bossStats.weaponDamage !== undefined) {
+                nextWeapon.baseDamage = Math.floor(bossStats.weaponDamage * damageMultiplier);
+                nextWeapon.damage = nextWeapon.baseDamage;
+            }
+            if (bossStats.projectileSpeed !== undefined) nextWeapon.projectileSpeed = bossStats.projectileSpeed;
+            if (bossStats.projectileCount !== undefined) nextWeapon.projectileCount = bossStats.projectileCount;
+            if (bossStats.spread !== undefined) nextWeapon.spread = bossStats.spread;
+            return nextWeapon;
+        }
+    };
