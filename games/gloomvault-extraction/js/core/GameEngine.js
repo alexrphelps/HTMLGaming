@@ -15,6 +15,16 @@ class GameEngine {
             this.renderer.setAssetManager(window.gloomvaultAssets);
         }
 
+        // Runtime services
+        this.runState = options.runState || (typeof RunState !== 'undefined' ? new RunState({ mapConfigs: MapConfigs }) : null);
+        this.loadoutService = options.loadoutService || (typeof LoadoutService !== 'undefined' ? new LoadoutService() : null);
+        this.floorOrchestrator = options.floorOrchestrator || (typeof FloorOrchestrator !== 'undefined' ? new FloorOrchestrator() : null);
+        this.encounterService = options.encounterService || (typeof EncounterService !== 'undefined' ? new EncounterService() : null);
+        this.combatSystem = options.combatSystem || (typeof CombatSystem !== 'undefined' ? new CombatSystem() : null);
+        this.abilitySystem = options.abilitySystem || (typeof AbilitySystem !== 'undefined' ? new AbilitySystem() : null);
+        this.minimapService = options.minimapService || (typeof MinimapService !== 'undefined' ? new MinimapService() : null);
+        this.gameRenderer = options.gameRenderer || (typeof GameRenderer !== 'undefined' ? new GameRenderer() : null);
+
         // Map Gen parameters
         this.tileSize = 64;
         this.runMapSelection = 'random';
@@ -52,8 +62,14 @@ class GameEngine {
         this._animationFrameId = null;
         this._hudElements = null;
         this._hudState = {};
-        this.hud = typeof HudController !== 'undefined' ? new HudController() : null;
+        this.hudAdapter = options.hudAdapter || (typeof HudAdapter !== 'undefined' ? new HudAdapter() : null);
+        this.hud = this.hudAdapter && this.hudAdapter.controller
+            ? this.hudAdapter.controller
+            : (typeof HudController !== 'undefined' ? new HudController() : null);
         this._playerRangedProjectiles = [];
+        if (this.runState && this.runState.syncFromEngine) {
+            this.runState.syncFromEngine(this);
+        }
 
         // Handle window resize
         if (this.eventRegistry) {
@@ -72,10 +88,20 @@ class GameEngine {
     }
 
     setRunMapSelection(mapKey) {
+        if (this.runState && this.runState.setRunMapSelection) {
+            this.runMapSelection = this.runState.setRunMapSelection(mapKey);
+            return;
+        }
         this.runMapSelection = mapKey === 'random' || MapConfigs[mapKey] ? mapKey : 'random';
     }
 
     selectMapConfig() {
+        if (this.runState && this.runState.selectMapConfig) {
+            this.runState.syncFromEngine(this);
+            const selection = this.runState.selectMapConfig();
+            this.runState.applyMapSelection(selection).syncToEngine(this);
+            return selection;
+        }
         if (this.runMapSelection && this.runMapSelection !== 'random' && MapConfigs[this.runMapSelection]) {
             return { key: this.runMapSelection, config: MapConfigs[this.runMapSelection] };
         }
@@ -107,6 +133,7 @@ class GameEngine {
     }
 
     getHudElements() {
+        if (this.hudAdapter && this.hudAdapter.getElements) return this.hudAdapter.getElements();
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) return this.hud.getElements();
         if (!this._hudState) this._hudState = {};
@@ -153,6 +180,7 @@ class GameEngine {
     }
 
     ensureBossHudRows(count) {
+        if (this.hudAdapter && this.hudAdapter.ensureBossRows) return this.hudAdapter.ensureBossRows(count);
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) return this.hud.ensureBossRows(count);
         const hud = this.getHudElements();
@@ -178,11 +206,18 @@ class GameEngine {
     }
 
     getVisibleBossEncounters() {
+        if (this.encounterService && this.encounterService.getVisibleBossEncounters) {
+            return this.encounterService.getVisibleBossEncounters(this);
+        }
         return (this.enemies || [])
             .filter(enemy => enemy && (enemy.isBossTier || enemy.isBoss) && enemy.hp > 0 && (enemy.hasTakenPlayerDamage || enemy.isAggroed));
     }
 
     setHudText(key, element, value) {
+        if (this.hudAdapter && this.hudAdapter.setText) {
+            this.hudAdapter.setText(key, element, value);
+            return;
+        }
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) {
             this.hud.setText(key, element, value);
@@ -197,6 +232,10 @@ class GameEngine {
     }
 
     setHudStyle(key, element, property, value) {
+        if (this.hudAdapter && this.hudAdapter.setStyle) {
+            this.hudAdapter.setStyle(key, element, property, value);
+            return;
+        }
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) {
             this.hud.setStyle(key, element, property, value);
@@ -211,6 +250,10 @@ class GameEngine {
     }
 
     setHudItemIcon(slotKey, element, item, fallbackText, fallbackColor) {
+        if (this.hudAdapter && this.hudAdapter.setItemIcon) {
+            this.hudAdapter.setItemIcon(slotKey, element, item, fallbackText, fallbackColor);
+            return;
+        }
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) {
             this.hud.setItemIcon(slotKey, element, item, fallbackText, fallbackColor);
@@ -237,6 +280,10 @@ class GameEngine {
     }
 
     setHudHidden(key, element, hidden) {
+        if (this.hudAdapter && this.hudAdapter.setHidden) {
+            this.hudAdapter.setHidden(key, element, hidden);
+            return;
+        }
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) {
             this.hud.setHidden(key, element, hidden);
@@ -257,11 +304,19 @@ class GameEngine {
     }
 
     showInteractionHint(text) {
+        if (this.hudAdapter && this.hudAdapter.showInteractionHint) {
+            this.hudAdapter.showInteractionHint(text);
+            return;
+        }
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) this.hud.showInteractionHint(text);
     }
 
     hideInteractionHint() {
+        if (this.hudAdapter && this.hudAdapter.hideInteractionHint) {
+            this.hudAdapter.hideInteractionHint();
+            return;
+        }
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) this.hud.hideInteractionHint();
     }
@@ -319,6 +374,9 @@ class GameEngine {
     }
 
     generateFloor(isNextFloor) {
+        if (this.floorOrchestrator && this.floorOrchestrator.generateFloor && !this._usingLegacyFloorGeneration) {
+            return this.floorOrchestrator.generateFloor(this, isNextFloor);
+        }
         const selectedMap = this.selectMapConfig();
         this.currentMapKey = selectedMap.key;
         this.currentMapConfig = selectedMap.config;
@@ -459,10 +517,17 @@ class GameEngine {
     }
 
     getEffectiveFloorLevel() {
+        if (this.runState && this.runState.getEffectiveFloorLevel) {
+            this.runState.syncFromEngine(this);
+            return this.runState.getEffectiveFloorLevel();
+        }
         return (this.currentFloor - 1) + (this.gearDifficultyFloor || 1);
     }
 
     createBossEnemy(x, y, encounterProfile, hpMult, dmgMult, extraOptions = {}) {
+        if (this.encounterService && this.encounterService.createBossEnemy) {
+            return this.encounterService.createBossEnemy(this, x, y, encounterProfile, hpMult, dmgMult, extraOptions);
+        }
         const enemy = new Enemy(x, y, encounterProfile.baseType || 'boss', hpMult, dmgMult, {
             ...extraOptions,
             bossProfile: encounterProfile,
@@ -787,6 +852,9 @@ class GameEngine {
         }
         this._hudElements = null;
         this._hudState = {};
+        if (this.hudAdapter && this.hudAdapter.destroy) {
+            this.hudAdapter.destroy();
+        }
         if (this.hud) {
             this.hud._elements = null;
             this.hud._state = {};
@@ -815,16 +883,21 @@ class GameEngine {
     }
 
     getElementConfig(element) {
+        if (this.combatSystem && this.combatSystem.getElementConfig) return this.combatSystem.getElementConfig(element);
         if (!element || typeof CombatConfig === 'undefined' || !CombatConfig.elemental) return null;
         return CombatConfig.elemental[element] || null;
     }
 
     getStatusEffect(target, type) {
+        if (this.combatSystem && this.combatSystem.getStatusEffect) return this.combatSystem.getStatusEffect(target, type);
         if (!target.statusEffects) target.statusEffects = [];
         return target.statusEffects.find(effect => effect.type === type);
     }
 
     applyStatusEffect(target, type, values = {}) {
+        if (this.combatSystem && this.combatSystem.applyStatusEffect) {
+            return this.combatSystem.applyStatusEffect(target, type, values);
+        }
         if (!target || !type) return null;
         if (!target.statusEffects) target.statusEffects = [];
 
@@ -859,6 +932,9 @@ class GameEngine {
     }
 
     applyElementalHit(target, projectile) {
+        if (this.combatSystem && this.combatSystem.applyElementalHit) {
+            return this.combatSystem.applyElementalHit(target, projectile);
+        }
         if (!target || !projectile || !projectile.element) return;
 
         const config = this.getElementConfig(projectile.element);
@@ -912,11 +988,17 @@ class GameEngine {
     }
 
     getDamageTakenMultiplier(target) {
+        if (this.combatSystem && this.combatSystem.getDamageTakenMultiplier) {
+            return this.combatSystem.getDamageTakenMultiplier(target);
+        }
         const amplify = this.getStatusEffect(target, 'amplify');
         return amplify ? amplify.damageTakenMultiplier || 1 : 1;
     }
 
     dealStatusDamage(target, amount) {
+        if (this.combatSystem && this.combatSystem.dealStatusDamage) {
+            return this.combatSystem.dealStatusDamage(this, target, amount);
+        }
         if (!target || amount <= 0) return 0;
         if (target === this.player && typeof DevConfig !== 'undefined' && DevConfig.godMode) return 0;
 
@@ -926,12 +1008,18 @@ class GameEngine {
     }
 
     showStatusDamageText(target, amount, color) {
+        if (this.combatSystem && this.combatSystem.showStatusDamageText) {
+            return this.combatSystem.showStatusDamageText(this, target, amount, color);
+        }
         if (!target || amount <= 0 || !this.combatFeedback || !this.combatFeedback.addText) return;
 
         this.combatFeedback.addText(`-${Math.round(amount)}`, target.x, target.y - 14, color || '#ff0000', 12, 0.75);
     }
 
     processStatusEffects(target, dt) {
+        if (this.combatSystem && this.combatSystem.processStatusEffects) {
+            return this.combatSystem.processStatusEffects(this, target, dt);
+        }
         if (!target || !target.statusEffects) return;
 
         let speedMultiplier = 1;
@@ -967,6 +1055,9 @@ class GameEngine {
     }
 
     hasStatusEffect(target, type) {
+        if (this.combatSystem && this.combatSystem.hasStatusEffect) {
+            return this.combatSystem.hasStatusEffect(target, type);
+        }
         return Boolean(target && target.statusEffects && target.statusEffects.some(effect => effect.type === type));
     }
 
@@ -1041,6 +1132,9 @@ class GameEngine {
     }
 
     consumePlayerTrinketAbilities() {
+        if (this.abilitySystem && this.abilitySystem.consumePlayerTrinketAbilities) {
+            return this.abilitySystem.consumePlayerTrinketAbilities(this);
+        }
         if (!this.player || !this.player.pendingTrinketAbilities || this.player.pendingTrinketAbilities.length === 0) return;
 
         const abilities = this.player.pendingTrinketAbilities.splice(0);
@@ -1050,6 +1144,9 @@ class GameEngine {
     }
 
     resolveTrinketAbility(request) {
+        if (this.abilitySystem && this.abilitySystem.resolveTrinketAbility) {
+            return this.abilitySystem.resolveTrinketAbility(this, request);
+        }
         if (!request || !request.ability || !this.player) return false;
 
         const ability = request.ability;
@@ -1517,6 +1614,9 @@ class GameEngine {
     }
 
     getEnemyTargetForEnemy(enemy) {
+        if (this.abilitySystem && this.abilitySystem.getEnemyTargetForEnemy) {
+            return this.abilitySystem.getEnemyTargetForEnemy(this, enemy);
+        }
         if (!enemy || !this.decoys || this.decoys.length === 0) return this.player;
 
         let bestDecoy = null;
@@ -1643,7 +1743,9 @@ class GameEngine {
             }
 
             // Update Minimap Fog of War
-            if (typeof MinimapConfig !== 'undefined') {
+            if (this.minimapService && this.minimapService.revealAroundPlayer) {
+                this.minimapService.revealAroundPlayer(this);
+            } else if (typeof MinimapConfig !== 'undefined') {
                 const pX = Math.floor(this.player.x / this.mapGen.tileSize);
                 const pY = Math.floor(this.player.y / this.mapGen.tileSize);
                 const vr = MinimapConfig.visionRadius;
@@ -2098,6 +2200,9 @@ class GameEngine {
     }
 
     getCurrentMapDisplayName() {
+        if (this.minimapService && this.minimapService.getCurrentMapDisplayName) {
+            return this.minimapService.getCurrentMapDisplayName(this);
+        }
         const config = this.currentMapConfig || {};
         if (config.displayName) return config.displayName;
         if (!this.currentMapKey) return 'Unknown Map';
@@ -2108,6 +2213,9 @@ class GameEngine {
     }
 
     getResponsiveMinimapSize() {
+        if (this.minimapService && this.minimapService.getResponsiveMinimapSize) {
+            return this.minimapService.getResponsiveMinimapSize(this);
+        }
         if (typeof MinimapConfig === 'undefined') {
             return { width: 300, height: 300, xOffset: 20, yOffset: 20 };
         }
@@ -2123,6 +2231,9 @@ class GameEngine {
     }
 
     getCanvasCssToBackingScale() {
+        if (this.minimapService && this.minimapService.getCanvasCssToBackingScale) {
+            return this.minimapService.getCanvasCssToBackingScale(this);
+        }
         if (!this.canvas) return { x: 1, y: 1, uniform: 1 };
 
         const rect = this.canvas.getBoundingClientRect ? this.canvas.getBoundingClientRect() : null;
@@ -2134,6 +2245,9 @@ class GameEngine {
     }
 
     getMinimapRenderConfig(cssSize = this.getResponsiveMinimapSize()) {
+        if (this.minimapService && this.minimapService.getMinimapRenderConfig) {
+            return this.minimapService.getMinimapRenderConfig(this, cssSize);
+        }
         if (typeof MinimapConfig === 'undefined') {
             return null;
         }
@@ -2151,6 +2265,9 @@ class GameEngine {
     }
 
     getInventoryPaneLayout(viewportWidth, viewportHeight, headerHeight = 0, options = {}) {
+        if (this.minimapService && this.minimapService.getInventoryPaneLayout) {
+            return this.minimapService.getInventoryPaneLayout(viewportWidth, viewportHeight, headerHeight, options);
+        }
         const isLargeFormFactor = viewportWidth >= 1000 && viewportHeight >= 1000;
         const gap = options.gap ?? (isLargeFormFactor ? 16 : 12);
         const panePadding = options.panePadding ?? (isLargeFormFactor ? 24 : 12);
@@ -2174,6 +2291,9 @@ class GameEngine {
     }
 
     updateMinimapInfoUI() {
+        if (this.minimapService && this.minimapService.updateInfo) {
+            return this.minimapService.updateInfo(this);
+        }
         const hud = this.getHudElements();
         if (!hud.minimapHud || !hud.minimapInfo || !hud.minimapFloorLabel || !hud.minimapMapLabel) return;
 
@@ -2196,6 +2316,9 @@ class GameEngine {
     }
 
     spawnBossRoomEntities(effectiveFloorLevel) {
+        if (this.encounterService && this.encounterService.spawnBossRoomEntities) {
+            return this.encounterService.spawnBossRoomEntities(this, effectiveFloorLevel);
+        }
         const bossRoom = this.mapGen.bossRoom;
         if (!bossRoom) return;
 
@@ -2226,6 +2349,9 @@ class GameEngine {
     }
 
     spawnFloorGuardian(startPos, effectiveFloorLevel) {
+        if (this.encounterService && this.encounterService.spawnFloorGuardian) {
+            return this.encounterService.spawnFloorGuardian(this, startPos, effectiveFloorLevel);
+        }
         if (typeof BossConfig === 'undefined' || !BossConfig.pickFloorGuardian) return null;
         if (Math.random() >= 0.08) return null;
 
@@ -2252,6 +2378,9 @@ class GameEngine {
     }
 
     dropBossEncounterLoot(enemy) {
+        if (this.encounterService && this.encounterService.dropBossEncounterLoot) {
+            return this.encounterService.dropBossEncounterLoot(this, enemy);
+        }
         if (!enemy) return;
         if (!enemy.bossTier || enemy.bossTier === 'mainBoss') {
             LootChest.dropChestLoot(enemy.x, enemy.y, this, 'Boss Defeated!');
@@ -2438,6 +2567,9 @@ class GameEngine {
     }
 
     render(dt) {
+        if (this.gameRenderer && this.gameRenderer.render && !this._usingLegacyRenderer) {
+            return this.gameRenderer.render(this, dt);
+        }
         if (this.state !== 'PLAYING') return;
 
         this.renderer.clear();
@@ -2582,10 +2714,10 @@ class GameEngine {
         this.stop();
 
         // Save equipment
-        if (this.player && this.player.equipment) {
-            if (typeof InventoryStore !== 'undefined') {
-                InventoryStore.saveEquipment(this.player.equipment);
-            }
+        if (this.loadoutService) {
+            this.loadoutService.saveEquipment(this.player);
+        } else if (this.player && this.player.equipment) {
+            if (typeof InventoryStore !== 'undefined') InventoryStore.saveEquipment(this.player.equipment);
         }
 
         // Pass inventory to main.js to handle the extraction screen
@@ -2601,7 +2733,9 @@ class GameEngine {
         this.stop();
 
         // Wipe equipment (penalty)
-        if (typeof InventoryStore !== 'undefined') {
+        if (this.loadoutService) {
+            this.loadoutService.applyDeathPenalty();
+        } else if (typeof InventoryStore !== 'undefined') {
             InventoryStore.clearEquipment();
         }
         // Keep stash untouched

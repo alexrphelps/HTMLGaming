@@ -140,6 +140,44 @@ describe('Gloomvault GameEngine loop and debug safeguards', () => {
     ]).toEqual([1, 1, 1, 'PLAYING', true]);
   });
 
+  test('start delegates first floor creation through the floor orchestrator service', () => {
+    const requestAnimationFrame = jest.fn(() => 303);
+    const context = createBrowserContext({
+      requestAnimationFrame,
+      cancelAnimationFrame: jest.fn(),
+      performance: { now: jest.fn(() => 250) }
+    });
+    const { GameEngine } = loadGloomvault('core/GameEngine.js', ['GameEngine'], context);
+    const floorOrchestrator = {
+      generateFloor: jest.fn(engine => {
+        engine.player = { x: 20, y: 30 };
+        engine.combatFeedback = { addText: jest.fn() };
+      })
+    };
+    const engine = Object.assign(Object.create(GameEngine.prototype), {
+      state: 'MENU',
+      player: null,
+      isRunning: false,
+      _animationFrameId: null,
+      lastTime: 0,
+      canvas: {},
+      currentFloor: 1,
+      floorOrchestrator,
+      input: { attach: jest.fn() },
+      resizeCanvas: jest.fn()
+    });
+
+    engine.start();
+    engine.start();
+
+    expect([
+      floorOrchestrator.generateFloor.mock.calls.length,
+      floorOrchestrator.generateFloor.mock.calls[0][1],
+      requestAnimationFrame.mock.calls.length,
+      engine.state
+    ]).toEqual([1, false, 1, 'PLAYING']);
+  });
+
   test('pauseLoop and resumeLoop are idempotent around overlay open and close', () => {
     const requestAnimationFrame = jest.fn(() => 202);
     const cancelAnimationFrame = jest.fn();
@@ -2050,6 +2088,24 @@ describe('Gloomvault MapGen', () => {
     expect([map.getTile(2, 2), map.getTile(-1, 0), map.getValidFloorPosNear(0, 0)]).toEqual([1, 0, { x: 25, y: 25 }]);
   });
 
+  test('MapGen facade wires layout and position services when available', () => {
+    const context = createBrowserContext();
+    loadGloomvault('systems/MapPositionService.js', ['MapPositionService'], context);
+    loadGloomvault('systems/MapLayoutRegistry.js', ['MapLayoutRegistry'], context);
+    loadGloomvault('systems/MapTopologyService.js', ['MapTopologyService'], context);
+    loadGloomvault('systems/BossRoomPlanner.js', ['BossRoomPlanner'], context);
+    const { MapGen } = loadGloomvault('systems/MapGen.js', ['MapGen'], context);
+    const map = new MapGen({ cols: 20, rows: 20, numRooms: 1, minRoomSize: 3, maxRoomSize: 4, perfectSquareChance: 1, blobMinRects: 1, blobMaxRects: 1, layoutType: 'sequential' }, 10);
+    const picked = map.pickWithDistance([{ x: 1, y: 1 }], 1, [], 0);
+
+    expect([
+      Boolean(map.layoutRegistry),
+      Boolean(map.positionService),
+      map.tileToWorld(1, 1),
+      picked
+    ]).toEqual([true, true, { x: 15, y: 15 }, [{ x: 15, y: 15 }]]);
+  });
+
   test('room and corridor carving respect configured edge padding', () => {
     const context = createBrowserContext();
     const { MapGen } = loadGloomvault('systems/MapGen.js', ['MapGen'], context);
@@ -3816,6 +3872,38 @@ describe('Gloomvault equipment and inventory services', () => {
       armor.maxDurability,
       durabilityConfig.calculateMaxDurability.mock.calls.length
     ]).toEqual([undefined, undefined, 42, 42, 1]);
+  });
+
+  test('LoadoutService centralizes equipment normalization, gear score, saves, and death penalty', () => {
+    const savedEquipment = { weapon: { id: 'wand', type: 'weapon', gearScore: 12 } };
+    const localStorage = {
+      getItem: jest.fn(key => key === 'gloomvault_equipment' ? JSON.stringify(savedEquipment) : null),
+      setItem: jest.fn(),
+      removeItem: jest.fn()
+    };
+    const context = createBrowserContext({
+      localStorage,
+      DifficultyConfig: { minStartingFloor: 1, gearScorePerFloor: 10 }
+    });
+    loadGloomvault('systems/EquipmentService.js', ['EquipmentService'], context);
+    loadGloomvault('systems/InventoryStore.js', ['InventoryStore'], context);
+    loadGloomvault('config/DurabilityConfig.js', ['DurabilityConfig'], context);
+    const { LoadoutService } = loadGloomvault('systems/LoadoutService.js', ['LoadoutService'], context);
+    const player = { recalculateStats: jest.fn() };
+
+    const loadout = new LoadoutService().preparePlayerForRun(player);
+    new LoadoutService().saveEquipment(player);
+    new LoadoutService().applyDeathPenalty();
+
+    expect([
+      player.equipment.weapon.id,
+      player.equipment.weapon2.id,
+      loadout.gearScore,
+      loadout.gearDifficultyFloor,
+      player.recalculateStats.mock.calls.length,
+      localStorage.setItem.mock.calls[0][0],
+      localStorage.removeItem.mock.calls.some(call => call[0] === 'gloomvault_equipment')
+    ]).toEqual(['wand', 'starter_wep2', 27, 2, 1, 'gloomvault_equipment', true]);
   });
 });
 

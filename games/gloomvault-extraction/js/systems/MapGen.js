@@ -9,6 +9,10 @@ class MapGen {
         this.rooms = [];
         this.bossRoom = null;
         this.mainReachableFloor = new Set();
+        this.layoutRegistry = typeof MapLayoutRegistry !== 'undefined' ? new MapLayoutRegistry(this) : null;
+        this.topologyService = typeof MapTopologyService !== 'undefined' ? new MapTopologyService(this) : null;
+        this.bossRoomPlanner = typeof BossRoomPlanner !== 'undefined' ? new BossRoomPlanner(this) : null;
+        this.positionService = typeof MapPositionService !== 'undefined' ? new MapPositionService() : null;
     }
 
     getEdgePaddingTiles() {
@@ -131,15 +135,19 @@ class MapGen {
         this.mainReachableFloor = new Set();
 
         const layoutType = this.config.layoutType || 'sequential';
-        const layoutGenerators = {
-            hub: () => this.generateHubLayout(),
-            linear: () => this.generateLinearLayout(),
-            cluster: () => this.generateClusterLayout(),
-            ring: () => this.generateRingLayout(),
-            structured: () => this.generateStructuredLayout(),
-            sequential: () => this.generateSequentialLayout()
-        };
-        (layoutGenerators[layoutType] || layoutGenerators.sequential)();
+        if (this.layoutRegistry && this.layoutRegistry.generate) {
+            this.layoutRegistry.generate(layoutType);
+        } else {
+            const layoutGenerators = {
+                hub: () => this.generateHubLayout(),
+                linear: () => this.generateLinearLayout(),
+                cluster: () => this.generateClusterLayout(),
+                ring: () => this.generateRingLayout(),
+                structured: () => this.generateStructuredLayout(),
+                sequential: () => this.generateSequentialLayout()
+            };
+            (layoutGenerators[layoutType] || layoutGenerators.sequential)();
+        }
 
         // Apply a single pass of cellular automata to smooth out some sharp edges while keeping others
         if (this.config.smoothingPasses > 0) {
@@ -1230,6 +1238,9 @@ class MapGen {
     }
 
     tileToWorld(x, y) {
+        if (this.positionService && this.positionService.tileToWorld) {
+            return this.positionService.tileToWorld(this, x, y);
+        }
         return {
             x: x * this.tileSize + this.tileSize / 2,
             y: y * this.tileSize + this.tileSize / 2
@@ -1394,6 +1405,9 @@ class MapGen {
     }
 
     pickPositionsByDistance(validTiles, count, excludePositions, minDistance, toPosition) {
+        if (this.positionService && this.positionService.pickPositionsByDistance) {
+            return this.positionService.pickPositionsByDistance(validTiles, count, excludePositions, minDistance, toPosition);
+        }
         const res = [];
         const copy = [...validTiles];
         const allExclusions = [...excludePositions];
