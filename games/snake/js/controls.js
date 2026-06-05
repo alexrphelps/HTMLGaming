@@ -168,7 +168,7 @@ if (typeof settingsSaveBtn !== 'undefined' && settingsSaveBtn) {
       settings.initialLength = parseInt(initialLengthSelect.value, 10);
     }
     if (typeof numObstaclesInput !== 'undefined' && numObstaclesInput) {
-      settings.obstacles = parseInt(numObstaclesInput.value, 10) || 0;
+      settings.numObstacles = parseInt(numObstaclesInput.value, 10) || 0;
     }
     if (typeof redGrowInput !== 'undefined' && redGrowInput) {
       settings.redGrow = parseInt(redGrowInput.value, 10) || 0;

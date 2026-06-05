@@ -1,23 +1,86 @@
 // Game state variables
 
-// Game loop abstraction (rAF) - migrated from setInterval
+// Game loop abstraction (rAF)
 let snakeGameLoop = null;
-try {
-  const GameLoop = require('../../../utils/GameLoop');
-  function startSnakeGameLoop() {
-    if (snakeGameLoop) return;
-    snakeGameLoop = new GameLoop({ tick: () => { try { gameLoop(); } catch (e) { console.error(e); } }, maxDelta: 200 });
-    snakeGameLoop.start();
+function requestSnakeFrame(callback) {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    return { type: 'raf', id: window.requestAnimationFrame(callback) };
   }
+  return { type: 'timeout', id: setTimeout(() => callback(Date.now()), ANIMATION_INTERVAL) };
+}
 
-  function stopSnakeGameLoop() {
-    if (!snakeGameLoop) return;
-    try { snakeGameLoop.stop(); } catch (e) {}
-    snakeGameLoop = null;
+function cancelSnakeFrame(frame) {
+  if (!frame) return;
+  if (frame.type === 'raf' && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(frame.id);
+  } else {
+    clearTimeout(frame.id);
   }
-} catch (e) {
-  // If GameLoop is not available in environment, leave fallback to setInterval
+}
+
+function startSnakeGameLoop() {
+  if (snakeGameLoop) return;
+
+  snakeGameLoop = {
+    frame: null,
+    lastTime: 0,
+    accumulator: 0,
+    running: true
+  };
+
+  const tick = (timestamp) => {
+    if (!snakeGameLoop || !snakeGameLoop.running) return;
+
+    const now = typeof timestamp === 'number' ? timestamp : Date.now();
+    const lastTime = snakeGameLoop.lastTime || now;
+    const delta = Math.min(now - lastTime, 200);
+    const interval = Math.max(1, baseInterval || BASE_GAME_INTERVAL);
+
+    snakeGameLoop.lastTime = now;
+    snakeGameLoop.accumulator += delta;
+
+    while (snakeGameLoop.accumulator >= interval) {
+      try {
+        gameLoop();
+      } catch (error) {
+        console.error("Snake game loop failed:", error);
+        stopSnakeGameLoop();
+        return;
+      }
+      snakeGameLoop.accumulator -= interval;
+    }
+
+    snakeGameLoop.frame = requestSnakeFrame(tick);
+  };
+
+  snakeGameLoop.frame = requestSnakeFrame(tick);
+}
+
+function stopSnakeGameLoop() {
+  if (!snakeGameLoop) return;
+  snakeGameLoop.running = false;
+  cancelSnakeFrame(snakeGameLoop.frame);
   snakeGameLoop = null;
+}
+
+function startSnakeRenderLoop() {
+  if (animationInterval) return;
+
+  const render = () => {
+    animationInterval = null;
+    if (typeof drawGameState === 'function') {
+      drawGameState();
+    }
+    animationInterval = requestSnakeFrame(render);
+  };
+
+  animationInterval = requestSnakeFrame(render);
+}
+
+function stopSnakeRenderLoop() {
+  if (!animationInterval) return;
+  cancelSnakeFrame(animationInterval);
+  animationInterval = null;
 }
 
 // DOM elements
@@ -888,6 +951,148 @@ function checkWinConditions() {
 }
 
 /**
+ * Build a consistent Snake-styled overlay dialog.
+ */
+function showSnakeDialogOverlay({ id = 'winOverlay', title, details, buttons = [] }) {
+  const existingOverlay = document.getElementById(id);
+  if (existingOverlay) {
+    existingOverlay.remove();
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.style.cssText = `
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    height: 300px;
+    background: rgba(0, 0, 0, 0.9);
+    border: 3px solid #00FF00;
+    border-radius: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 0 30px #00FF00, inset 0 0 20px rgba(0, 255, 0, 0.1);
+    backdrop-filter: blur(5px);
+  `;
+
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    padding: 30px;
+    border-radius: 15px;
+    text-align: center;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+    border: 2px solid #00FF00;
+  `;
+
+  const message = document.createElement('div');
+  message.style.cssText = `
+    font-size: 28px;
+    font-weight: bold;
+    color: #00FF00;
+    margin-bottom: 15px;
+    text-shadow: 0 0 10px #00FF00;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  `;
+  message.textContent = title;
+  dialog.appendChild(message);
+
+  const detailElement = document.createElement('div');
+  detailElement.style.cssText = `
+    font-size: 14px;
+    color: #CCCCCC;
+    margin-bottom: 25px;
+    line-height: 1.4;
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+    white-space: pre-line;
+  `;
+  detailElement.textContent = details;
+  dialog.appendChild(detailElement);
+
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = `
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+  `;
+
+  const variants = {
+    primary: {
+      color: '#000000',
+      border: '#00FF00',
+      background: 'linear-gradient(135deg, #00FF00 0%, #00CC00 100%)',
+      hoverBackground: 'linear-gradient(135deg, #00CC00 0%, #00AA00 100%)',
+      shadow: '0 0 15px rgba(0, 255, 0, 0.5)',
+      hoverShadow: '0 0 20px rgba(0, 255, 0, 0.8)'
+    },
+    secondary: {
+      color: '#00FF00',
+      border: '#00FF00',
+      background: 'linear-gradient(135deg, #333333 0%, #555555 100%)',
+      hoverBackground: 'linear-gradient(135deg, #444444 0%, #666666 100%)',
+      shadow: '0 0 15px rgba(0, 255, 0, 0.3)',
+      hoverShadow: '0 0 20px rgba(0, 255, 0, 0.6)'
+    }
+  };
+
+  buttons.forEach(({ label, onClick, variant = 'primary' }) => {
+    const style = variants[variant] || variants.primary;
+    const button = document.createElement('button');
+    button.textContent = label;
+    button.style.cssText = `
+      padding: 12px 24px;
+      font-size: 16px;
+      background: ${style.background};
+      color: ${style.color};
+      border: 2px solid ${style.border};
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      box-shadow: ${style.shadow};
+    `;
+    button.onmouseover = () => {
+      button.style.background = style.hoverBackground;
+      button.style.transform = 'translateY(-2px)';
+      button.style.boxShadow = style.hoverShadow;
+    };
+    button.onmouseout = () => {
+      button.style.background = style.background;
+      button.style.transform = 'translateY(0)';
+      button.style.boxShadow = style.shadow;
+    };
+    button.onclick = onClick;
+    buttonContainer.appendChild(button);
+  });
+
+  dialog.appendChild(buttonContainer);
+  overlay.appendChild(dialog);
+
+  const container = document.getElementById('gameContainer');
+  if (container) {
+    container.style.position = 'relative';
+    container.appendChild(overlay);
+  } else {
+    document.body.appendChild(overlay);
+  }
+
+  return overlay;
+}
+
+/**
  * NEW: Show win overlay with Next Level and Continue buttons
  */
 function showWinOverlay(objective) {
@@ -909,71 +1114,9 @@ function showWinOverlay(objective) {
   if (gameInterval) {
     clearInterval(gameInterval);
   }
-  if (animationInterval) {
-    clearInterval(animationInterval);
+  if (typeof stopSnakeRenderLoop === 'function') {
+    stopSnakeRenderLoop();
   }
-  
-  // Create overlay positioned over the game board
-  const overlay = document.createElement('div');
-  overlay.id = 'winOverlay';
-  overlay.style.cssText = `
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 400px;
-    height: 300px;
-    background: rgba(0, 0, 0, 0.9);
-    border: 3px solid #00FF00;
-    border-radius: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000;
-    font-family: Arial, sans-serif;
-    box-shadow: 0 0 30px #00FF00, inset 0 0 20px rgba(0, 255, 0, 0.1);
-    backdrop-filter: blur(5px);
-  `;
-  
-  // Create dialog
-  const dialog = document.createElement('div');
-  dialog.style.cssText = `
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    padding: 30px;
-    border-radius: 15px;
-    text-align: center;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-    border: 2px solid #00FF00;
-  `;
-  
-  // Create message
-  const message = document.createElement('div');
-  message.style.cssText = `
-    font-size: 28px;
-    font-weight: bold;
-    color: #00FF00;
-    margin-bottom: 15px;
-    text-shadow: 0 0 10px #00FF00;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-  `;
-  message.textContent = 'You Won!';
-  dialog.appendChild(message);
-  
-  // Create objective details
-  const details = document.createElement('div');
-  details.style.cssText = `
-    font-size: 14px;
-    color: #CCCCCC;
-    margin-bottom: 25px;
-    line-height: 1.4;
-    text-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
-  `;
   
   let detailText = '';
   switch (objective.type) {
@@ -993,93 +1136,15 @@ function showWinOverlay(objective) {
       detailText = `You were the last snake standing!\n\nEnemies Defeated: ${aiSnakes.length - aliveAiCount}`;
       break;
   }
-  
-  details.textContent = detailText;
-  dialog.appendChild(details);
-  
-  // Create button container
-  const buttonContainer = document.createElement('div');
-  buttonContainer.style.cssText = `
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-  `;
-  
-  // Next Level button
-  const nextLevelBtn = document.createElement('button');
-  nextLevelBtn.textContent = 'Next Level';
-  nextLevelBtn.style.cssText = `
-    padding: 12px 24px;
-    font-size: 16px;
-    background: linear-gradient(135deg, #00FF00 0%, #00CC00 100%);
-    color: #000000;
-    border: 2px solid #00FF00;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
-  `;
-  nextLevelBtn.onmouseover = () => {
-    nextLevelBtn.style.background = 'linear-gradient(135deg, #00CC00 0%, #00AA00 100%)';
-    nextLevelBtn.style.transform = 'translateY(-2px)';
-    nextLevelBtn.style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.8)';
-  };
-  nextLevelBtn.onmouseout = () => {
-    nextLevelBtn.style.background = 'linear-gradient(135deg, #00FF00 0%, #00CC00 100%)';
-    nextLevelBtn.style.transform = 'translateY(0)';
-    nextLevelBtn.style.boxShadow = '0 0 15px rgba(0, 255, 0, 0.5)';
-  };
-  nextLevelBtn.onclick = () => handleNextLevel();
-  
-  // Continue button
-  const continueBtn = document.createElement('button');
-  continueBtn.textContent = 'Continue';
-  continueBtn.style.cssText = `
-    padding: 12px 24px;
-    font-size: 16px;
-    background: linear-gradient(135deg, #333333 0%, #555555 100%);
-    color: #00FF00;
-    border: 2px solid #00FF00;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
-  `;
-  continueBtn.onmouseover = () => {
-    continueBtn.style.background = 'linear-gradient(135deg, #444444 0%, #666666 100%)';
-    continueBtn.style.transform = 'translateY(-2px)';
-    continueBtn.style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.6)';
-  };
-  continueBtn.onmouseout = () => {
-    continueBtn.style.background = 'linear-gradient(135deg, #333333 0%, #555555 100%)';
-    continueBtn.style.transform = 'translateY(0)';
-    continueBtn.style.boxShadow = '0 0 15px rgba(0, 255, 0, 0.3)';
-  };
-  continueBtn.onclick = () => handleContinueLevel();
-  
-  // Add buttons to container
-  buttonContainer.appendChild(nextLevelBtn);
-  buttonContainer.appendChild(continueBtn);
-  dialog.appendChild(buttonContainer);
-  
-  // Add dialog to overlay
-  overlay.appendChild(dialog);
-  
-  // Add overlay to game container
-  const gameContainer = document.getElementById('gameContainer');
-  if (gameContainer) {
-    gameContainer.style.position = 'relative'; // Ensure game container can contain positioned elements
-    gameContainer.appendChild(overlay);
-  } else {
-    // Fallback to body if game container not found
-    document.body.appendChild(overlay);
-  }
+
+  showSnakeDialogOverlay({
+    title: 'You Won!',
+    details: detailText,
+    buttons: [
+      { label: 'Next Level', onClick: () => handleNextLevel(), variant: 'primary' },
+      { label: 'Continue', onClick: () => handleContinueLevel(), variant: 'secondary' }
+    ]
+  });
   
   // Show the existing side buttons (Restart and Main Menu)
   if (typeof gameControlsElement !== 'undefined' && gameControlsElement) {
@@ -1121,105 +1186,23 @@ function handleNextLevel() {
  * NEW: Show all levels complete overlay
  */
 function showAllLevelsCompleteOverlay() {
-  // Remove any existing overlay
-  const existingOverlay = document.getElementById('winOverlay');
-  if (existingOverlay) {
-    existingOverlay.remove();
-  }
-  
-  // Create new overlay for all levels complete
-  const overlay = document.createElement('div');
-  overlay.id = 'winOverlay';
-  overlay.style.cssText = `
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 400px;
-    height: 300px;
-    background: rgba(0, 0, 0, 0.9);
-    border: 3px solid #00FF00;
-    border-radius: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000;
-    font-family: Arial, sans-serif;
-    box-shadow: 0 0 30px #00FF00, inset 0 0 20px rgba(0, 255, 0, 0.1);
-    backdrop-filter: blur(5px);
-  `;
-  
-  const dialog = document.createElement('div');
-  dialog.style.cssText = `
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    padding: 30px;
-    border-radius: 15px;
-    text-align: center;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-    border: 2px solid #00FF00;
-  `;
-  
-  const message = document.createElement('div');
-  message.style.cssText = `
-    font-size: 24px;
-    font-weight: bold;
-    color: #00FF00;
-    margin-bottom: 20px;
-    text-shadow: 0 0 10px #00FF00;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-  `;
-  message.textContent = 'All Levels Complete!';
-  
-  const details = document.createElement('div');
-  details.style.cssText = `
-    font-size: 14px;
-    color: #CCCCCC;
-    margin-bottom: 25px;
-    line-height: 1.4;
-    text-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
-  `;
-  details.textContent = 'Congratulations! You have completed all levels!';
-  
-  const button = document.createElement('button');
-  button.textContent = 'Return to Menu';
-  button.style.cssText = `
-    padding: 12px 24px;
-    font-size: 16px;
-    background: linear-gradient(135deg, #00FF00 0%, #00CC00 100%);
-    color: #000000;
-    border: 2px solid #00FF00;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
-  `;
-  button.onclick = () => {
-    overlay.remove();
-    if (typeof GameManager !== 'undefined' && GameManager.returnToLevelSelection) {
-      GameManager.returnToLevelSelection();
-    }
-  };
-  
-  dialog.appendChild(message);
-  dialog.appendChild(details);
-  dialog.appendChild(button);
-  overlay.appendChild(dialog);
-  
-  const gameContainer = document.getElementById('gameContainer');
-  if (gameContainer) {
-    gameContainer.appendChild(overlay);
-  } else {
-    document.body.appendChild(overlay);
-  }
+  showSnakeDialogOverlay({
+    title: 'All Levels Complete!',
+    details: 'Congratulations! You have completed all levels!',
+    buttons: [
+      {
+        label: 'Return to Menu',
+        onClick: () => {
+          const overlay = document.getElementById('winOverlay');
+          if (overlay) overlay.remove();
+          if (typeof GameManager !== 'undefined' && GameManager.returnToLevelSelection) {
+            GameManager.returnToLevelSelection();
+          }
+        },
+        variant: 'primary'
+      }
+    ]
+  });
   
   // Show the existing side buttons (Restart and Main Menu)
   if (typeof gameControlsElement !== 'undefined' && gameControlsElement) {
@@ -1253,7 +1236,9 @@ function handleContinueLevel() {
     startSnakeGameLoop();
   } else if (typeof baseInterval !== 'undefined') {
     gameInterval = setInterval(gameLoop, baseInterval);
-    animationInterval = requestAnimationFrame(animationLoop);
+  }
+  if (typeof startSnakeRenderLoop === 'function') {
+    startSnakeRenderLoop();
   }
 }
 

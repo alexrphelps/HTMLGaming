@@ -446,8 +446,8 @@ const LevelManager = {
     if (typeof gameInterval !== 'undefined' && gameInterval) {
       clearInterval(gameInterval);
     }
-    if (typeof animationInterval !== 'undefined' && animationInterval) {
-      clearInterval(animationInterval);
+    if (typeof stopSnakeRenderLoop === 'function') {
+      stopSnakeRenderLoop();
     }
   },
   
@@ -498,7 +498,9 @@ const LevelManager = {
         startSnakeGameLoop();
       } else if (typeof baseInterval !== 'undefined') {
         gameInterval = setInterval(gameLoop, baseInterval);
-        animationInterval = requestAnimationFrame(animationLoop);
+      }
+      if (typeof startSnakeRenderLoop === 'function') {
+        startSnakeRenderLoop();
       }
     }
   },

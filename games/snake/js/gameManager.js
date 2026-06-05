@@ -43,8 +43,8 @@ const GameManager = {
       }
       // Draw default preview with placeholder colors AFTER setting colors
       drawSnakePreview();
-      // Start the animation loop
-      requestAnimationFrame(this.animationLoop);
+      // Start the shared render loop for menu previews and idle rendering
+      if (typeof startSnakeRenderLoop === 'function') startSnakeRenderLoop();
       console.log("Snake Battle Royale initialized - Ready to play!");
     } catch (error) {
       console.error("Error during GameManager initialization:", error);
@@ -93,9 +93,10 @@ const GameManager = {
   initGame() {
     console.log('GameManager.initGame() called');
     try {
-      // Clear any existing intervals
+      // Clear any existing loops
+      if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
       if (gameInterval) clearInterval(gameInterval);
-      if (animationInterval) clearInterval(animationInterval);
+      if (typeof stopSnakeRenderLoop === 'function') stopSnakeRenderLoop();
       console.log("Initializing game with player color:", playerColor);
       // Reset game state variables
       score = 0;
@@ -155,14 +156,8 @@ const GameManager = {
       if (typeof setCanvasAndContainerSize === 'function') setCanvasAndContainerSize();
       // Show game container
       gameContainer.style.display = 'block';
-      // Start animation loop for rendering
-      if (animationInterval) clearInterval(animationInterval);
-      function animationFrameLoop() {
-        drawGameState();
-        // Always continue animation, even after gameOver
-        window.requestAnimationFrame(animationFrameLoop);
-      }
-      window.requestAnimationFrame(animationFrameLoop);
+      // Start the shared animation loop for rendering
+      if (typeof startSnakeRenderLoop === 'function') startSnakeRenderLoop();
       // Show/hide Return to Levels button based on whether we're in a level
       const returnToLevelsBtn = document.getElementById('returnToLevelsBtn');
       if (returnToLevelsBtn) {
@@ -188,8 +183,9 @@ const GameManager = {
     console.log("GameManager: Returning to main menu and resetting state...");
     
     // Clear intervals
+    if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
     if (gameInterval) clearInterval(gameInterval);
-    if (animationInterval) clearInterval(animationInterval);
+    if (typeof stopSnakeRenderLoop === 'function') stopSnakeRenderLoop();
     
     // Reset core game state
     gameOver = false;
@@ -291,13 +287,13 @@ const GameManager = {
   resumeGame() {
     console.log('Resuming game after level completion');
     
+    if (typeof startSnakeRenderLoop === 'function') startSnakeRenderLoop();
+
     // Restart the game loop
-    // Restart the game loop (prefer rAF GameLoop)
     if (typeof startSnakeGameLoop === 'function') {
       startSnakeGameLoop();
     } else if (typeof baseInterval !== 'undefined') {
       gameInterval = setInterval(gameLoop, baseInterval);
-      animationInterval = requestAnimationFrame(animationLoop);
     }
     
     // Clear the game winner so the game can continue
@@ -310,7 +306,7 @@ const GameManager = {
   returnToLevelSelection() {
     if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
     if (gameInterval) clearInterval(gameInterval);
-    if (animationInterval) clearInterval(animationInterval);
+    if (typeof stopSnakeRenderLoop === 'function') stopSnakeRenderLoop();
     gameOver = false;
     gameWinner = null;
     playerAlive = true;
@@ -323,11 +319,7 @@ const GameManager = {
     console.log("Returned to level selection");
   },
 
-  /**
-   * Enhanced animation loop using requestAnimationFrame with improved timing
-   */
   animationLoop() {
-    drawGameState();
-    requestAnimationFrame(GameManager.animationLoop);
+    if (typeof startSnakeRenderLoop === 'function') startSnakeRenderLoop();
   }
 };

@@ -26,6 +26,26 @@ describe('Snake utility logic', () => {
     expect([parseIntSafe('7'), parseIntSafe('bad', 3), clamp(12, 0, 10), clamp(-1, 0, 10)]).toEqual([7, 3, 10, 0]);
   });
 
+  test('ConfigManager applies obstacle settings with canonical and legacy keys', () => {
+    const context = createBrowserContext({
+      INITIAL_SNAKE_LENGTH: 3,
+      NUM_OBSTACLES: 0,
+      FOOD_TYPES: {
+        red: { color: 'red', grow: 2, speedInc: 0, tempSpeedInc: 0 },
+        orange: { color: 'orange', grow: 1, speedInc: 0.25, tempSpeedInc: 0 },
+        yellow: { color: 'yellow', grow: 1, speedInc: 0, tempSpeedInc: 0.75 }
+      },
+      RUNTIME_TEMP_SPEED_BOOST_DURATION: 3000,
+      AI_DIFFICULTY: 'medium',
+      EventSystem: { emit: jest.fn() }
+    });
+    const { ConfigManager } = loadSnake(context, 'configManager.js', ['ConfigManager']);
+    ConfigManager.applySettings({ initialLength: 4, numObstacles: 7 });
+    const canonicalCount = context.NUM_OBSTACLES;
+    ConfigManager.applySettings({ initialLength: 4, obstacles: 3 });
+    expect([canonicalCount, context.NUM_OBSTACLES]).toEqual([7, 3]);
+  });
+
   test('EventSystem subscribe emit and clear methods isolate event names', () => {
     const context = createBrowserContext();
     const { EventSystem } = loadSnake(context, 'eventSystem.js', ['EventSystem']);

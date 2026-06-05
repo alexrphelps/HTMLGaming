@@ -56,8 +56,9 @@ const ConfigManager = {
    * @param {Object} settings - Object containing updated settings
    */
   applySettings(settings) {
+    const numObstacles = settings.numObstacles ?? settings.obstacles;
     INITIAL_SNAKE_LENGTH = this.validateInRange(settings.initialLength, 3, 6, this.defaults.INITIAL_SNAKE_LENGTH);
-    NUM_OBSTACLES = this.validateInRange(settings.numObstacles, 0, 50, this.defaults.NUM_OBSTACLES);
+    NUM_OBSTACLES = this.validateInRange(numObstacles, 0, 50, this.defaults.NUM_OBSTACLES);
     
     // Update food types
     FOOD_TYPES = {
