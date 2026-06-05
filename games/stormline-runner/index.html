@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stormline Runner</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main id="stormline-shell" class="stormline-shell">
+    <canvas id="game" aria-label="Stormline Runner game canvas"></canvas>
+
+    <section id="hud" class="hud" aria-live="polite">
+      <div class="hud-strip hud-left">
+        <div class="hud-block">
+          <span class="hud-label">Distance</span>
+          <strong id="distanceText">0m</strong>
+        </div>
+        <div class="hud-block">
+          <span class="hud-label">Speed</span>
+          <strong id="speedText">0</strong>
+        </div>
+        <div class="hud-block weather-readout">
+          <span class="hud-label">Storm</span>
+          <strong id="weatherText">Overcast Calm</strong>
+        </div>
+      </div>
+
+      <div class="hud-strip hud-right">
+        <div class="meter-block">
+          <span class="hud-label">Health</span>
+          <div class="meter"><div id="healthFill" class="meter-fill health-fill"></div></div>
+          <strong id="healthText">100</strong>
+        </div>
+        <div class="meter-block">
+          <span class="hud-label">Battery</span>
+          <div class="meter"><div id="batteryFill" class="meter-fill battery-fill"></div></div>
+          <strong id="batteryText">100</strong>
+        </div>
+      </div>
+
+      <div class="talent-rail">
+        <span class="hud-label">Talents</span>
+        <div id="talentList" class="talent-list"></div>
+      </div>
+    </section>
+
+    <section id="draftPanel" class="draft-panel hidden" aria-live="assertive">
+      <div class="draft-header">
+        <span id="draftStorm" class="draft-kicker">Shrine Online</span>
+        <h2>Choose a Circuit</h2>
+      </div>
+      <div id="draftCards" class="draft-cards"></div>
+    </section>
+
+    <section id="overlay" class="overlay">
+      <div class="overlay-panel">
+        <span class="overlay-kicker">Stormline Network</span>
+        <h1 id="overlayTitle">Stormline Runner</h1>
+        <p id="overlayBody">Run signal acquired.</p>
+        <button id="primaryAction" class="primary-action" type="button">Start Run</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/rng.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/talents.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

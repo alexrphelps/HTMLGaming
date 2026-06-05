@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elemental Stickman</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game" aria-label="Elemental Stickman game canvas"></canvas>
+
+<div id="hud" aria-live="polite">
+  <section class="hud-panel hud-top-left">
+    <div class="health-row">
+      <span>Health</span>
+      <div class="meter"><div id="healthFill" class="meter-fill health-fill"></div></div>
+      <b id="healthText">100</b>
+    </div>
+    <div class="element-row">
+      <span>Primary</span>
+      <b id="primaryElement">Air</b>
+    </div>
+    <div class="element-row">
+      <span>Secondary</span>
+      <b id="secondaryElement">Fire</b>
+    </div>
+    <div id="cooldownList" class="cooldown-list"></div>
+  </section>
+
+  <section class="hud-panel hud-top-right">
+    <div class="section-title">Element Mastery</div>
+    <div id="xpList" class="xp-list"></div>
+  </section>
+
+  <section class="hud-panel hud-bottom-left">
+    <div class="section-title">Training Notes</div>
+    <div class="prompt-list">
+      <span>Hold left mouse and swipe to cast primary.</span>
+      <span>Hold right mouse and swipe to cast secondary.</span>
+      <span>Find water before using water.</span>
+      <span>Earth requires ground.</span>
+      <span>Use Air to move objects.</span>
+      <span>Gain XP to unlock abilities.</span>
+    </div>
+  </section>
+
+  <section class="hud-panel hud-bottom-right">
+    <div class="section-title">Gesture</div>
+    <div id="gestureText">none</div>
+    <button id="debugToggle" type="button">Debug</button>
+    <pre id="debugPanel"></pre>
+  </section>
+</div>
+
+<div id="radialMenu" class="radial-menu" aria-hidden="true">
+  <div class="radial-option radial-air" data-element="Air">Air</div>
+  <div class="radial-option radial-fire" data-element="Fire">Fire</div>
+  <div class="radial-option radial-water" data-element="Water">Water</div>
+  <div class="radial-option radial-earth" data-element="Earth">Earth</div>
+  <div class="radial-core">F</div>
+</div>
+
+<script src="js/game.js"></script>
+</body>
+</html>

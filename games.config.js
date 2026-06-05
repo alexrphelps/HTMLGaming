@@ -77,6 +77,38 @@ window.GAMEHUB_GAMES = [
         defaultRating: 1
     },
     {
+        folder: 'elemental-stickman',
+        name: 'Elemental Stickman',
+        description: 'Gesture-cast four elements in a side-scrolling stickman platform fighting sandbox.',
+        category: 'Platformer',
+        difficulty: 'Medium',
+        icon: 'ES',
+        tags: ['2d', 'platformer', 'fighting', 'elemental', 'gesture', 'canvas'],
+        author: 'GameHub',
+        estimatedPlayTime: 15,
+        aiEffortRating: 5,
+        defaultRating: 4,
+        input: 'Keyboard + Mouse',
+        rendering: 'Canvas',
+        saveSupport: 'None'
+    },
+    {
+        folder: 'stormline-runner',
+        name: 'Stormline Runner',
+        description: 'Endless neon-weather platformer where generated storm fronts reshape hazards, routes, and talent value.',
+        category: 'Platformer',
+        difficulty: 'Medium',
+        icon: 'SR',
+        tags: ['2d', 'platformer', 'arcade', 'endless', 'procedural', 'talents'],
+        author: 'GameHub',
+        estimatedPlayTime: 12,
+        aiEffortRating: 4,
+        defaultRating: 4,
+        input: 'Keyboard',
+        rendering: 'Canvas',
+        saveSupport: 'None'
+    },
+    {
         folder: 'blockdodge',
         name: 'Block Dodge',
         description: 'Control a square and dodge falling blocks as the difficulty increases.',

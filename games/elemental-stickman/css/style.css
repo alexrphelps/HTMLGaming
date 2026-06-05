@@ -1,0 +1,286 @@
+:root {
+  color-scheme: dark;
+  --bg: #080b10;
+  --panel: rgba(12, 17, 24, 0.82);
+  --panel-line: rgba(255, 255, 255, 0.16);
+  --text: #edf7ff;
+  --muted: #9ca9b8;
+  --air: #d8fbff;
+  --water: #32d7ff;
+  --earth: #d0a15f;
+  --fire: #ff7342;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  background: #080b10;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-panel {
+  position: absolute;
+  width: min(340px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.hud-top-left {
+  top: 12px;
+  left: 12px;
+}
+
+.hud-top-right {
+  top: 12px;
+  right: 12px;
+}
+
+.hud-bottom-left {
+  left: 12px;
+  bottom: 12px;
+}
+
+.hud-bottom-right {
+  right: 12px;
+  bottom: 12px;
+  pointer-events: auto;
+}
+
+.health-row,
+.element-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.element-row {
+  grid-template-columns: 72px 1fr;
+}
+
+.meter {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  transition: width 120ms linear;
+}
+
+.health-fill {
+  background: linear-gradient(90deg, #64f08d, #ffe76b);
+}
+
+.section-title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.xp-list,
+.cooldown-list,
+.prompt-list {
+  display: grid;
+  gap: 7px;
+}
+
+.xp-row {
+  display: grid;
+  grid-template-columns: 48px 36px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.xp-meter {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.xp-fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.ability-list {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cooldown-pill {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.prompt-list span {
+  display: block;
+  color: var(--muted);
+}
+
+#gestureText {
+  min-height: 22px;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+#debugToggle {
+  min-width: 74px;
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+#debugPanel {
+  display: none;
+  max-height: 210px;
+  margin: 8px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+#debugPanel.visible {
+  display: block;
+}
+
+.radial-menu {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 220px;
+  margin-left: -110px;
+  margin-top: -110px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(7, 11, 16, 0.78);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.radial-menu.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.radial-option,
+.radial-core {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 700;
+}
+
+.radial-core {
+  left: 77px;
+  top: 93px;
+  width: 66px;
+  height: 34px;
+  color: var(--muted);
+}
+
+.radial-air {
+  left: 77px;
+  top: 18px;
+  color: var(--air);
+}
+
+.radial-fire {
+  right: 18px;
+  top: 93px;
+  color: var(--fire);
+}
+
+.radial-water {
+  left: 77px;
+  bottom: 18px;
+  color: var(--water);
+}
+
+.radial-earth {
+  left: 18px;
+  top: 93px;
+  color: var(--earth);
+}
+
+.radial-option.active {
+  border-color: currentColor;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 18px currentColor;
+}
+
+@media (max-width: 860px) {
+  .hud-panel {
+    font-size: 12px;
+  }
+
+  .hud-top-right {
+    top: auto;
+    right: 12px;
+    bottom: 148px;
+  }
+
+  .hud-bottom-left {
+    display: none;
+  }
+}
