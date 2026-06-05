@@ -41,6 +41,18 @@ class HudAdapter {
         if (this.controller && this.controller.updateBossHud) this.controller.updateBossHud(encounters);
     }
 
+    updateHealth(player) {
+        if (this.controller && this.controller.updateHealthHud) this.controller.updateHealthHud(player);
+    }
+
+    updateActionBar(player) {
+        if (this.controller && this.controller.updateActionBarHud) this.controller.updateActionBarHud(player);
+    }
+
+    updatePassiveBuffs(player) {
+        if (this.controller && this.controller.updatePassiveBuffHud) this.controller.updatePassiveBuffHud(player);
+    }
+
     updateDurability(player) {
         if (this.controller && this.controller.updateDurabilityHud) this.controller.updateDurabilityHud(player);
     }

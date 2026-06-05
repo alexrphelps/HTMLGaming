@@ -4243,6 +4243,56 @@ describe('Gloomvault HUD and screen controllers', () => {
     ]).toEqual([false, 2, '50%', 'Guardian 10 / 20']);
   });
 
+  test('HudController owns health, action bar, and passive buff updates', () => {
+    document.body.innerHTML = `
+      <div id="player-health-bar-fill"></div><div id="player-health-bar-text"></div>
+      <div id="player-shield-bar-container"></div><div id="player-shield-bar-fill"></div><div id="player-shield-bar-text"></div>
+      <div id="slot-weapon1"><div class="action-icon"></div><div class="cooldown-overlay"></div></div>
+      <div id="slot-weapon2"><div class="action-icon"></div><div class="cooldown-overlay"></div></div>
+      <div id="slot-trinket1"><div class="action-icon"></div><div class="cooldown-overlay"></div></div>
+      <div id="slot-trinket2"><div class="action-icon"></div><div class="cooldown-overlay"></div></div>
+      <div id="passive-buff-container" class="hidden">
+        <div id="passive-buff-healing-well" class="hidden"><div class="passive-buff-icon"></div><div class="passive-buff-stack"></div><div class="passive-buff-time"></div></div>
+      </div>
+    `;
+    const context = createBrowserContext();
+    context.window.gloomvaultAssets = { getLootIcon: () => null, getImage: () => ({ src: 'well.png' }) };
+    const { HudController } = loadGloomvault('ui/HudController.js', ['HudController'], context);
+    const controller = new HudController();
+    const player = {
+      hp: 25,
+      maxHp: 100,
+      shield: 10,
+      maxShield: 20,
+      equipment: {
+        weapon: { name: 'Fire Wand', color: '#aaa' },
+        weapon2: null,
+        trinket1: { name: 'Health Potion', color: '#f0f', activeAbility: { cooldown: 10 } },
+        trinket2: null
+      },
+      weapon1: { cooldownTimer: 0.2, cooldown: 1 },
+      weapon2: null,
+      abilityCooldowns: { trinket1: 5, trinket2: 0 },
+      stats: { cooldownReduction: 0 },
+      getHealingWellStackCount: () => 2,
+      getHealingWellRemainingTime: () => 12.2
+    };
+
+    controller.updateHealthHud(player);
+    controller.updateActionBarHud(player);
+    controller.updatePassiveBuffHud(player);
+
+    expect([
+      document.getElementById('player-health-bar-fill').style.width,
+      document.getElementById('player-health-bar-text').textContent,
+      document.querySelector('#slot-weapon1 .cooldown-overlay').style.height,
+      document.querySelector('#slot-trinket1 .cooldown-overlay').style.height,
+      document.getElementById('passive-buff-container').classList.contains('hidden'),
+      document.querySelector('#passive-buff-healing-well .passive-buff-stack').textContent,
+      document.querySelector('#passive-buff-healing-well .passive-buff-time').textContent
+    ]).toEqual(['25%', '25 / 100', '20%', '50%', false, 'x2', '13s']);
+  });
+
   test('ScreenController starts, stops, and renders map selections', () => {
     document.body.innerHTML = `
       <div id="main-menu" class="screen active"></div>
@@ -4349,6 +4399,106 @@ describe('Gloomvault HUD and screen controllers', () => {
       2,
       true
     ]);
+  });
+
+  test('InventoryUiController destroy removes registry-owned listeners', () => {
+    const makeElement = () => {
+      const element = {
+        style: { setProperty: jest.fn() },
+        dataset: {},
+        children: [],
+        classList: { add: jest.fn(), remove: jest.fn(), contains: jest.fn(() => true), toggle: jest.fn() },
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        appendChild: jest.fn(child => {
+          element.children.push(child);
+          return child;
+        }),
+        querySelector: jest.fn(() => makeElement()),
+        querySelectorAll: jest.fn(() => []),
+        getContext: jest.fn(() => ({ clearRect: jest.fn() })),
+        getBoundingClientRect: jest.fn(() => ({ width: 100, height: 100 })),
+        closest: jest.fn(() => null),
+        remove: jest.fn()
+      };
+      return element;
+    };
+    const body = makeElement();
+    const fakeDocument = {
+      body,
+      createElement: jest.fn(() => makeElement()),
+      getElementById: jest.fn(() => makeElement()),
+      querySelectorAll: jest.fn(() => [])
+    };
+    const context = createBrowserContext({ document: fakeDocument });
+    const { EventRegistry } = loadGloomvault('systems/EventRegistry.js', ['EventRegistry'], context);
+    const registry = new EventRegistry();
+    const { InventoryUiController } = loadGloomvault('ui/InventoryUiController.js', ['InventoryUiController'], context);
+    const controller = new InventoryUiController({
+      engine: { state: 'MENU', getInventoryPaneLayout: jest.fn() },
+      eventRegistry: registry,
+      expandedMinimapCanvas: makeElement()
+    });
+    const listenerCount = registry.listeners.length;
+
+    controller.destroy();
+
+    expect([listenerCount > 0, registry.listeners.length]).toEqual([true, 0]);
+  });
+});
+
+// Behaviour under test: equipment stat projection is shared by player and inventory UI.
+describe('Gloomvault equipment stat projection', () => {
+  test('EquipmentStatsService projects modifiers, weapons, caps, and broken item exclusions', () => {
+    const context = createBrowserContext();
+    loadGloomvault('config/CombatConfig.js', ['CombatConfig'], context);
+    loadGloomvault('systems/EquipmentService.js', ['EquipmentService'], context);
+    loadGloomvault('systems/Weapon.js', ['Weapon'], context);
+    const { EquipmentStatsService } = loadGloomvault('systems/EquipmentStatsService.js', ['EquipmentStatsService'], context);
+
+    const projection = EquipmentStatsService.projectEquipment({
+      weapon: { name: 'Wand', type: 'weapon', weaponType: 'pistol', gearScore: 5, modifiers: [{ type: 'flat', stat: 'flatDamage', value: 7 }] },
+      chest: { name: 'Broken Chest', type: 'chest', gearScore: 9, maxDurability: 10, durability: 0, modifiers: [{ type: 'flat', stat: 'armor', value: 99 }] },
+      trinket1: { name: 'Leech Charm', type: 'trinket', gearScore: 3, modifiers: [{ type: 'percent', stat: 'lifesteal', value: 50 }] }
+    });
+
+    expect([
+      projection.gearScore,
+      projection.stats.armor,
+      projection.weapon1.damage,
+      projection.dodgeCooldown,
+      EquipmentStatsService.formatLifesteal(projection)
+    ]).toEqual([17, 0, 27, 1, '35% (50%)']);
+  });
+});
+
+// Behaviour under test: ability effects live in AbilitySystem rather than GameEngine fallback code.
+describe('Gloomvault AbilitySystem ownership', () => {
+  test('AbilitySystem resolves, ticks, targets, and cleans up ability runtime effects', () => {
+    const context = createBrowserContext();
+    const { AbilitySystem } = loadGloomvault('systems/AbilitySystem.js', ['AbilitySystem'], context);
+    const abilitySystem = new AbilitySystem();
+    const enemy = { x: 10, y: 0, width: 20, hp: 10, isAggroed: false };
+    const engine = {
+      player: { x: 0, y: 0, width: 20, angle: 0, pendingTrinketAbilities: [{ ability: { type: 'target_dummy', duration: 0.1, radius: 100 }, angle: 0 }] },
+      mapGen: { tileSize: 10 },
+      decoys: [],
+      trinketEffects: [],
+      enemies: [enemy],
+      findSafePlayerLanding: () => ({ x: 20, y: 0 }),
+      combatFeedback: { addText: jest.fn() }
+    };
+
+    abilitySystem.consumePlayerTrinketAbilities(engine);
+    const target = abilitySystem.getEnemyTargetForEnemy(engine, enemy);
+    abilitySystem.updateRuntimeEffects(engine, 0.2);
+
+    expect([
+      engine.player.pendingTrinketAbilities.length,
+      target.isDecoy,
+      enemy.isAggroed,
+      engine.decoys.length
+    ]).toEqual([0, true, true, 0]);
   });
 });
 

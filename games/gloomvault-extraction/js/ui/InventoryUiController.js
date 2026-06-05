@@ -63,6 +63,15 @@ class InventoryUiController {
         dropZoneBinder.bind(element, onDrop, options);
     }
 
+    function addUiEvent(target, type, handler, options) {
+        if (!target || !handler) return handler;
+        if (eventRegistry && eventRegistry.add) {
+            return eventRegistry.add(target, type, handler, options);
+        }
+        if (target.addEventListener) target.addEventListener(type, handler, options);
+        return handler;
+    }
+
     function swapItems(sourceList, sourceId, targetList, targetId, options = {}) {
         if (transferService) {
             return transferService.swap(sourceList, sourceId, targetList, targetId, options);
@@ -306,7 +315,7 @@ function loadStashData() {
         updateStashUI(); // Refresh UI
     });
 
-    btnUpgrade.addEventListener('click', () => {
+    addUiEvent(btnUpgrade, 'click', () => {
         if (!itemInUpgradeSlot) return;
         const result = UpgradeSystem.upgradeItem(itemInUpgradeSlot.item, scraps);
         if (result.success) {
@@ -350,7 +359,7 @@ function loadStashData() {
     }
 
     if (btnRepair) {
-        btnRepair.addEventListener('click', () => {
+        addUiEvent(btnRepair, 'click', () => {
             if (!itemInRepairSlot) return;
             const result = UpgradeSystem.repairItem(itemInRepairSlot.item, scraps);
             if (result.success) {
@@ -362,7 +371,7 @@ function loadStashData() {
         });
     }
 
-    btnUpgrade.addEventListener('mouseenter', (e) => {
+    addUiEvent(btnUpgrade, 'mouseenter', (e) => {
         if (!itemInUpgradeSlot) return;
         const simulated = UpgradeSystem.simulateUpgrade(itemInUpgradeSlot.item);
         if (simulated) {
@@ -370,14 +379,14 @@ function loadStashData() {
         }
     });
 
-    btnUpgrade.addEventListener('mousemove', (e) => {
+    addUiEvent(btnUpgrade, 'mousemove', (e) => {
         if (!itemInUpgradeSlot) return;
         if (currentHoveredItem && currentHoveredSourceData && currentHoveredSourceData.source === 'upgrade_preview') {
             positionTooltipSafely(tooltip, e.clientX, e.clientY);
         }
     });
 
-    btnUpgrade.addEventListener('mouseleave', hideTooltip);
+    addUiEvent(btnUpgrade, 'mouseleave', hideTooltip);
 
     function refreshUpgradeUI() {
         document.getElementById('scrap-counter').textContent = `Scraps: ${scraps}`;
@@ -461,93 +470,27 @@ function loadStashData() {
     }
 
     function updateStashStats() {
-        // Base Stats (Unmodified) - mimicking Player constructor
-        const stats = {
-            speed: 200,
-            damageMultiplier: 1.0,
-            attackSpeedMultiplier: 1.0,
-            movementSpeedMultiplier: 1.0,
-            flatDamage: 0,
-            lifesteal: 0,
-            lifestealCapBonus: 0,
-            armor: 0,
-            damageReduction: 0,
-            thorns: 0,
-            dodgeCooldownMultiplier: 1.0
-        };
-
-        // Aggregate modifiers from stashEquipment
-        const activeMods = [];
-        for (const slot in stashEquipment) {
-            const item = stashEquipment[slot];
-            if (item && item.modifiers) {
-                // Skip broken items (durability === 0)
-                if (item.durability !== undefined && item.durability <= 0) continue;
-                activeMods.push(...item.modifiers);
-            }
-        }
-
-        // Apply modifiers
-        for (const mod of activeMods) {
-            if (mod.type === 'percent' || mod.type === 'percent_penalty') {
-                if (stats[mod.stat] !== undefined) {
-                    stats[mod.stat] += (mod.value / 100);
-                }
-            } else if (mod.type === 'flat') {
-                if (stats[mod.stat] !== undefined) {
-                    stats[mod.stat] += mod.value;
-                }
-            }
-        }
-
-        // Apply derived stats
-        stats.armor = stats.armor * (stats.armorMultiplier || 1.0);
-        const finalSpeed = stats.speed * stats.movementSpeedMultiplier;
-        
-        let weapon1 = stashEquipment.weapon && !(stashEquipment.weapon.durability !== undefined && stashEquipment.weapon.durability <= 0) ? new Weapon(stashEquipment.weapon, false) : null;
-        let weaponDamage = 0;
-        let weaponCooldown = 0;
-        let totalGearScore = 0;
-        
-        for (const slot in stashEquipment) {
-            if (stashEquipment[slot] && stashEquipment[slot].gearScore) {
-                totalGearScore += stashEquipment[slot].gearScore;
-            }
-        }
-
-        if (weapon1) {
-            weaponDamage = Math.round(weapon1.baseDamage * stats.damageMultiplier + stats.flatDamage);
-            weaponCooldown = weapon1.baseCooldown / stats.attackSpeedMultiplier;
-        } else {
-            weaponDamage = Math.round(stats.flatDamage);
-        }
+        const projection = typeof EquipmentStatsService !== 'undefined'
+            ? EquipmentStatsService.projectEquipment(stashEquipment)
+            : null;
+        if (!projection) return;
+        const stats = projection.stats;
+        const weapon1 = projection.weapon1;
+        const weaponDamage = weapon1 ? Math.round(weapon1.damage) : Math.round(stats.flatDamage);
 
         // Update UI
         const gsEl = document.getElementById('stash-stat-gs');
-        if (gsEl) gsEl.textContent = totalGearScore;
+        if (gsEl) gsEl.textContent = projection.gearScore;
         
         document.getElementById('stash-stat-dmg').textContent = weaponDamage;
-        document.getElementById('stash-stat-spd').textContent = weapon1 ? (1 / weaponCooldown).toFixed(2) + '/s' : '-';
-        document.getElementById('stash-stat-ms').textContent = Math.round(finalSpeed);
+        document.getElementById('stash-stat-spd').textContent = weapon1 ? (1 / weapon1.cooldown).toFixed(2) + '/s' : '-';
+        document.getElementById('stash-stat-ms').textContent = Math.round(projection.speed);
         
         document.getElementById('stash-stat-armor').textContent = Math.round(stats.armor);
         document.getElementById('stash-stat-dr').textContent = Math.round(stats.damageReduction * 100) + '%';
-        
-        const baseDodgeCooldown = 1.0;
-        const dodgeCd = baseDodgeCooldown * Math.max(0.2, stats.dodgeCooldownMultiplier);
-        document.getElementById('stash-stat-dodge').textContent = dodgeCd.toFixed(2) + 's';
-        
+        document.getElementById('stash-stat-dodge').textContent = projection.dodgeCooldown.toFixed(2) + 's';
         document.getElementById('stash-stat-thorns').textContent = Math.round(stats.thorns);
-
-        let baseLsCap = typeof CombatConfig !== 'undefined' ? CombatConfig.caps.lifesteal : 0.35;
-        let currentLsCap = baseLsCap + stats.lifestealCapBonus;
-        let totalLs = stats.lifesteal;
-        let effectiveLs = Math.min(totalLs, currentLsCap);
-        let lsText = `${Math.round(effectiveLs * 100)}%`;
-        if (Math.round(totalLs * 100) > Math.round(currentLsCap * 100)) {
-            lsText += ` (${Math.round(totalLs * 100)}%)`;
-        }
-        document.getElementById('stash-stat-ls').textContent = lsText;
+        document.getElementById('stash-stat-ls').textContent = EquipmentStatsService.formatLifesteal(projection);
     }
 
     let currentLoot = [];
@@ -651,7 +594,7 @@ function loadStashData() {
     // Stash All button
     const btnStashAll = document.getElementById('btn-stash-all');
     if(btnStashAll) {
-        btnStashAll.addEventListener('click', () => {
+        addUiEvent(btnStashAll, 'click', () => {
             const movedAny = transferService
                 ? transferService.stashAll(currentLoot, stashItems, 25)
                 : false;
@@ -666,7 +609,7 @@ function loadStashData() {
     // Salvage All Common button
     const btnSalvageAllCommon = document.getElementById('btn-salvage-all-common');
     if (btnSalvageAllCommon) {
-        btnSalvageAllCommon.addEventListener('click', () => {
+        addUiEvent(btnSalvageAllCommon, 'click', () => {
             const result = transferService
                 ? transferService.salvageWhere(currentLoot, item => item.rarity === 'Common', UpgradeSystem)
                 : { salvagedAny: false, scraps: 0 };
@@ -687,7 +630,7 @@ function loadStashData() {
     const extractionConfirmText = document.getElementById('extraction-confirm-text');
 
     if(btnFinishExtraction) {
-        btnFinishExtraction.addEventListener('click', () => {
+        addUiEvent(btnFinishExtraction, 'click', () => {
             let highRarityCount = 0;
             if (currentLoot && currentLoot.length > 0) {
                 for (let i = 0; i < currentLoot.length; i++) {
@@ -707,14 +650,14 @@ function loadStashData() {
         });
 
         if (btnConfirmLeave) {
-            btnConfirmLeave.addEventListener('click', () => {
+            addUiEvent(btnConfirmLeave, 'click', () => {
                 extractionConfirmModal.classList.add('hidden');
                 showScreen('main-menu');
             });
         }
 
         if (btnCancelLeave) {
-            btnCancelLeave.addEventListener('click', () => {
+            addUiEvent(btnCancelLeave, 'click', () => {
                 extractionConfirmModal.classList.add('hidden');
             });
         }
@@ -748,7 +691,7 @@ function loadStashData() {
         }
     };
     if (eventRegistry) eventRegistry.add(document, 'keydown', shiftKeyDownHandler);
-    else document.addEventListener('keydown', shiftKeyDownHandler);
+    else addUiEvent(document, 'keydown', shiftKeyDownHandler);
 
     const shiftKeyUpHandler = (e) => {
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
@@ -761,7 +704,7 @@ function loadStashData() {
         }
     };
     if (eventRegistry) eventRegistry.add(document, 'keyup', shiftKeyUpHandler);
-    else document.addEventListener('keyup', shiftKeyUpHandler);
+    else addUiEvent(document, 'keyup', shiftKeyUpHandler);
 
     function getStatMap(itm) {
         let map = {};
@@ -993,9 +936,9 @@ function loadStashData() {
         }
     };
     if (eventRegistry) eventRegistry.add(document, 'keydown', inventoryToggleHandler);
-    else document.addEventListener('keydown', inventoryToggleHandler);
+    else addUiEvent(document, 'keydown', inventoryToggleHandler);
 
-    btnCloseInventory.addEventListener('click', toggleInventory);
+    addUiEvent(btnCloseInventory, 'click', toggleInventory);
 
     function toggleInventory() {
         if (inventoryScreen.classList.contains('hidden')) {
@@ -1013,9 +956,9 @@ function loadStashData() {
             requestAnimationFrame(renderExpandedInventoryMinimap);
             if (!inventoryResizeHandler) {
                 inventoryResizeHandler = () => requestAnimationFrame(renderExpandedInventoryMinimap);
-                window.addEventListener('resize', inventoryResizeHandler);
+                addUiEvent(window, 'resize', inventoryResizeHandler);
                 if (window.visualViewport && window.visualViewport.addEventListener) {
-                    window.visualViewport.addEventListener('resize', inventoryResizeHandler);
+                    addUiEvent(window.visualViewport, 'resize', inventoryResizeHandler);
                 }
             }
         } else {
@@ -1140,7 +1083,7 @@ function loadStashData() {
     }
 
     if (btnCloseService) {
-        btnCloseService.addEventListener('click', closeDungeonService);
+        addUiEvent(btnCloseService, 'click', closeDungeonService);
     }
 
     function setupServiceDropZone(element, targetType, id) {
@@ -1299,7 +1242,7 @@ function loadStashData() {
     setupServiceSalvageDropzone();
 
     if (btnServiceUpgrade) {
-        btnServiceUpgrade.addEventListener('click', () => {
+        addUiEvent(btnServiceUpgrade, 'click', () => {
             if (!serviceUpgradeSlot) return;
             const result = UpgradeSystem.upgradeItem(serviceUpgradeSlot.item, scraps);
             if (!result.success) return;
@@ -1311,7 +1254,7 @@ function loadStashData() {
     }
 
     if (btnServiceRepair) {
-        btnServiceRepair.addEventListener('click', () => {
+        addUiEvent(btnServiceRepair, 'click', () => {
             if (!serviceRepairSlot) return;
             const result = UpgradeSystem.repairItem(serviceRepairSlot.item, scraps);
             if (!result.success) return;
@@ -1466,36 +1409,25 @@ function loadStashData() {
         });
 
         // Update Stats Display
-        let totalGearScore = 0;
-        for (const slot in engine.player.equipment) {
-            if (engine.player.equipment[slot] && engine.player.equipment[slot].gearScore) {
-                totalGearScore += engine.player.equipment[slot].gearScore;
-            }
-        }
+        const projection = typeof EquipmentStatsService !== 'undefined'
+            ? EquipmentStatsService.projectPlayer(engine.player)
+            : null;
+        if (!projection) return;
+        const stats = projection.stats;
         const gsEl = document.getElementById('stat-gs');
-        if (gsEl) gsEl.textContent = totalGearScore;
+        if (gsEl) gsEl.textContent = projection.gearScore;
         
         document.getElementById('stat-dmg').textContent = 
-            (engine.player.weapon1 ? Math.round(engine.player.weapon1.damage) : Math.round(engine.player.stats.flatDamage));
+            (projection.weapon1 ? Math.round(projection.weapon1.damage) : Math.round(stats.flatDamage));
         document.getElementById('stat-spd').textContent = 
-            (engine.player.weapon1 ? (1 / engine.player.weapon1.cooldown).toFixed(2) + '/s' : '-');
-        document.getElementById('stat-ms').textContent = Math.round(engine.player.speed);
+            (projection.weapon1 ? (1 / projection.weapon1.cooldown).toFixed(2) + '/s' : '-');
+        document.getElementById('stat-ms').textContent = Math.round(projection.speed);
         
-        document.getElementById('stat-armor').textContent = Math.round(engine.player.stats.armor || 0);
-        document.getElementById('stat-dr').textContent = Math.round((engine.player.stats.damageReduction || 0) * 100) + '%';
-        const dodgeCd = engine.player.dodgeCooldown * Math.max(0.2, engine.player.stats.dodgeCooldownMultiplier || 1.0);
-        document.getElementById('stat-dodge').textContent = dodgeCd.toFixed(2) + 's';
-        document.getElementById('stat-thorns').textContent = Math.round(engine.player.stats.thorns || 0);
-
-        let baseLsCap = typeof CombatConfig !== 'undefined' ? CombatConfig.caps.lifesteal : 0.35;
-        let currentLsCap = baseLsCap + (engine.player.stats.lifestealCapBonus || 0);
-        let totalLs = engine.player.stats.lifesteal || 0;
-        let effectiveLs = Math.min(totalLs, currentLsCap);
-        let lsText = `${Math.round(effectiveLs * 100)}%`;
-        if (Math.round(totalLs * 100) > Math.round(currentLsCap * 100)) {
-            lsText += ` (${Math.round(totalLs * 100)}%)`;
-        }
-        document.getElementById('stat-ls').textContent = lsText;
+        document.getElementById('stat-armor').textContent = Math.round(stats.armor || 0);
+        document.getElementById('stat-dr').textContent = Math.round((stats.damageReduction || 0) * 100) + '%';
+        document.getElementById('stat-dodge').textContent = projection.dodgeCooldown.toFixed(2) + 's';
+        document.getElementById('stat-thorns').textContent = Math.round(stats.thorns || 0);
+        document.getElementById('stat-ls').textContent = EquipmentStatsService.formatLifesteal(projection);
 
         // Force UI update for Health Bar in case max HP changed
         if (typeof engine.updateHealthBarUI === 'function') {
@@ -1540,9 +1472,9 @@ function loadStashData() {
 
     document.querySelectorAll('[data-stat-tip]').forEach(el => {
         el.style.cursor = 'help'; // Add a hint cursor
-        el.addEventListener('mouseenter', handleStatMouseOver);
-        el.addEventListener('mousemove', handleStatMouseMove);
-        el.addEventListener('mouseleave', handleStatMouseOut);
+        addUiEvent(el, 'mouseenter', handleStatMouseOver);
+        addUiEvent(el, 'mousemove', handleStatMouseMove);
+        addUiEvent(el, 'mouseleave', handleStatMouseOut);
     });
 
 

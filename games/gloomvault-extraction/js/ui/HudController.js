@@ -135,6 +135,35 @@ class HudController {
         this.setHidden('interactionHintHidden', this.getElements().interactionHint, true);
     }
 
+    updateHealthHud(player) {
+        if (!player) return;
+        const hud = this.getElements();
+        if (hud.healthFill && hud.healthText) {
+            const hpPercent = Math.max(0, (player.hp / player.maxHp) * 100);
+            this.setStyle('healthWidth', hud.healthFill, 'width', `${hpPercent}%`);
+            this.setText('healthText', hud.healthText, `${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)}`);
+
+            let healthColor = '#2ecc71';
+            if (hpPercent < 10) {
+                healthColor = '#e74c3c';
+            } else if (hpPercent < 35) {
+                healthColor = '#e67e22';
+            }
+            this.setStyle('healthColor', hud.healthFill, 'backgroundColor', healthColor);
+        }
+
+        if (hud.shieldContainer && hud.shieldFill && hud.shieldText) {
+            if (player.maxShield > 0) {
+                this.setStyle('shieldDisplay', hud.shieldContainer, 'display', 'block');
+                const shieldPercent = Math.max(0, (player.shield / player.maxShield) * 100);
+                this.setStyle('shieldWidth', hud.shieldFill, 'width', `${shieldPercent}%`);
+                this.setText('shieldText', hud.shieldText, `${Math.ceil(player.shield)} / ${Math.ceil(player.maxShield)}`);
+            } else {
+                this.setStyle('shieldDisplay', hud.shieldContainer, 'display', 'none');
+            }
+        }
+    }
+
     updateBossHud(encounters) {
         const hud = this.getElements();
         if (!hud.bossContainer || !hud.bossFill || !hud.bossText) return;
@@ -174,6 +203,86 @@ class HudController {
                     ? encounter.getBossHudText()
                     : `${encounter.displayName || (encounter.isBoss ? 'Vault Warden' : 'Boss')} ${Math.ceil(encounter.hp)} / ${Math.ceil(encounter.maxHp)}`;
             }
+        }
+    }
+
+    updateActionBarHud(player) {
+        if (!player) return;
+        const hud = this.getElements();
+        const weaponSlots = [
+            { slotName: 'weapon1', equipmentSlot: 'weapon', fallback: 'ATK' },
+            { slotName: 'weapon2', equipmentSlot: 'weapon2', fallback: 'SEC' }
+        ];
+
+        for (const slotConfig of weaponSlots) {
+            const slot = hud.actionSlots[slotConfig.slotName];
+            if (!slot || !slot.icon || !slot.cooldownOverlay) continue;
+            const item = player.equipment[slotConfig.equipmentSlot];
+            const weapon = slotConfig.slotName === 'weapon1' ? player.weapon1 : player.weapon2;
+            if (item) {
+                this.setItemIcon(
+                    slotConfig.slotName,
+                    slot.icon,
+                    item,
+                    item.name.split(' ')[0].substring(0, 3),
+                    item.element && typeof Weapon !== 'undefined' ? Weapon.getElementColor(item.element) : item.color
+                );
+            } else {
+                this.setItemIcon(slotConfig.slotName, slot.icon, null, slotConfig.fallback, '#555');
+            }
+
+            const cdPercent = weapon ? (weapon.cooldownTimer / weapon.cooldown) * 100 : 0;
+            this.setStyle(`${slotConfig.slotName}Cooldown`, slot.cooldownOverlay, 'height', `${Math.max(0, Math.min(100, cdPercent))}%`);
+        }
+
+        const cdr = Math.min(0.75, player.stats.cooldownReduction || 0);
+        for (let i = 1; i <= 2; i++) {
+            const slotName = `trinket${i}`;
+            const slot = hud.actionSlots[slotName];
+            if (!slot || !slot.icon || !slot.cooldownOverlay) continue;
+
+            const item = player.equipment[slotName];
+            if (item && item.activeAbility) {
+                this.setItemIcon(slotName, slot.icon, item, item.name.split(' ')[0].substring(0, 3), item.color);
+
+                const maxCd = item.activeAbility.cooldown * (1 - cdr);
+                const currentCd = player.abilityCooldowns[slotName];
+                const cdPercent = maxCd > 0 ? (currentCd / maxCd) * 100 : 0;
+
+                this.setStyle(`${slotName}Cooldown`, slot.cooldownOverlay, 'height', `${Math.max(0, Math.min(100, cdPercent))}%`);
+            } else {
+                this.setItemIcon(slotName, slot.icon, null, '', 'transparent');
+                this.setStyle(`${slotName}Cooldown`, slot.cooldownOverlay, 'height', '0%');
+            }
+        }
+    }
+
+    updatePassiveBuffHud(player) {
+        if (!player) return;
+        const hud = this.getElements();
+        const passive = hud.passiveBuffs || {};
+        if (!passive.healingWell) return;
+
+        const stacks = player.getHealingWellStackCount ? player.getHealingWellStackCount() : 0;
+        if (stacks <= 0) {
+            this.setHidden('healingWellBuffHidden', passive.healingWell, true);
+            if (passive.container) this.setHidden('passiveBuffContainerHidden', passive.container, true);
+            return;
+        }
+
+        if (passive.container) this.setHidden('passiveBuffContainerHidden', passive.container, false);
+        this.setHidden('healingWellBuffHidden', passive.healingWell, false);
+
+        const remaining = player.getHealingWellRemainingTime ? player.getHealingWellRemainingTime() : 0;
+        if (passive.stack) this.setText('healingWellBuffStack', passive.stack, stacks > 1 ? `x${stacks}` : '');
+        if (passive.time) this.setText('healingWellBuffTime', passive.time, `${Math.ceil(remaining)}s`);
+        if (passive.icon) {
+            const assets = this.getAssets();
+            const image = assets && assets.getImage ? assets.getImage('sprites.service.healingWell.1') : null;
+            const imageValue = image && image.src ? `url("${image.src}")` : 'none';
+            this.setStyle('healingWellBuffImage', passive.icon, 'backgroundImage', imageValue);
+            this.setStyle('healingWellBuffImageSize', passive.icon, 'backgroundSize', image ? '100% 100%' : 'auto');
+            this.setText('healingWellBuffIconText', passive.icon, image ? '' : 'WEL');
         }
     }
 

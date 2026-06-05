@@ -25,6 +25,7 @@ class GameEngine {
         this.abilitySystem = options.abilitySystem || (typeof AbilitySystem !== 'undefined' ? new AbilitySystem() : null);
         this.minimapService = options.minimapService || (typeof MinimapService !== 'undefined' ? new MinimapService() : null);
         this.gameRenderer = options.gameRenderer || (typeof GameRenderer !== 'undefined' ? new GameRenderer() : null);
+        this.flowController = options.flowController || {};
 
         // Map Gen parameters
         this.tileSize = 64;
@@ -137,7 +138,6 @@ class GameEngine {
         if (this.hudAdapter && this.hudAdapter.getElements) return this.hudAdapter.getElements();
         if (!this.hud && typeof HudController !== 'undefined') this.hud = new HudController();
         if (this.hud) return this.hud.getElements();
-        if (!this._hudState) this._hudState = {};
         if (this._hudElements) return this._hudElements;
 
         const actionSlots = {};
@@ -191,18 +191,14 @@ class GameEngine {
         while (rowHost.children.length < count) {
             const row = document.createElement('div');
             row.className = 'boss-health-bar-row';
-
             const fill = document.createElement('div');
             fill.className = 'boss-health-bar-fill';
-
             const text = document.createElement('div');
             text.className = 'boss-health-bar-text';
-
             row.appendChild(fill);
             row.appendChild(text);
             rowHost.appendChild(row);
         }
-
         return Array.from(rowHost.children);
     }
 
@@ -294,13 +290,9 @@ class GameEngine {
         if (!this._hudState) this._hudState = {};
         const nextValue = Boolean(hidden);
         if (this._hudState[key] === nextValue) return;
-        if (element.classList.toggle) {
-            element.classList.toggle('hidden', nextValue);
-        } else if (nextValue) {
-            element.classList.add('hidden');
-        } else {
-            element.classList.remove('hidden');
-        }
+        if (element.classList.toggle) element.classList.toggle('hidden', nextValue);
+        else if (nextValue) element.classList.add('hidden');
+        else element.classList.remove('hidden');
         this._hudState[key] = nextValue;
     }
 
@@ -1427,6 +1419,10 @@ class GameEngine {
     }
 
     updateTrinketRuntimeEffects(dt) {
+        if (this.abilitySystem && this.abilitySystem.updateRuntimeEffects) {
+            return this.abilitySystem.updateRuntimeEffects(this, dt);
+        }
+
         if (this.player && this.player.soulSiphonTimer > 0) {
             this.player.soulSiphonTimer = Math.max(0, this.player.soulSiphonTimer - dt);
             if (this.player.soulSiphonTimer <= 0) {
@@ -1497,6 +1493,9 @@ class GameEngine {
     }
 
     handleAbilityProjectileEnd(projectile) {
+        if (this.abilitySystem && this.abilitySystem.handleAbilityProjectileEnd) {
+            return this.abilitySystem.handleAbilityProjectileEnd(this, projectile);
+        }
         if (!projectile || !projectile.abilityEffect) return false;
         if (projectile.abilityEffect === 'element_bomb') {
             return this.explodeElementBomb(projectile);
@@ -1865,37 +1864,17 @@ class GameEngine {
 
     updateHealthBarUI() {
         if (!this.player) return;
-        const hud = this.getHudElements();
-        if (hud.healthFill && hud.healthText) {
-            const hpPercent = Math.max(0, (this.player.hp / this.player.maxHp) * 100);
-            this.setHudStyle('healthWidth', hud.healthFill, 'width', `${hpPercent}%`);
-            this.setHudText('healthText', hud.healthText, `${Math.ceil(this.player.hp)} / ${Math.ceil(this.player.maxHp)}`);
-            
-            // Color fading logic
-            let healthColor = '#2ecc71'; // Green
-            if (hpPercent < 10) {
-                healthColor = '#e74c3c'; // Red
-            } else if (hpPercent < 35) {
-                healthColor = '#e67e22'; // Orange
-            }
-            this.setHudStyle('healthColor', hud.healthFill, 'backgroundColor', healthColor);
-        }
-        
-        if (hud.shieldContainer && hud.shieldFill && hud.shieldText) {
-            if (this.player.maxShield > 0) {
-                this.setHudStyle('shieldDisplay', hud.shieldContainer, 'display', 'block');
-                const shieldPercent = Math.max(0, (this.player.shield / this.player.maxShield) * 100);
-                this.setHudStyle('shieldWidth', hud.shieldFill, 'width', `${shieldPercent}%`);
-                this.setHudText('shieldText', hud.shieldText, `${Math.ceil(this.player.shield)} / ${Math.ceil(this.player.maxShield)}`);
-            } else {
-                this.setHudStyle('shieldDisplay', hud.shieldContainer, 'display', 'none');
-            }
-        }
+        if (this.hudAdapter && this.hudAdapter.updateHealth) return this.hudAdapter.updateHealth(this.player);
+        if (this.hud && this.hud.updateHealthHud) this.hud.updateHealthHud(this.player);
     }
 
     updateBossHealthBarUI() {
         if (this.hud && this.hud.updateBossHud) {
             this.hud.updateBossHud(this.getVisibleBossEncounters());
+            return;
+        }
+        if (this.hudAdapter && this.hudAdapter.updateBosses) {
+            this.hudAdapter.updateBosses(this.getVisibleBossEncounters());
             return;
         }
 
@@ -1916,25 +1895,17 @@ class GameEngine {
             const fill = i === 0 ? hud.bossFill : (row && row.querySelector ? row.querySelector('.boss-health-bar-fill') : null);
             const text = i === 0 ? hud.bossText : (row && row.querySelector ? row.querySelector('.boss-health-bar-text') : null);
             const encounter = encounters[i];
-
             if (!encounter) {
                 if (row && row.classList) row.classList.add('hidden');
                 continue;
             }
-
             if (row && row.classList) {
                 row.classList.remove('hidden');
-                if (encounter.bossTier === 'floorGuardian') {
-                    row.classList.add('guardian');
-                } else {
-                    row.classList.remove('guardian');
-                }
+                if (encounter.bossTier === 'floorGuardian') row.classList.add('guardian');
+                else row.classList.remove('guardian');
             }
-
             const hpPercent = Math.max(0, (encounter.hp / encounter.maxHp) * 100);
-            if (fill) {
-                fill.style.width = `${hpPercent}%`;
-            }
+            if (fill) fill.style.width = `${hpPercent}%`;
             if (text) {
                 text.textContent = encounter.getBossHudText
                     ? encounter.getBossHudText()
@@ -2212,73 +2183,14 @@ class GameEngine {
 
     updateActionBarUI() {
         if (!this.player) return;
-        const hud = this.getHudElements();
-
-        // Weapon Primary
-        const w1Slot = hud.actionSlots.weapon1;
-        if (w1Slot && w1Slot.icon && w1Slot.cooldownOverlay) {
-            const wepItem = this.player.equipment.weapon;
-            if (wepItem) {
-                this.setHudItemIcon(
-                    'weapon1',
-                    w1Slot.icon,
-                    wepItem,
-                    wepItem.name.split(' ')[0].substring(0, 3),
-                    wepItem.element && typeof Weapon !== 'undefined' ? Weapon.getElementColor(wepItem.element) : wepItem.color
-                );
-            } else {
-                this.setHudItemIcon('weapon1', w1Slot.icon, null, 'ATK', '#555');
-            }
-
-            const cdPercent = this.player.weapon1 ? (this.player.weapon1.cooldownTimer / this.player.weapon1.cooldown) * 100 : 0;
-            this.setHudStyle('weapon1Cooldown', w1Slot.cooldownOverlay, 'height', `${Math.max(0, Math.min(100, cdPercent))}%`);
-        }
-
-        // Weapon Secondary
-        const w2Slot = hud.actionSlots.weapon2;
-        if (w2Slot && w2Slot.icon && w2Slot.cooldownOverlay) {
-            const wepItem = this.player.equipment.weapon2;
-            if (wepItem) {
-                this.setHudItemIcon(
-                    'weapon2',
-                    w2Slot.icon,
-                    wepItem,
-                    wepItem.name.split(' ')[0].substring(0, 3),
-                    wepItem.element && typeof Weapon !== 'undefined' ? Weapon.getElementColor(wepItem.element) : wepItem.color
-                );
-            } else {
-                this.setHudItemIcon('weapon2', w2Slot.icon, null, 'SEC', '#555');
-            }
-
-            const cdPercent = this.player.weapon2 ? (this.player.weapon2.cooldownTimer / this.player.weapon2.cooldown) * 100 : 0;
-            this.setHudStyle('weapon2Cooldown', w2Slot.cooldownOverlay, 'height', `${Math.max(0, Math.min(100, cdPercent))}%`);
-        }
-
-        // Trinkets
-        const cdr = Math.min(0.75, this.player.stats.cooldownReduction || 0);
-        for (let i = 1; i <= 2; i++) {
-            const slotName = `trinket${i}`;
-            const slot = hud.actionSlots[slotName];
-            if (!slot || !slot.icon || !slot.cooldownOverlay) continue;
-
-            const item = this.player.equipment[slotName];
-            if (item && item.activeAbility) {
-                this.setHudItemIcon(slotName, slot.icon, item, item.name.split(' ')[0].substring(0, 3), item.color);
-
-                const maxCd = item.activeAbility.cooldown * (1 - cdr);
-                const currentCd = this.player.abilityCooldowns[slotName];
-                const cdPercent = maxCd > 0 ? (currentCd / maxCd) * 100 : 0;
-
-                this.setHudStyle(`${slotName}Cooldown`, slot.cooldownOverlay, 'height', `${Math.max(0, Math.min(100, cdPercent))}%`);
-            } else {
-                this.setHudItemIcon(slotName, slot.icon, null, '', 'transparent');
-                this.setHudStyle(`${slotName}Cooldown`, slot.cooldownOverlay, 'height', '0%');
-            }
-        }
+        if (this.hudAdapter && this.hudAdapter.updateActionBar) return this.hudAdapter.updateActionBar(this.player);
+        if (this.hud && this.hud.updateActionBarHud) this.hud.updateActionBarHud(this.player);
     }
 
     updatePassiveBuffUI() {
         if (!this.player) return;
+        if (this.hudAdapter && this.hudAdapter.updatePassiveBuffs) return this.hudAdapter.updatePassiveBuffs(this.player);
+        if (this.hud && this.hud.updatePassiveBuffHud) return this.hud.updatePassiveBuffHud(this.player);
         const hud = this.getHudElements();
         const passive = hud.passiveBuffs || {};
         if (!passive.healingWell) return;
@@ -2294,12 +2206,8 @@ class GameEngine {
         this.setHudHidden('healingWellBuffHidden', passive.healingWell, false);
 
         const remaining = this.player.getHealingWellRemainingTime ? this.player.getHealingWellRemainingTime() : 0;
-        if (passive.stack) {
-            this.setHudText('healingWellBuffStack', passive.stack, stacks > 1 ? `x${stacks}` : '');
-        }
-        if (passive.time) {
-            this.setHudText('healingWellBuffTime', passive.time, `${Math.ceil(remaining)}s`);
-        }
+        if (passive.stack) this.setHudText('healingWellBuffStack', passive.stack, stacks > 1 ? `x${stacks}` : '');
+        if (passive.time) this.setHudText('healingWellBuffTime', passive.time, `${Math.ceil(remaining)}s`);
         if (passive.icon) {
             const assets = typeof window !== 'undefined' ? window.gloomvaultAssets : null;
             const image = assets && assets.getImage ? assets.getImage('sprites.service.healingWell.1') : null;
@@ -2465,8 +2373,9 @@ class GameEngine {
         }
 
         // Pass inventory to main.js to handle the extraction screen
-        if (window.gloomvaultApp) {
-            // Trigger extraction screen setup
+        if (this.flowController && this.flowController.onExtract) {
+            this.flowController.onExtract(this.player.inventory, this);
+        } else if (window.gloomvaultApp) {
             window.gloomvaultApp.setupExtraction(this.player.inventory);
             window.gloomvaultApp.showScreen('extraction-screen');
         }
@@ -2485,7 +2394,9 @@ class GameEngine {
         // Keep stash untouched
 
         // Transition to game over
-        if (window.gloomvaultApp) {
+        if (this.flowController && this.flowController.onDeath) {
+            this.flowController.onDeath(this);
+        } else if (window.gloomvaultApp) {
             window.gloomvaultApp.showScreen('game-over-screen');
         }
     }

@@ -147,71 +147,65 @@ class Player extends Entity {
     }
 
     recalculateStats() {
-        
-        // Instantiate weapons based on equipment
-        const wep1 = this.equipment.weapon;
-        const wep2 = this.equipment.weapon2;
-        this.weapon1 = (wep1 && !(wep1.maxDurability !== undefined && wep1.durability <= 0)) ? new Weapon(wep1, true) : null;
-        this.weapon2 = (wep2 && !(wep2.maxDurability !== undefined && wep2.durability <= 0)) ? new Weapon(wep2, true) : null;
-        
-        // Reset to base
+        if (typeof EquipmentStatsService !== 'undefined') {
+            const projection = EquipmentStatsService.projectEquipment(this.equipment, {
+                baseStats: this.baseStats,
+                isPlayerWeapon: true,
+                healingWellMaxHpBonus: this.getHealingWellMaxHpBonus()
+            });
+            this.stats = projection.stats;
+            this.weapon1 = projection.weapon1;
+            this.weapon2 = projection.weapon2;
+            this.speed = projection.speed;
+        } else {
+            const wep1 = this.equipment.weapon;
+            const wep2 = this.equipment.weapon2;
+            this.weapon1 = (wep1 && !(wep1.maxDurability !== undefined && wep1.durability <= 0)) ? new Weapon(wep1, true) : null;
+            this.weapon2 = (wep2 && !(wep2.maxDurability !== undefined && wep2.durability <= 0)) ? new Weapon(wep2, true) : null;
+            this.stats = { ...this.baseStats };
 
-        this.stats = { ...this.baseStats };
+            const activeMods = [];
+            for (const slot in this.equipment) {
+                const item = this.equipment[slot];
+                if (!item || !item.modifiers) continue;
+                if (item.maxDurability !== undefined && item.durability <= 0) continue;
+                activeMods.push(...item.modifiers);
+            }
 
-        // Aggregate modifiers
-        const activeMods = [];
-        
-        for (const slot in this.equipment) {
-            const item = this.equipment[slot];
-            if (!item || !item.modifiers) continue;
-            // Skip broken items (durability 0) - they provide no stats
-            if (item.maxDurability !== undefined && item.durability <= 0) continue;
-            activeMods.push(...item.modifiers);
-        }
-
-        // Apply modifiers
-        for (const mod of activeMods) {
-            if (mod.type === 'percent' || mod.type === 'percent_penalty') {
-                if (this.stats[mod.stat] !== undefined) {
-                    // additive percentages (10% + 5% = 1.15 multiplier)
-                    this.stats[mod.stat] += (mod.value / 100);
-                }
-            } else if (mod.type === 'flat') {
-                if (this.stats[mod.stat] !== undefined) {
-                    this.stats[mod.stat] += mod.value;
+            for (const mod of activeMods) {
+                if (mod.type === 'percent' || mod.type === 'percent_penalty') {
+                    if (this.stats[mod.stat] !== undefined) this.stats[mod.stat] += (mod.value / 100);
+                } else if (mod.type === 'flat') {
+                    if (this.stats[mod.stat] !== undefined) this.stats[mod.stat] += mod.value;
                 }
             }
+
+            this.stats.maxHp = this.stats.maxHp * (this.stats.maxHpMultiplier + this.getHealingWellMaxHpBonus());
+            this.stats.armor = this.stats.armor * this.stats.armorMultiplier;
+            this.speed = this.stats.speed * this.stats.movementSpeedMultiplier;
+
+            let weaponSpeedBonus = 0;
+            if (this.weapon1) {
+                this.weapon1.damage = Math.round(this.weapon1.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
+                this.weapon1.cooldown = this.weapon1.baseCooldown / this.stats.attackSpeedMultiplier;
+                weaponSpeedBonus += this.weapon1.movementSpeedBonus || 0;
+            }
+            if (this.weapon2) {
+                this.weapon2.damage = Math.round(this.weapon2.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
+                this.weapon2.cooldown = this.weapon2.baseCooldown / this.stats.attackSpeedMultiplier;
+                weaponSpeedBonus += this.weapon2.movementSpeedBonus || 0;
+            }
+            this.speed += weaponSpeedBonus;
         }
 
-        // Apply derived stats
-        this.stats.maxHp = this.stats.maxHp * (this.stats.maxHpMultiplier + this.getHealingWellMaxHpBonus());
         this.maxHp = this.stats.maxHp;
         
         this.maxShield = this.stats.maxShield;
         this.shieldRegen = this.stats.shieldRegen;
-        
-        this.stats.armor = this.stats.armor * this.stats.armorMultiplier;
 
         if (this.hp > this.maxHp) this.hp = this.maxHp;
         if (this.maxShield === 0) this.shield = 0;
         if (this.shield > this.maxShield) this.shield = this.maxShield;
-
-        this.speed = this.stats.speed * this.stats.movementSpeedMultiplier;
-        
-        let weaponSpeedBonus = 0;
-        
-        if (this.weapon1) {
-            this.weapon1.damage = Math.round(this.weapon1.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
-            this.weapon1.cooldown = this.weapon1.baseCooldown / this.stats.attackSpeedMultiplier;
-            weaponSpeedBonus += this.weapon1.movementSpeedBonus || 0;
-        }
-        if (this.weapon2) {
-            this.weapon2.damage = Math.round(this.weapon2.baseDamage * this.stats.damageMultiplier + this.stats.flatDamage);
-            this.weapon2.cooldown = this.weapon2.baseCooldown / this.stats.attackSpeedMultiplier;
-            weaponSpeedBonus += this.weapon2.movementSpeedBonus || 0;
-        }
-        
-        this.speed += weaponSpeedBonus;
 
     }
 

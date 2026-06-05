@@ -24,7 +24,7 @@ Current gameplay loop:
 - `index.html`: All screen markup and script load order. Contains main menu, map select, stash, extraction, play canvas, inventory overlay, dungeon service overlay, action bar, stacked boss health rows, durability HUD, and minimap canvas.
 - `css/style.css`: Full standalone UI and game overlay styling.
 - `js/main.js`: DOM coordinator. Creates the engine, asset manager, screen controller, inventory UI controller, and exposes `window.gloomvaultApp`.
-- `js/core/GameEngine.js`: Runtime orchestrator. Owns canvas loop, map selection state, entity arrays, dungeon service spawning/interactions, extraction/death, boss-room flow, guardian spawn flow, borrowed boss powers, minimap render call, health/action/boss UI updates, and dev helpers.
+- `js/core/GameEngine.js`: Runtime orchestrator. Owns canvas loop, map selection state, entity arrays, dungeon service spawning/interactions, extraction/death, boss-room flow, guardian spawn flow, borrowed boss powers, minimap render call, and dev helpers. HUD updates are controller-owned, with small legacy fallbacks only for isolated tests.
 - `js/core/Input.js`: Keyboard and mouse state. Attached to canvas by the engine, with idempotent `attach()`, `detach()`, and `destroy()` cleanup.
 - `js/core/Camera.js`: Fixed world-space viewport, browser-DPR backing canvas handling, zoom for dev mode, map clamping, screenshake, and world/screen transforms.
 - `js/core/Renderer.js`: Drawing helpers and minimap rendering.
@@ -33,6 +33,7 @@ Current gameplay loop:
 - `js/systems/FloorOrchestrator.js`: Single floor-generation path. Selects map config, creates `MapGen`, prepares/keeps player loadout, resets floor entities, populates enemies, and places portals, chests, transitions, services, guardians, and boss-room entities through engine APIs.
 - `js/systems/ProjectileCombatResolver.js`: Projectile update/collision service for player/enemy projectile hits, lifesteal, thorns, stagger/knockback, ability projectile cleanup, and impact feedback.
 - `js/systems/InventoryTransferService.js` and `js/systems/DropZoneBinder.js`: Shared inventory movement/salvage rules and reusable drag/drop binding for stash, extraction, dungeon service, and run inventory UI.
+- `js/systems/EquipmentStatsService.js`: Shared equipment/stat projection for player recalculation and inventory/stash stat display. Keep modifier application, broken-item exclusions, weapon projection, gear score, dodge cooldown, and lifesteal formatting here rather than duplicating stat math in UI.
 - `js/systems/EnemyFactory.js`: Data-driven enemy base stat and weapon setup used by `Enemy`.
 - `js/systems/Pathfinder.js`: A* tile pathing for enemy chase/wander behavior.
 - `js/systems/LootGen.js`: Item generation, rarity, affixes, implicits, weapon subtypes, trinket active abilities, traits, durability initialization, and guaranteed minimum-rarity encounter rewards.
@@ -167,6 +168,9 @@ Starter equipment migration is centralized through `EquipmentService`, `Inventor
 - `GameEngine.start()` always calls `generateFloor(false)`. Re-entering play from menu starts a new run. Avoid adding menu transitions that accidentally call it twice.
 - `GameEngine.generateFloor()` intentionally delegates only to `FloorOrchestrator`; avoid reintroducing fallback floor-generation logic in the engine.
 - `Input.attach()` is idempotent and `destroy()` removes keyboard/canvas listeners. Keep new input listeners behind `Input` or `EventRegistry` so iframe cleanup stays reliable.
+- `InventoryUiController` persistent document/window/button/stat listeners should go through `EventRegistry` via its local `addUiEvent()` helper. Direct listeners are acceptable for generated item elements that are removed with their parent cells.
+- `AbilitySystem` owns player trinket ability resolution, decoys, ability-created runtime effects, and ability projectile cleanup. Prefer adding new trinket/ability runtime behavior there instead of growing `GameEngine`.
+- HUD action bar, health/shield, boss rows, durability, interaction hints, and passive buffs are owned by `HudController`/`HudAdapter`. Avoid reintroducing duplicated HUD mutation paths in `GameEngine` except compatibility fallbacks for prototype-style tests.
 - Camera intentionally caps visible world space and scales to the canvas backing size. Do not change canvas resize/zoom logic without checking browser zoom cannot reveal extra dungeon area.
 - Minimap and inventory minimap depend on `Renderer.renderMinimap()` and `mapGen.visitedGrid`.
 - Boss room locked entrances are represented by wall tiles until opened. Connectivity/pruning code must not delete or prematurely open these.
@@ -197,7 +201,7 @@ Manual smoke test:
 ## Future Work Backlog
 
 - Continue splitting `InventoryUiController.js` into stash, extraction, service, inventory, and tooltip modules.
-- Consider extracting enemy AI role behaviors from `Enemy.js` once additional enemy types are added.
+- Extract enemy AI role behaviors from `Enemy.js` behind an `EnemyAiController` or role-behavior modules once additional enemy types are added.
 - Decide whether weapon slot 2 is intended to remain a second weapon attack or become a true secondary ability system.
 - Add richer boss mechanics beyond current chase/cleave boss.
 - Add quick-equip/unequip and better inventory quality-of-life.

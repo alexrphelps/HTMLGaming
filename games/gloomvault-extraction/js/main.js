@@ -1,7 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Gloomvault Extraction - main.js loaded');
 
-    const engine = new GameEngine('game-canvas');
+    let screenController = null;
+    let inventoryUi = null;
+    const engine = new GameEngine('game-canvas', {
+        flowController: {
+            onExtract: inventory => {
+                if (inventoryUi) inventoryUi.setupExtraction(inventory);
+                if (screenController) screenController.showScreen('extraction-screen');
+            },
+            onDeath: () => {
+                if (screenController) screenController.showScreen('game-over-screen');
+            }
+        }
+    });
     const expandedMinimapCanvas = document.getElementById('expanded-minimap-canvas');
     const assetManifest = typeof AssetManifest !== 'undefined' ? AssetManifest : window.AssetManifest;
     const assetManager = typeof AssetManager !== 'undefined' ? new AssetManager(assetManifest) : null;
@@ -17,10 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    let screenController = null;
     window.gloomvaultApp = { engine };
 
-    const inventoryUi = typeof InventoryUiController !== 'undefined'
+    inventoryUi = typeof InventoryUiController !== 'undefined'
         ? new InventoryUiController({
             engine,
             expandedMinimapCanvas,
