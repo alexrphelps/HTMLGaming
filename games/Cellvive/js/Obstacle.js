@@ -41,7 +41,8 @@ class FoodSpawner {
     }
     
     /**
-     * Generate a natural, irregular polygon shape
+     * Generate a natural, irregular polygon shape as center-relative points.
+     * Keeping points relative lets moved spawners render at their new position.
      */
     generateNaturalPolygon() {
         const points = [];
@@ -56,13 +57,21 @@ class FoodSpawner {
             const radiusVariation = 1 + (Math.random() - 0.5) * 0.3;
             const radius = this.radius * radiusVariation;
             
-            const x = this.x + Math.cos(angle) * radius;
-            const y = this.y + Math.sin(angle) * radius;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
             
             points.push({ x, y });
         }
         
         return points;
+    }
+
+    /**
+     * Move the spawner without invalidating its organic silhouette.
+     */
+    setPosition(x, y) {
+        this.x = x;
+        this.y = y;
     }
     
     /**

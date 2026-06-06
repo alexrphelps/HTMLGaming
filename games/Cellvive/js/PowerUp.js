@@ -93,7 +93,7 @@ class PowerUp {
     /**
      * Apply power-up effects to a cell - simplified for basic cells
      */
-    applyTo(cell) {
+    applyTo(cell, services = null) {
         this.isCollected = true;
         this.collectionTime = Date.now();
         
@@ -127,7 +127,9 @@ class PowerUp {
         }
         
         // Create collection particles
-        if (window.game && window.game.particleSystem) {
+        if (services && typeof services.createPowerUpParticles === 'function') {
+            services.createPowerUpParticles(this.x, this.y, this.type);
+        } else if (window.game && window.game.particleSystem) {
             window.game.particleSystem.createPowerUpParticles(this.x, this.y, this.type);
         }
     }
@@ -293,7 +295,7 @@ class PowerUpManager {
                 if (powerUp.canBeCollectedBy(this.game.player)) {
                     // Log when player touches power-up
                     GameLogger.debug(`💎 Player touched ${powerUp.type} at (${powerUp.x.toFixed(0)}, ${powerUp.y.toFixed(0)})`);
-                    powerUp.applyTo(this.game.player);
+                    powerUp.applyTo(this.game.player, this.game.services);
                     if (this.game.audioManager) this.game.audioManager.playPowerUp();
                 }
             }
@@ -304,7 +306,7 @@ class PowerUpManager {
             if (Math.random() < 0.001) { // Very rare for AI to collect power-ups
                 for (const powerUp of this.powerUps) {
                     if (powerUp.canBeCollectedBy(cell)) {
-                        powerUp.applyTo(cell);
+                        powerUp.applyTo(cell, this.game.services);
                         break; // One power-up per cell per check
                     }
                 }

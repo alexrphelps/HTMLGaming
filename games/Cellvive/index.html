@@ -20,9 +20,18 @@
             <div class="hud-right">
                 <div class="health">Health: <span id="health">100</span></div>
                 <div class="cells">Cells: <span id="cell-count">0</span></div>
+                <div class="phase">Phase: <span id="phase">Seedling</span></div>
+                <div class="active-event">Event: <span id="active-event">Calm</span></div>
+                <div class="danger">Nearest Danger: <span id="nearest-danger">Clear</span></div>
+                <div class="best-run">Best: <span id="best-run">0s / size 0</span></div>
+                <div class="discoveries">Codex: <span id="codex-count">0</span></div>
                 <div class="zone">Zone: <span id="zone">🟢 Safe Zone</span></div>
                 <div class="talent-points">Talent Points: <span id="talent-points">0</span></div>
             </div>
+        </div>
+        <div id="talent-points-badge" class="talent-points-badge">
+            <span class="talent-points-badge-label">TP</span>
+            <span id="talent-points-bottom">0</span>
         </div>
         
         <!-- Pause/Unpause Button -->
@@ -74,6 +83,15 @@
                     <button id="talent-select-btn" class="talent-select-btn primary" disabled>Select Talent</button>
                     <button id="talent-cancel-btn" class="talent-select-btn">Cancel</button>
                 </div>
+            </div>
+        </div>
+
+        <div id="mutation-popup" class="hidden">
+            <div class="mutation-popup-content">
+                <h2>Mutation Surge</h2>
+                <p class="mutation-description">Choose an immediate adaptation. Talent points are still banked for the tree.</p>
+                <div id="mutation-choice-grid" class="mutation-choice-grid"></div>
+                <button id="mutation-skip-btn" class="mutation-skip-btn">Keep Moving</button>
             </div>
         </div>
         
@@ -174,6 +192,7 @@
     <script src="js/EnvironmentManager.js"></script>
     <script src="js/ParticleSystem.js"></script>
     <script src="js/Logger.js"></script>
+    <script src="js/ErrorHandler.js"></script>
         <script src="js/PowerUp.js"></script>
         <script src="js/TalentSystem.js"></script>
         <script src="js/AudioManager.js"></script>

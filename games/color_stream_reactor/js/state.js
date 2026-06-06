@@ -29,6 +29,7 @@ let spawnRate = BASE_SPAWN_RATE;
 let fallSpeed = BASE_FALL_SPEED;
 
 let availableColors = 1;
+let revealedColors = 1;
 
 let lastTime = 0;
 let lastWarningTime = -Infinity;
@@ -50,7 +51,7 @@ COLORS.forEach((color,index)=>{
 
     btn.onclick = ()=>{
 
-        if(running && index < availableColors){
+        if(running && isColorActive(index)){
 
             shoot(color);
         }
@@ -116,14 +117,15 @@ function updateButtons(){
 
     buttons.forEach((btn,index)=>{
 
-        const isActive = index < availableColors;
+        const isActive = index < availableColors && index < revealedColors;
+        const isRevealed = index < revealedColors;
 
         btn.disabled = !isActive;
-        btn.style.display = isActive ? "" : "none";
+        btn.style.display = isRevealed ? "" : "none";
 
-        if(isActive){
+        if(isRevealed){
 
-            btn.setAttribute("aria-disabled", "false");
+            btn.setAttribute("aria-disabled", isActive ? "false" : "true");
 
             if(btn.animate && btn.dataset.justShown !== "true"){
                 btn.dataset.justShown = "true";
@@ -144,10 +146,31 @@ function updateButtons(){
 
         }else{
 
-            btn.setAttribute("aria-disabled", "true");
+            btn.setAttribute("aria-disabled", isActive ? "false" : "true");
             delete btn.dataset.justShown;
         }
     });
+}
+
+function revealColor(index){
+
+    const nextVisible = index + 1;
+
+    if(nextVisible > revealedColors){
+
+        revealedColors = nextVisible;
+        
+        if(nextVisible > 1){
+            comboPopup("NEW COLOR");
+        }
+
+        updateButtons();
+    }
+}
+
+function isColorActive(index){
+
+    return index < availableColors && index < revealedColors;
 }
 
 function updateHUD(){

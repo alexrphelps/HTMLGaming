@@ -68,16 +68,63 @@ body {
     text-align: center;
 }
 
-.score, .size, .health, .cells {
+.score, .size, .health, .cells, .zone, .phase, .active-event, .danger, .best-run, .discoveries, .talent-points {
     font-size: 18px;
     font-weight: 600;
     color: #4a90e2;
+}
+
+.phase,
+.active-event,
+.danger,
+.best-run,
+.discoveries,
+.talent-points {
+    font-size: 14px;
+    color: #d9e8ff;
+}
+
+#active-event {
+    color: #ffd166;
+}
+
+#nearest-danger {
+    color: #ff9f6e;
 }
 
 .instructions {
     font-size: 16px;
     color: #b0c4de;
     font-style: italic;
+}
+
+.talent-points-badge {
+    position: absolute;
+    left: 20px;
+    bottom: 20px;
+    z-index: 12;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 72px;
+    padding: 8px 12px;
+    background: rgba(10, 10, 20, 0.78);
+    border: 1px solid rgba(255, 165, 0, 0.45);
+    border-radius: 8px;
+    color: #FFA500;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+}
+
+.talent-points-badge-label {
+    color: #f8d18a;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 /* Game Over Screen */
@@ -655,56 +702,171 @@ body {
 .talent-popup-content {
     background: linear-gradient(135deg, #1a1a2e, #16213e);
     border: 3px solid #4A90E2;
-    border-radius: 20px;
-    padding: 30px;
-    max-width: 800px;
-    width: 95%;
+    border-radius: 14px;
+    padding: 20px;
+    max-width: 980px;
+    width: min(95vw, 980px);
     text-align: center;
     box-shadow: 0 15px 40px rgba(74, 144, 226, 0.4);
-    max-height: 90vh;
+    max-height: min(90vh, 760px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#mutation-popup {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(5px);
+}
+
+.mutation-popup-content {
+    width: min(92vw, 620px);
+    max-height: 86vh;
     overflow-y: auto;
+    background: linear-gradient(135deg, #141b2f, #1f2638);
+    border: 2px solid #ffd166;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+}
+
+.mutation-popup-content h2 {
+    margin: 0 0 8px 0;
+    color: #ffd166;
+    font-size: 24px;
+}
+
+.mutation-description {
+    color: #d9e8ff;
+    margin: 0 0 14px 0;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.mutation-choice-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.mutation-choice-btn,
+.mutation-skip-btn {
+    width: 100%;
+    text-align: left;
+    background: rgba(255, 209, 102, 0.08);
+    color: #ffffff;
+    border: 1px solid rgba(255, 209, 102, 0.38);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.mutation-choice-btn:hover,
+.mutation-skip-btn:hover {
+    background: rgba(255, 209, 102, 0.16);
+    border-color: rgba(255, 209, 102, 0.7);
+    transform: translateY(-1px);
+}
+
+.mutation-choice-name {
+    display: block;
+    color: #ffd166;
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 4px;
+}
+
+.mutation-choice-desc {
+    display: block;
+    color: #d9e8ff;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.mutation-skip-btn {
+    margin-top: 12px;
+    text-align: center;
+    color: #b0c4de;
 }
 
 .talent-popup-content h2 {
     color: #4A90E2;
-    margin-bottom: 10px;
-    font-size: 28px;
+    margin: 0;
+    font-size: 24px;
     text-shadow: 0 0 10px rgba(74, 144, 226, 0.5);
 }
 
 .talent-description {
     color: #b0c4de;
-    margin-bottom: 25px;
-    font-size: 16px;
+    margin: 0;
+    font-size: 14px;
     line-height: 1.4;
 }
 
 /* Talent Grid Layout */
 .talent-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
-    margin: 25px 0;
-    padding: 20px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 12px;
     background: rgba(0, 0, 0, 0.3);
-    border-radius: 15px;
+    border-radius: 10px;
     border: 1px solid #333;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.talent-tier-section {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.talent-tier-label {
+    color: #b0c4de;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    min-height: 16px;
+}
+
+.talent-tier-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    min-width: 0;
 }
 
 /* Square Talent Boxes */
 .talent-box {
     background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
     border: 2px solid #555;
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: left;
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
-    min-height: 160px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    min-height: 72px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-areas:
+        "icon name"
+        "icon level"
+        "icon cost";
+    column-gap: 10px;
+    row-gap: 3px;
+    align-items: center;
 }
 
 .talent-box:hover {
@@ -733,17 +895,21 @@ body {
 }
 
 .talent-box-icon {
-    font-size: 32px;
-    margin-bottom: 10px;
+    grid-area: icon;
+    font-size: 26px;
+    margin-bottom: 0;
     display: block;
+    text-align: center;
 }
 
 .talent-box-name {
+    grid-area: name;
     color: #4A90E2;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: bold;
-    margin-bottom: 8px;
+    margin-bottom: 0;
     line-height: 1.2;
+    overflow-wrap: anywhere;
 }
 
 .talent-box-description {
@@ -755,13 +921,22 @@ body {
 }
 
 .talent-box-cost {
+    grid-area: cost;
     color: #FFA500;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
     background: rgba(255, 165, 0, 0.1);
-    padding: 4px 8px;
+    padding: 3px 6px;
     border-radius: 6px;
     border: 1px solid rgba(255, 165, 0, 0.3);
+    justify-self: start;
+}
+
+.talent-box-level {
+    grid-area: level;
+    color: #d9e8ff;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .talent-box-category {
@@ -779,52 +954,54 @@ body {
 .talent-info-panel {
     background: linear-gradient(135deg, #333, #222);
     border: 2px solid #555;
-    border-radius: 12px;
-    padding: 20px;
-    margin: 20px 0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 0;
     text-align: left;
+    flex-shrink: 0;
 }
 
 .selected-talent-info h3 {
     color: #4A90E2;
-    margin: 0 0 10px 0;
-    font-size: 20px;
+    margin: 0 0 6px 0;
+    font-size: 16px;
 }
 
 .selected-talent-info p {
     color: #ccc;
-    margin: 0 0 10px 0;
-    font-size: 14px;
-    line-height: 1.4;
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    line-height: 1.35;
 }
 
 .talent-cost {
     color: #FFA500;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: bold;
     background: rgba(255, 165, 0, 0.1);
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 5px 8px;
+    border-radius: 6px;
     border: 1px solid rgba(255, 165, 0, 0.3);
     display: inline-block;
 }
 
 /* Talent Popup Actions */
 .talent-popup-actions {
-    margin-top: 25px;
+    margin-top: 0;
     display: flex;
-    gap: 15px;
+    gap: 12px;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .talent-select-btn {
     background: linear-gradient(135deg, #666, #555);
     color: white;
     border: none;
-    padding: 12px 24px;
+    padding: 10px 22px;
     border-radius: 8px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: bold;
     transition: all 0.3s ease;
     min-width: 120px;
@@ -854,6 +1031,27 @@ body {
 
 .talent-select-btn:active {
     transform: translateY(0);
+}
+
+@media (max-width: 860px) {
+    .talent-popup-content {
+        width: 94vw;
+        max-height: 92vh;
+        padding: 14px;
+    }
+
+    .talent-grid {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+
+    .talent-tier-grid {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .talent-popup-actions {
+        flex-wrap: wrap;
+    }
 }
 
 /* Biome-specific button styling */

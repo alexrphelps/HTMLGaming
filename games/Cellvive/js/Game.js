@@ -85,6 +85,18 @@ class CellviveGame {
             talentsUnlocked: 0,
             sporesCollected: 0
         };
+
+        const phases = this.getProgressionPhases();
+        this.progression = {
+            phase: phases[0],
+            lastPhaseId: phases[0].ID
+        };
+        this.persistence = this.loadPersistence();
+        this.activeMutations = [];
+        this.mutationPopup = null;
+        this.mutationChoiceGrid = null;
+        this.mutationSkipBtn = null;
+        this.services = this.createRuntimeServices();
         
         GameLogger.gameInit('Cellvive Game initialized');
     }
@@ -118,6 +130,7 @@ class CellviveGame {
         this.initRenderer();
         this.initCollisionDetector();
         this.initEnhancedSystems();
+        this.configureRuntimeServices();
         this.initCells();
         this.initEnemies();
         this.initTutorialManager();
@@ -134,6 +147,88 @@ class CellviveGame {
             GameLogger.error(`Failed to initialize Cellvive game: ${error.message}`);
             throw error;
         }
+    }
+
+    createRuntimeServices() {
+        return {
+            getCells: () => this.cells,
+            playDamage: () => this.audioManager?.playDamage(),
+            createPowerUpParticles: (x, y, type) => this.particleSystem?.createPowerUpParticles(x, y, type),
+            onTalentSporeCollected: () => this.handleTalentSporeCollected()
+        };
+    }
+
+    configureRuntimeServices() {
+        this.services = this.createRuntimeServices();
+        if (this.player) {
+            this.player.services = this.services;
+        }
+    }
+
+    handleTalentSporeCollected() {
+        if (this.talentSystem) {
+            this.talentSystem.addTalentPoints(CELLVIVE_CONSTANTS.TALENTS?.POINTS_PER_ORANGE_SPORE || 1);
+        }
+        this.showMutationChoices();
+        this.recordDiscovery('orange_spore');
+    }
+
+    loadPersistence() {
+        const fallback = {
+            bestScore: 0,
+            bestSurvivalTime: 0,
+            bestSize: 0,
+            discoveries: []
+        };
+
+        try {
+            const saved = JSON.parse(localStorage.getItem(this.getPersistenceKey()) || 'null');
+            return saved && typeof saved === 'object' ? { ...fallback, ...saved } : fallback;
+        } catch (error) {
+            console.warn('Cellvive persistence unavailable:', error);
+            return fallback;
+        }
+    }
+
+    getPersistenceKey() {
+        return CELLVIVE_CONSTANTS.PERSISTENCE?.STORAGE_KEY || 'cellvive_progress_v2';
+    }
+
+    getProgressionPhases() {
+        return CELLVIVE_CONSTANTS.PROGRESSION?.PHASES || [
+            { ID: 'seedling', NAME: 'Seedling', MIN_SIZE: 0, DESCRIPTION: 'Survive and grow.' }
+        ];
+    }
+
+    getMutationOptions() {
+        return CELLVIVE_CONSTANTS.MUTATIONS?.OPTIONS || [];
+    }
+
+    savePersistence() {
+        try {
+            localStorage.setItem(this.getPersistenceKey(), JSON.stringify(this.persistence));
+        } catch (error) {
+            console.warn('Cellvive persistence save failed:', error);
+        }
+    }
+
+    recordDiscovery(id) {
+        if (!id || !this.persistence) return;
+        if (!Array.isArray(this.persistence.discoveries)) {
+            this.persistence.discoveries = [];
+        }
+        if (!this.persistence.discoveries.includes(id)) {
+            this.persistence.discoveries.unshift(id);
+            this.persistence.discoveries = this.persistence.discoveries.slice(0, CELLVIVE_CONSTANTS.PERSISTENCE?.DISCOVERY_LIMIT || 40);
+            this.savePersistence();
+        }
+    }
+
+    updateBestRunStats(score = this.score, finalSize = this.player?.radius || 0, survivalTime = Math.floor(this.gameTime / 1000)) {
+        this.persistence.bestScore = Math.max(this.persistence.bestScore || 0, score || 0);
+        this.persistence.bestSize = Math.max(this.persistence.bestSize || 0, Math.floor(finalSize || 0));
+        this.persistence.bestSurvivalTime = Math.max(this.persistence.bestSurvivalTime || 0, survivalTime || 0);
+        this.savePersistence();
     }
 
     /**
@@ -161,6 +256,7 @@ class CellviveGame {
             color: '#4a90e2',
             maxSpeed: 3
         });
+        this.player.services = this.services;
         
         // Initialize camera to follow player (will be updated in updateCamera)
         this.camera.x = playerX;
@@ -204,6 +300,7 @@ class CellviveGame {
         const score = Math.floor(this.player.radius * 10);
         const finalSize = Math.floor(this.player.radius);
         const survivalTime = Math.floor(this.gameTime / 1000); // Convert to seconds
+        this.updateBestRunStats(score, finalSize, survivalTime);
         
         // Update game over screen with stats
         this.updateGameOverStats(score, finalSize, survivalTime, cause);
@@ -405,6 +502,33 @@ class CellviveGame {
         } else {
             console.warn('🌳 Talent tree button not found in DOM');
         }
+
+        const pauseBtn = document.getElementById('pause-btn');
+        if (pauseBtn) {
+            this.addManagedEventListener(pauseBtn, 'click', () => this.toggleManualPause());
+        }
+
+        this.addManagedEventListener(document, 'keydown', (e) => {
+            if ((e.key === 'p' || e.key === 'P') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                this.toggleManualPause();
+            }
+        });
+
+        this.addManagedEventListener(document, 'visibilitychange', () => {
+            if (document.hidden) {
+                this.pause('visibility');
+            } else {
+                this.resume('visibility');
+            }
+            this.updatePauseButton();
+        });
+
+        this.mutationPopup = document.getElementById('mutation-popup');
+        this.mutationChoiceGrid = document.getElementById('mutation-choice-grid');
+        this.mutationSkipBtn = document.getElementById('mutation-skip-btn');
+        if (this.mutationSkipBtn) {
+            this.addManagedEventListener(this.mutationSkipBtn, 'click', () => this.hideMutationChoices());
+        }
         
         // Window resize
         this.addManagedEventListener(window, 'resize', () => this.handleResize());
@@ -588,10 +712,13 @@ class CellviveGame {
         if (this.spawnManager) this.spawnManager.spawnEnemies();
         
         // Update environment systems
-        this.updateEnvironment();
+        this.updateEnvironment(deltaTime);
         
         // Update enhanced systems
         this.updateEnhancedSystems();
+
+        this.updateProgression();
+        this.updateActiveMutations();
         
         // Check for tutorial discoveries
         if (this.tutorialManager) {
@@ -914,9 +1041,9 @@ class CellviveGame {
                 
                 // Determine if player can eat this cell
                 const canEatSpore = isSpore && CELLVIVE_CONSTANTS.EATING.SPORES_ALWAYS_EDIBLE;
-                const canEatCell = CELLVIVE_CONSTANTS.EATING.USE_STRICT_SIZE_CHECK ? 
-                    this.player.radius > requiredSize : 
-                    this.player.radius >= requiredSize;
+                const canEatCell = typeof this.player.canEatCell === 'function'
+                    ? this.player.canEatCell(cell)
+                    : (CELLVIVE_CONSTANTS.EATING.USE_STRICT_SIZE_CHECK ? this.player.radius > requiredSize : this.player.radius >= requiredSize);
                 
                 if (canEatSpore || canEatCell) {
                     // Player eats the cell (spores are always edible!)
@@ -1137,11 +1264,11 @@ class CellviveGame {
     /**
      * Update environment systems
      */
-    updateEnvironment() {
+    updateEnvironment(deltaTime = 16) {
         if (!this.environmentManager) return;
         
         // Update environment manager
-        this.environmentManager.update();
+        this.environmentManager.update(deltaTime);
         
         // Apply environmental effects to all entities
         this.applyEnvironmentalEffects();
@@ -1156,6 +1283,9 @@ class CellviveGame {
     applyEnvironmentalEffects() {
         // Apply effects to player
         this.environmentManager.applyEffectsToCell(this.player);
+        this.environmentManager.getActiveEffectsForCell(this.player).forEach(effect => {
+            this.recordDiscovery(`environment_${String(effect).toLowerCase().replace(/\s+/g, '_')}`);
+        });
         
         // Apply effects to AI cells
         this.cells.forEach(cell => {
@@ -1226,12 +1356,152 @@ class CellviveGame {
         // No temporary power-ups to track anymore - all effects are permanent
         // This method is kept for compatibility but does nothing
     }
+
+    updateProgression() {
+        if (!this.player) return;
+        const phases = this.getProgressionPhases();
+        const nextPhase = phases
+            .slice()
+            .reverse()
+            .find(phase => this.player.radius >= phase.MIN_SIZE) || phases[0];
+
+        if (nextPhase.ID !== this.progression.lastPhaseId) {
+            this.progression.phase = nextPhase;
+            this.progression.lastPhaseId = nextPhase.ID;
+            this.enhancedUI?.addNotification(`Phase: ${nextPhase.NAME}`, '#ffd166');
+            this.recordDiscovery(`phase_${nextPhase.ID}`);
+        } else {
+            this.progression.phase = nextPhase;
+        }
+    }
+
+    updateActiveMutations() {
+        const now = Date.now();
+        this.activeMutations = this.activeMutations.filter(mutation => mutation.endsAt > now);
+        if (this.player) {
+            this.player.mutationSpeedMultiplier = this.getActiveMutationValue('temporary_speed');
+            this.player.hazardDamageReduction = Math.max(
+                this.getActiveMutationValue('temporary_resistance'),
+                this.player.toxicDamageReduction || 0
+            );
+            this.player.predatorSenseBonus = this.getActiveMutationValue('predator_sense');
+            if (typeof this.player.updateMaxSpeed === 'function') {
+                this.player.updateMaxSpeed();
+            }
+        }
+    }
+
+    getActiveMutationValue(type) {
+        return this.activeMutations
+            .filter(mutation => mutation.type === type)
+            .reduce((total, mutation) => total + (mutation.value || 0), 0);
+    }
+
+    showMutationChoices() {
+        if (!this.mutationPopup || !this.mutationChoiceGrid || !this.player) return false;
+        const options = this.pickMutationChoices();
+        if (options.length === 0) return false;
+        this.mutationChoiceGrid.innerHTML = '';
+
+        options.forEach(option => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'mutation-choice-btn';
+            button.innerHTML = `
+                <span class="mutation-choice-name">${option.NAME}</span>
+                <span class="mutation-choice-desc">${option.DESCRIPTION}</span>
+            `;
+            button.addEventListener('click', () => this.applyMutationChoice(option));
+            this.mutationChoiceGrid.appendChild(button);
+        });
+
+        this.pauseGame('mutation');
+        this.mutationPopup.classList.remove('hidden');
+        return true;
+    }
+
+    pickMutationChoices() {
+        const options = this.getMutationOptions().slice();
+        const count = Math.min(CELLVIVE_CONSTANTS.MUTATIONS?.CHOICES_PER_ORANGE_SPORE || 3, options.length);
+        const choices = [];
+
+        while (choices.length < count && options.length > 0) {
+            const index = Math.floor(Math.random() * options.length);
+            choices.push(options.splice(index, 1)[0]);
+        }
+
+        return choices;
+    }
+
+    applyMutationChoice(option) {
+        if (!option || !this.player) return false;
+
+        switch (option.TYPE) {
+            case 'temporary_speed':
+                this.addTimedMutation(option.TYPE, option.VALUE, option.DURATION);
+                break;
+            case 'temporary_resistance':
+                this.addTimedMutation(option.TYPE, option.VALUE, option.DURATION);
+                break;
+            case 'predator_sense':
+                this.addTimedMutation(option.TYPE, option.VALUE, option.DURATION);
+                break;
+            case 'health_patch':
+                this.player.maxHealth += option.MAX_HEALTH || 0;
+                this.player.health = Math.min(this.player.maxHealth, this.player.health + (option.HEALTH || 0));
+                break;
+            case 'spore_lure':
+                for (let i = 0; i < (option.COUNT || 4); i++) {
+                    this.spawnManager?.spawnRandomGreenSpore();
+                }
+                break;
+        }
+
+        this.enhancedUI?.addNotification(option.NAME, '#ffd166');
+        this.recordDiscovery(`mutation_${option.ID}`);
+        this.hideMutationChoices();
+        return true;
+    }
+
+    addTimedMutation(type, value, duration) {
+        this.activeMutations.push({
+            type,
+            value,
+            endsAt: Date.now() + (duration || 20000)
+        });
+    }
+
+    hideMutationChoices() {
+        if (this.mutationPopup) {
+            this.mutationPopup.classList.add('hidden');
+        }
+        if (this.mutationChoiceGrid) {
+            this.mutationChoiceGrid.innerHTML = '';
+        }
+        this.resumeGame('mutation');
+    }
     
     /**
      * Check if god mode is enabled
      */
     isGodModeEnabled() {
         return this.testingManager && this.testingManager.isEnabled('godmode');
+    }
+
+    toggleManualPause() {
+        if (this.isPaused && this.pauseReasons.has('manual')) {
+            this.resumeGame('manual');
+        } else {
+            this.pauseGame('manual');
+        }
+        this.updatePauseButton();
+    }
+
+    updatePauseButton() {
+        const pauseBtn = document.getElementById('pause-btn');
+        if (pauseBtn) {
+            pauseBtn.classList.toggle('paused', this.isPaused);
+        }
     }
 
     /**
@@ -1245,6 +1515,7 @@ class CellviveGame {
         if (!wasPaused && this.isPaused) {
             console.log('Game paused');
         }
+        this.updatePauseButton();
         return true;
     }
 
@@ -1265,6 +1536,7 @@ class CellviveGame {
             console.log('Game resumed');
         }
 
+        this.updatePauseButton();
         return !this.isPaused;
     }
 
@@ -1746,6 +2018,51 @@ class CellviveGame {
         if (cellCountElement) {
             cellCountElement.textContent = this.cells.length;
         }
+
+        const healthElement = document.getElementById('health');
+        if (healthElement && this.player) {
+            healthElement.textContent = `${Math.round(this.player.health)}/${Math.round(this.player.maxHealth)}`;
+        }
+
+        const talentPoints = this.player && typeof this.player.talentPoints === 'number'
+            ? this.player.talentPoints
+            : 0;
+        const talentPointsElement = document.getElementById('talent-points');
+        if (talentPointsElement) {
+            talentPointsElement.textContent = talentPoints;
+        }
+        const bottomTalentPointsElement = document.getElementById('talent-points-bottom');
+        if (bottomTalentPointsElement) {
+            bottomTalentPointsElement.textContent = talentPoints;
+        }
+
+        const phaseElement = document.getElementById('phase');
+        if (phaseElement) {
+            phaseElement.textContent = this.progression.phase.NAME;
+        }
+
+        const eventElement = document.getElementById('active-event');
+        if (eventElement) {
+            const event = this.environmentManager?.getEventStatus();
+            eventElement.textContent = event ? `${event.name} (${Math.ceil(event.remainingMs / 1000)}s)` : 'Calm';
+            eventElement.style.color = event?.color || '#d9e8ff';
+        }
+
+        const dangerElement = document.getElementById('nearest-danger');
+        if (dangerElement) {
+            const threat = this.environmentManager?.getNearestThreat(this.player);
+            dangerElement.textContent = threat ? `${threat.label} ${Math.round(threat.distance)}px` : 'Clear';
+        }
+
+        const bestRunElement = document.getElementById('best-run');
+        if (bestRunElement) {
+            bestRunElement.textContent = `${this.persistence.bestSurvivalTime || 0}s / size ${this.persistence.bestSize || 0}`;
+        }
+
+        const codexCountElement = document.getElementById('codex-count');
+        if (codexCountElement) {
+            codexCountElement.textContent = Array.isArray(this.persistence.discoveries) ? this.persistence.discoveries.length : 0;
+        }
         
         // Update zone information
         if (this.player) {
@@ -1857,6 +2174,7 @@ class CellviveGame {
     gameOver() {
         console.log('🔬 Game Over!');
         this.gameState = 'gameOver';
+        this.updateBestRunStats(this.score, this.player?.radius || 0, Math.floor(this.gameTime / 1000));
         
         // Show game over screen
         const gameOverElement = document.getElementById('game-over');
@@ -1883,6 +2201,12 @@ class CellviveGame {
         this.cells = [];
         this.enemies = []; // Reset enemies too
         this.camera = { x: 0, y: 0, zoom: 1.0 };
+        this.activeMutations = [];
+        const phases = this.getProgressionPhases();
+        this.progression = {
+            phase: phases[0],
+            lastPhaseId: phases[0].ID
+        };
         
         // Reset environment
         if (this.environmentManager) {
@@ -1904,6 +2228,7 @@ class CellviveGame {
         
         // Reset player
         this.initPlayer();
+        this.configureRuntimeServices();
         this.initCells();
         
         // Reset enemies

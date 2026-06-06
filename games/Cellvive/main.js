@@ -23,9 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Expose game instance globally for talent system access
         window.game = game;
         
-        // Setup pause button
-        setupPauseButton();
-        
     } catch (error) {
         console.error('Failed to start Cellvive game:', error);
         showErrorMessage('Failed to start the game. Please refresh the page and try again.');
@@ -62,88 +59,6 @@ function showErrorMessage(message) {
         }
     }, 5000);
 }
-
-/**
- * Setup pause button functionality
- */
-function setupPauseButton() {
-    const pauseBtn = document.getElementById('pause-btn');
-    
-    if (!pauseBtn) {
-        console.warn('Pause button not found');
-        return;
-    }
-    
-    // Click handler for pause button
-    pauseBtn.addEventListener('click', () => {
-        togglePause();
-    });
-    
-    // Keyboard shortcut (P key)
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P') {
-            // Don't pause if typing in an input field
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                return;
-            }
-            togglePause();
-        }
-    });
-}
-
-/**
- * Toggle pause/unpause state
- */
-function togglePause() {
-    if (!game) return;
-    
-    const pauseBtn = document.getElementById('pause-btn');
-    
-    if (game.isPaused) {
-        game.resumeGame('manual');
-        if (pauseBtn) {
-            pauseBtn.classList.remove('paused');
-        }
-    } else {
-        game.pauseGame('manual');
-        if (pauseBtn) {
-            pauseBtn.classList.add('paused');
-        }
-    }
-}
-
-/**
- * Handle page visibility change (pause/resume game)
- */
-document.addEventListener('visibilitychange', () => {
-    if (game) {
-        const pauseBtn = document.getElementById('pause-btn');
-        if (document.hidden) {
-            game.pause('visibility');
-            if (pauseBtn) {
-                pauseBtn.classList.add('paused');
-            }
-        } else {
-            game.resume('visibility');
-            if (pauseBtn) {
-                pauseBtn.classList.toggle('paused', game.isPaused);
-            }
-        }
-    }
-});
-
-/**
- * Handle window resize with debouncing
- */
-let resizeTimeout;
-window.addEventListener('resize', () => {
-    if (game) {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            game.handleResize();
-        }, 100);
-    }
-});
 
 /**
  * Handle page unload (cleanup)

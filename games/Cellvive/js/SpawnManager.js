@@ -154,7 +154,8 @@ class SpawnManager {
 
     spawnCells() {
         if (this.cells.length >= this.config.maxCells) return;
-        if (Math.random() < this.config.cellSpawnRate) {
+        const multiplier = this.environmentManager?.getSpawnMultipliers?.().cells || 1;
+        if (Math.random() < this.config.cellSpawnRate * multiplier) {
             const cell = this.createRandomCell();
             if (cell) {
                 this.cells.push(cell);
@@ -167,7 +168,9 @@ class SpawnManager {
 
     spawnEnemies() {
         if (this.enemies.length >= this.config.maxEnemies) return;
-        if (Math.random() < this.config.enemySpawnRate) {
+        const eventMultiplier = this.environmentManager?.getSpawnMultipliers?.().enemies || 1;
+        const phaseMultiplier = this.game?.progression?.phase?.id === 'apex' ? 1.35 : this.game?.progression?.phase?.id === 'predator' ? 1.15 : 1;
+        if (Math.random() < this.config.enemySpawnRate * eventMultiplier * phaseMultiplier) {
             const enemy = this.createRandomEnemy();
             if (enemy) {
                 this.enemies.push(enemy);
@@ -202,23 +205,36 @@ class SpawnManager {
         return this.createSporeAt(position.x, position.y, this.pickWeightedSporeType(), { speed });
     }
 
-    createRandomEnemy() {
+    createRandomEnemy(options = {}) {
         const enemyTypes = ['amoeba', 'virus'];
         const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
         const zoneWeights = {
             SAFE_ZONE: 0.0,
-            NORMAL_ZONE: 0.2,
-            DANGER_ZONE: 0.5,
-            DEATH_ZONE: 0.3
+            NORMAL_ZONE: options.forceDanger ? 0.0 : 0.2,
+            DANGER_ZONE: options.forceDanger ? 0.65 : 0.5,
+            DEATH_ZONE: options.forceDanger ? 0.35 : 0.3
         };
         const targetZone = this.pickWeightedZone(zoneWeights);
         const zoneParams = this.getZoneBasedEnemyParams(targetZone);
         if (!zoneParams) return null;
         const position = this.createPositionInZone(targetZone, zoneParams.radius);
-        const enemyOptions = { x: position.x, y: position.y, radius: zoneParams.radius, speed: zoneParams.speed };
+        const isElite = options.forceDanger || this.game?.progression?.phase?.id === 'apex' && Math.random() < 0.16;
+        const enemyOptions = {
+            x: position.x,
+            y: position.y,
+            radius: isElite ? zoneParams.radius * 1.2 : zoneParams.radius,
+            speed: isElite ? zoneParams.speed * 1.12 : zoneParams.speed
+        };
         try {
-            if (enemyType === 'amoeba') return new AmoebaEnemy(enemyOptions);
-            if (enemyType === 'virus') return new VirusEnemy(enemyOptions);
+            let enemy = null;
+            if (enemyType === 'amoeba') enemy = new AmoebaEnemy(enemyOptions);
+            if (enemyType === 'virus') enemy = new VirusEnemy(enemyOptions);
+            if (enemy && isElite) {
+                enemy.ecologyRole = 'apex_rival';
+                enemy.color = enemyType === 'virus' ? '#ff4d8d' : '#8bd3ff';
+                enemy.health = (enemy.health || 100) * 1.25;
+            }
+            return enemy;
         } catch (error) {
             console.warn('Failed to create enemy:', error);
             return null;

@@ -410,7 +410,10 @@ class Player {
         this.health = Math.min(this.maxHealth, this.health + energyGain);
         
         // Add +1 talent point
-        if (window.game && window.game.talentSystem) {
+        if (this.services && typeof this.services.onTalentSporeCollected === 'function') {
+            this.services.onTalentSporeCollected();
+            GameLogger.debug(`Orange Talent Spore: +${energyGain} health, +1 talent point`);
+        } else if (window.game && window.game.talentSystem) {
             window.game.talentSystem.addTalentPoints(1);
             GameLogger.debug(`🍊 Orange Talent Spore: +${energyGain} health, +1 talent point`);
         } else {
@@ -418,7 +421,7 @@ class Player {
         }
         
         // Open talent system UI if available
-        if (window.game && window.game.openTalentSystem) {
+        if (!this.services && window.game && window.game.openTalentSystem) {
             window.game.openTalentSystem();
         }
     }
@@ -454,6 +457,9 @@ class Player {
         let talentSpeedMultiplier = 1;
         if (this.hasRapidMovement && this.speedMultiplier) {
             talentSpeedMultiplier = this.speedMultiplier;
+        }
+        if (this.mutationSpeedMultiplier) {
+            talentSpeedMultiplier += this.mutationSpeedMultiplier;
         }
         
         // Calculate final max speed
@@ -523,7 +529,9 @@ class Player {
         }
         this.health = Math.max(0, this.health - amount);
         
-        if (window.game && window.game.audioManager) {
+        if (this.services && typeof this.services.playDamage === 'function') {
+            this.services.playDamage();
+        } else if (window.game && window.game.audioManager) {
             window.game.audioManager.playDamage();
         }
         
@@ -591,7 +599,9 @@ class Player {
         
         // Find nearby cells within magnet range
         const magnetRange = this.powerUpMagnet;
-        const nearbyCells = window.game ? window.game.cells : [];
+        const nearbyCells = this.services && typeof this.services.getCells === 'function'
+            ? this.services.getCells()
+            : (window.game ? window.game.cells : []);
         
         for (const cell of nearbyCells) {
             if (cell === this) continue;
@@ -679,10 +689,9 @@ class Player {
      * Check if player can eat a cell (with predatory instinct talent)
      */
     canEatCell(cell) {
-        const baseSizeRatio = 1.1;
-        const sizeRatio = this.hasPredatoryInstinct ?
-            baseSizeRatio * this.eatSizeModifier :
-            baseSizeRatio;
+        const baseSizeRatio = CELLVIVE_CONSTANTS.EATING?.AI_CELL_SIZE_MULTIPLIER || 1.1;
+        const bonus = Math.max(1, this.eatSizeModifier || 1) + (this.predatorSenseBonus || 0);
+        const sizeRatio = baseSizeRatio / bonus;
         return this.radius > cell.radius * sizeRatio;
     }
     

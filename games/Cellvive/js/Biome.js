@@ -142,7 +142,10 @@ class Biome {
             cell.health = Math.min(cell.maxHealth, cell.health + this.effects.healthRegen);
         }
         if (this.effects.healthDecay > 0) {
-            cell.health = Math.max(0, cell.health - this.effects.healthDecay);
+            const resistance = this.type === 'toxic'
+                ? Math.max(cell.toxicDamageReduction || 0, cell.hazardDamageReduction || 0)
+                : 0;
+            cell.health = Math.max(0, cell.health - this.effects.healthDecay * Math.max(0, 1 - resistance));
         }
         
         // Apply size effects
@@ -174,6 +177,7 @@ class Biome {
      */
     getRenderProps() {
         return {
+            id: this.id,
             type: this.type,
             name: this.name,
             x: this.x,

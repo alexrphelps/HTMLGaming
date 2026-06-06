@@ -211,6 +211,17 @@ class EnhancedUI {
         ctx.fillStyle = '#ffffff';
         ctx.font = '14px Arial';
         ctx.fillText(`Time: ${survivalTime}s`, 20, 135);
+
+        ctx.fillStyle = '#ffd166';
+        ctx.font = '13px Arial';
+        ctx.fillText(`Phase: ${this.game.progression?.phase?.NAME || 'Seedling'}`, 20, 160);
+
+        if (this.game.activeMutations && this.game.activeMutations.length > 0) {
+            const activeNames = this.game.activeMutations.map(mutation => mutation.type.replace(/_/g, ' ')).join(', ');
+            ctx.fillStyle = '#d9e8ff';
+            ctx.font = '12px Arial';
+            ctx.fillText(`Mutations: ${activeNames}`, 20, 182);
+        }
     }
     
     /**
@@ -221,7 +232,7 @@ class EnhancedUI {
         
         const ctx = this.ctx;
         const startX = 20;
-        const startY = 160;
+        const startY = 205;
         
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(startX - 5, startY - 5, 250, this.powerUpDisplay.active.length * 25 + 10);

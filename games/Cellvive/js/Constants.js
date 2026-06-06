@@ -231,10 +231,10 @@ const CELLVIVE_CONSTANTS = {
             SPAWN_RATE: 0.001,
             
             // Size ranges
-            REGULAR_SIZE_MIN: 150,
-            REGULAR_SIZE_MAX: 200,
-            NUTRIENT_SIZE_MIN: 1500, // MODIFIED: Increased by 500% (300 * 5)
-            NUTRIENT_SIZE_MAX: 3500, // MODIFIED: Increased by 500% (700 * 5)
+            REGULAR_SIZE_MIN: 900,
+            REGULAR_SIZE_MAX: 1800,
+            NUTRIENT_SIZE_MIN: 1800,
+            NUTRIENT_SIZE_MAX: 3200,
             
             // Types
             TYPES: {
@@ -259,12 +259,12 @@ const CELLVIVE_CONSTANTS = {
             }
         },
         
-        // Hazard settings - DISABLED
+        // Hazard settings
         HAZARDS: {
-            ENABLED: false, // Disable all hazards
-            INITIAL_COUNT: 0,
-            MAX_COUNT: 0,
-            SPAWN_RATE: 0,
+            ENABLED: true,
+            INITIAL_COUNT: 6,
+            MAX_COUNT: 18,
+            SPAWN_RATE: 0.00035,
             
             // Size ranges
             MIN_SIZE: 80,
@@ -278,24 +278,50 @@ const CELLVIVE_CONSTANTS = {
             // Types
             TYPES: {
                 ACID: {
+                    TYPE: 'acid',
+                    NAME: 'Acid Bloom',
                     COLOR: '#FF4500',
-                    DAMAGE: 2,
-                    DAMAGE_INTERVAL: 1000
+                    DAMAGE: 1.8,
+                    DAMAGE_INTERVAL: 900,
+                    SLOW_MULTIPLIER: 0.92
                 },
                 TOXIC: {
-                    COLOR: '#8B4513',
-                    DAMAGE: 1,
-                    DAMAGE_INTERVAL: 2000
+                    TYPE: 'toxic',
+                    NAME: 'Toxin Cloud',
+                    COLOR: '#7CFC00',
+                    DAMAGE: 1.1,
+                    DAMAGE_INTERVAL: 1300,
+                    SLOW_MULTIPLIER: 0.96
                 }
             }
         },
         
-        // Current flow (DISABLED)
+        // Current flow
         CURRENTS: {
-            ENABLED: false,
-            INITIAL_COUNT: 0,
-            MAX_COUNT: 0,
-            SPAWN_RATE: 0
+            ENABLED: true,
+            INITIAL_COUNT: 5,
+            MAX_COUNT: 12,
+            SPAWN_RATE: 0.00025,
+            MIN_LENGTH: 420,
+            MAX_LENGTH: 900,
+            MIN_WIDTH: 100,
+            MAX_WIDTH: 190,
+            MIN_FORCE: 0.012,
+            MAX_FORCE: 0.028
+        },
+
+        EVENTS: {
+            ENABLED: true,
+            MIN_INTERVAL: 45000,
+            MAX_INTERVAL: 90000,
+            DURATION: 18000,
+            TYPES: {
+                NUTRIENT_BLOOM: { TYPE: 'nutrient_bloom', NAME: 'Nutrient Bloom', COLOR: '#90EE90' },
+                TOXIC_BLOOM: { TYPE: 'toxic_bloom', NAME: 'Toxic Bloom', COLOR: '#7CFC00' },
+                CURRENT_SURGE: { TYPE: 'current_surge', NAME: 'Current Surge', COLOR: '#00FFFF' },
+                SPORE_STORM: { TYPE: 'spore_storm', NAME: 'Spore Storm', COLOR: '#FFD700' },
+                PREDATOR_MIGRATION: { TYPE: 'predator_migration', NAME: 'Predator Migration', COLOR: '#FF6B6B' }
+            }
         },
         
         // Food Spawner settings
@@ -372,6 +398,34 @@ const CELLVIVE_CONSTANTS = {
                 RARITY: 'uncommon'   // Special handling
             }
         }
+    },
+
+    // ========================================
+    // RUN PROGRESSION, MUTATIONS, AND SAVE DATA
+    // ========================================
+    PROGRESSION: {
+        PHASES: [
+            { ID: 'seedling', NAME: 'Seedling', MIN_SIZE: 0, DESCRIPTION: 'Feed, learn the currents, and build early mass.' },
+            { ID: 'adaptation', NAME: 'Adaptation', MIN_SIZE: 45, DESCRIPTION: 'Biomes matter now. Pick mutations around the ecosystem.' },
+            { ID: 'predator', NAME: 'Predator', MIN_SIZE: 95, DESCRIPTION: 'Enemies begin to treat you as a rival organism.' },
+            { ID: 'apex', NAME: 'Apex', MIN_SIZE: 170, DESCRIPTION: 'Survive migrations and dominate the outer zones.' }
+        ]
+    },
+
+    MUTATIONS: {
+        CHOICES_PER_ORANGE_SPORE: 3,
+        OPTIONS: [
+            { ID: 'cilia_burst', NAME: 'Cilia Burst', DESCRIPTION: '+18% movement speed for 25 seconds.', TYPE: 'temporary_speed', VALUE: 0.18, DURATION: 25000 },
+            { ID: 'membrane_patch', NAME: 'Membrane Patch', DESCRIPTION: 'Restore 35 health and gain +10 max health.', TYPE: 'health_patch', HEALTH: 35, MAX_HEALTH: 10 },
+            { ID: 'spore_lure', NAME: 'Spore Lure', DESCRIPTION: 'Release a small cluster of growth spores nearby.', TYPE: 'spore_lure', COUNT: 6 },
+            { ID: 'toxin_purge', NAME: 'Toxin Purge', DESCRIPTION: 'Reduce toxic and hazard damage by 25% for 30 seconds.', TYPE: 'temporary_resistance', VALUE: 0.25, DURATION: 30000 },
+            { ID: 'predator_sense', NAME: 'Predator Sense', DESCRIPTION: 'Show nearest danger and gain +10% eat tolerance for 25 seconds.', TYPE: 'predator_sense', VALUE: 0.10, DURATION: 25000 }
+        ]
+    },
+
+    PERSISTENCE: {
+        STORAGE_KEY: 'cellvive_progress_v2',
+        DISCOVERY_LIMIT: 40
     },
     
     // ========================================

@@ -1,7 +1,6 @@
 class TalentSystem {
     constructor(game) {
         this.game = game;
-        this.player = game.player;
 
         if (typeof CELLVIVE_CONSTANTS === 'undefined' || !CELLVIVE_CONSTANTS.TALENTS) {
             console.error('CELLVIVE_CONSTANTS not available or TALENTS section missing');
@@ -30,6 +29,7 @@ class TalentSystem {
         }
 
         this.initEventListeners();
+        this.syncTalentStateFromPlayer();
     }
 
     flattenTalentTree(talentTree) {
@@ -76,6 +76,7 @@ class TalentSystem {
 
     showPopup() {
         if (!this.popup || !this.talentGrid) return;
+        this.syncTalentStateFromPlayer();
         this.popup.classList.remove('hidden');
         this.populateTalentGrid();
         this.hideInfoPanel();
@@ -137,23 +138,71 @@ class TalentSystem {
         const currentLevel = this.talentLevels[talent.ID] || 0;
         const maxLevel = talent.MAX_LEVEL || 1;
         const isMaxed = currentLevel >= maxLevel;
-        const isLocked = !this.isTalentAvailable(talent);
+        const canSelect = this.canSelectTalent(talent);
 
         if (isMaxed) box.classList.add('maxed');
-        if (isLocked) box.classList.add('locked');
+        if (!canSelect) box.classList.add('unavailable');
 
         box.innerHTML = `
             <div class="talent-box-icon">${talent.ICON}</div>
             <div class="talent-box-name">${talent.NAME}</div>
             <div class="talent-box-level">${isMaxed ? 'MAX' : 'Lv.' + currentLevel + '/' + maxLevel}</div>
-            <div class="talent-box-cost">${isMaxed ? '—' : talent.COST_PER_LEVEL + ' spore(s)'}</div>
+            <div class="talent-box-cost">${isMaxed ? '—' : this.getTalentCost(talent) + ' spore(s)'}</div>
         `;
 
-        if (!isMaxed && !isLocked) {
+        if (canSelect) {
             box.addEventListener('click', () => this.selectTalentBox(talent));
         }
 
         return box;
+    }
+
+    getCurrentPlayer() {
+        return this.game ? this.game.player : null;
+    }
+
+    syncTalentStateFromPlayer() {
+        const player = this.getCurrentPlayer();
+        if (!player) return;
+
+        if (typeof player.talentPoints !== 'number') {
+            player.talentPoints = 0;
+        }
+        if (!player.talentLevels || typeof player.talentLevels !== 'object') {
+            player.talentLevels = {};
+        }
+
+        this.talentLevels = { ...player.talentLevels };
+        this.playerTalents = new Set(
+            Object.keys(this.talentLevels).filter(talentId => (this.talentLevels[talentId] || 0) > 0)
+        );
+    }
+
+    syncTalentStateToPlayer() {
+        const player = this.getCurrentPlayer();
+        if (!player) return;
+
+        if (!player.talentLevels || typeof player.talentLevels !== 'object') {
+            player.talentLevels = {};
+        }
+        player.talentLevels = { ...this.talentLevels };
+    }
+
+    getTalentCost(talent) {
+        if (!talent) return 0;
+        return talent.COST_PER_LEVEL || talent.COST || 1;
+    }
+
+    canSelectTalent(talent) {
+        const player = this.getCurrentPlayer();
+        if (!player || !talent) return false;
+
+        const currentLevel = this.talentLevels[talent.ID] || 0;
+        const maxLevel = talent.MAX_LEVEL || 1;
+        if (currentLevel >= maxLevel) return false;
+        if (!this.isTalentAvailable(talent)) return false;
+
+        return (player.talentPoints || 0) >= this.getTalentCost(talent);
     }
 
     isTalentAvailable(talent) {
@@ -182,6 +231,10 @@ class TalentSystem {
     }
 
     selectTalentBox(talent) {
+        if (!this.canSelectTalent(talent)) {
+            return false;
+        }
+
         this.talentGrid.querySelectorAll('.talent-box.selected').forEach(box => {
             box.classList.remove('selected');
         });
@@ -191,15 +244,16 @@ class TalentSystem {
 
         this.selectedTalent = talent;
         this.showInfoPanel(talent);
+        return true;
     }
 
     showInfoPanel(talent) {
         if (!this.talentInfoPanel) return;
         if (this.selectedTalentName) this.selectedTalentName.textContent = talent.NAME;
         if (this.selectedTalentDescription) this.selectedTalentDescription.textContent = talent.DESCRIPTION;
-        if (this.selectedTalentCost) this.selectedTalentCost.textContent = talent.COST_PER_LEVEL;
+        if (this.selectedTalentCost) this.selectedTalentCost.textContent = this.getTalentCost(talent);
         this.talentInfoPanel.style.display = 'block';
-        if (this.selectBtn) this.selectBtn.disabled = false;
+        if (this.selectBtn) this.selectBtn.disabled = !this.canSelectTalent(talent);
     }
 
     hideInfoPanel() {
@@ -208,30 +262,42 @@ class TalentSystem {
     }
 
     confirmSelection() {
-        if (!this.selectedTalent) return;
+        if (!this.selectedTalent) return false;
+
+        this.syncTalentStateFromPlayer();
+        const player = this.getCurrentPlayer();
+        if (!player || !this.canSelectTalent(this.selectedTalent)) {
+            this.hideInfoPanel();
+            return false;
+        }
 
         const talentId = this.selectedTalent.ID;
         const currentLevel = this.talentLevels[talentId] || 0;
         const maxLevel = this.selectedTalent.MAX_LEVEL || 1;
+        const cost = this.getTalentCost(this.selectedTalent);
 
-        if (currentLevel >= maxLevel) return;
+        if (currentLevel >= maxLevel) return false;
 
+        player.talentPoints -= cost;
         this.talentLevels[talentId] = currentLevel + 1;
         this.playerTalents.add(talentId);
+        this.syncTalentStateToPlayer();
         this.applyTalentEffect(this.selectedTalent);
 
         GameLogger.debug(`Talent ${this.selectedTalent.NAME} upgraded to level ${this.talentLevels[talentId]}`);
         
         if (this.game.audioManager) this.game.audioManager.playTalentUnlock();
         
+        this.populateTalentGrid();
         this.hidePopup();
+        return true;
     }
 
     applyTalentEffect(talent) {
-        if (!this.game.player) return;
-        const player = this.game.player;
+        const player = this.getCurrentPlayer();
+        if (!player) return;
         const level = this.talentLevels[talent.ID] || 1;
-        const effect = talent.EFFECT;
+        const effect = talent.EFFECT || talent.EFFECT_PER_LEVEL || {};
 
         switch (talent.ID) {
             case 'efficient_metabolism':
@@ -331,13 +397,17 @@ class TalentSystem {
     }
 
     addTalentPoints(amount) {
-        if (this.player) {
-            this.player.talentPoints += amount;
-            GameLogger.debug(`+${amount} talent point(s) (total: ${this.player.talentPoints})`);
+        const player = this.getCurrentPlayer();
+        if (player) {
+            if (typeof player.talentPoints !== 'number') {
+                player.talentPoints = 0;
+            }
+            player.talentPoints += amount;
+            GameLogger.debug(`+${amount} talent point(s) (total: ${player.talentPoints})`);
         }
     }
 
-    getStartingMaxHealth(player = this.player) {
+    getStartingMaxHealth(player = this.getCurrentPlayer()) {
         const constantsHealth = typeof CELLVIVE_CONSTANTS !== 'undefined'
             ? CELLVIVE_CONSTANTS.PLAYER?.STARTING_MAX_HEALTH
             : null;
@@ -349,6 +419,7 @@ class TalentSystem {
         this.talentLevels = {};
         if (this.game.player) {
             const p = this.game.player;
+            p.talentLevels = {};
             p.hasEfficientMetabolism = false;
             p.hasThickMembrane = false;
             p.hasRapidMovement = false;

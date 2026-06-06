@@ -577,7 +577,7 @@ class Renderer {
                     
                     if (!renderedConnections.has(connectionId)) {
                         const connectedVirus = viruses.find(v => v.uniqueId === connectedVirusId);
-                        
+
                         if (connectedVirus) {
                             const connectedScreenPos = this.worldToScreen(connectedVirus.x, connectedVirus.y, camera);
                             const connectedScreenX = connectedScreenPos.x;
@@ -755,6 +755,18 @@ class Renderer {
                 this.renderFoodSpawner(spawner, camera);
             });
         }
+
+        if (environmentElements.currents) {
+            environmentElements.currents.forEach(current => {
+                this.renderCurrent(current, camera);
+            });
+        }
+
+        if (environmentElements.hazards) {
+            environmentElements.hazards.forEach(hazard => {
+                this.renderHazard(hazard, camera);
+            });
+        }
     }
     
     /**
@@ -801,6 +813,79 @@ class Renderer {
         
         this.ctx.restore();
     }
+
+    renderHazard(hazard, camera) {
+        if (!hazard || !camera) return;
+        const zoom = camera.zoom || 1.0;
+        const screenPos = this.worldToScreen(hazard.x, hazard.y, camera);
+        const radius = hazard.radius * zoom;
+
+        if (screenPos.x + radius < 0 || screenPos.x - radius > this.width ||
+            screenPos.y + radius < 0 || screenPos.y - radius > this.height) {
+            return;
+        }
+
+        const pulse = 1 + Math.sin(hazard.pulse || 0) * 0.08;
+        const drawRadius = radius * pulse;
+
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.26;
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, drawRadius
+        );
+        gradient.addColorStop(0, hazard.color || '#7CFC00');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, drawRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.globalAlpha = 0.6;
+        this.ctx.strokeStyle = hazard.color || '#7CFC00';
+        this.ctx.lineWidth = Math.max(1, 2 * zoom);
+        this.ctx.setLineDash([8 * zoom, 8 * zoom]);
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, drawRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        this.ctx.restore();
+    }
+
+    renderCurrent(current, camera) {
+        if (!current || !camera) return;
+        const zoom = camera.zoom || 1.0;
+        const screenPos = this.worldToScreen(current.x, current.y, camera);
+        const length = current.length * zoom;
+        const width = current.width * zoom;
+
+        if (screenPos.x + length < 0 || screenPos.x - length > this.width ||
+            screenPos.y + length < 0 || screenPos.y - length > this.height) {
+            return;
+        }
+
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.rotate(current.angle || 0);
+        this.ctx.globalAlpha = 0.18;
+        this.ctx.fillStyle = current.color || '#00FFFF';
+        this.ctx.fillRect(-length / 2, -width / 2, length, width);
+
+        this.ctx.globalAlpha = 0.55;
+        this.ctx.strokeStyle = current.color || '#00FFFF';
+        this.ctx.lineWidth = Math.max(1, 2 * zoom);
+        const spacing = Math.max(34, 80 * zoom);
+        const phase = ((current.phase || 0) * 18 * zoom) % spacing;
+        for (let x = -length / 2 + phase; x < length / 2; x += spacing) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x + 22 * zoom, -10 * zoom);
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x + 22 * zoom, 10 * zoom);
+            this.ctx.stroke();
+        }
+        this.ctx.restore();
+    }
     
     
     
@@ -810,26 +895,30 @@ class Renderer {
      * Render a food spawner
      */
     renderFoodSpawner(spawner, camera) {
-        const screenX = spawner.x - camera.x;
-        const screenY = spawner.y - camera.y;
+        const zoom = camera.zoom || 1.0;
+        const screenPos = this.worldToScreen(spawner.x, spawner.y, camera);
+        const screenX = screenPos.x;
+        const screenY = screenPos.y;
+        const screenRadius = spawner.radius * zoom;
         
         // Skip if outside viewport
-        if (screenX + spawner.radius < 0 || screenX - spawner.radius > this.width ||
-            screenY + spawner.radius < 0 || screenY - spawner.radius > this.height) {
+        if (screenX + screenRadius < 0 || screenX - screenRadius > this.width ||
+            screenY + screenRadius < 0 || screenY - screenRadius > this.height) {
             return;
         }
         
+        this.ctx.save();
         this.ctx.fillStyle = spawner.color;
         this.ctx.strokeStyle = spawner.strokeColor;
-        this.ctx.lineWidth = spawner.strokeWidth;
+        this.ctx.lineWidth = Math.max(1, spawner.strokeWidth * zoom);
         
         // Render natural polygon shape
         if (spawner.points && spawner.points.length > 0) {
             this.ctx.beginPath();
-            this.ctx.moveTo(screenX + spawner.points[0].x - spawner.x, screenY + spawner.points[0].y - spawner.y);
+            this.ctx.moveTo(screenX + spawner.points[0].x * zoom, screenY + spawner.points[0].y * zoom);
             
             for (let i = 1; i < spawner.points.length; i++) {
-                this.ctx.lineTo(screenX + spawner.points[i].x - spawner.x, screenY + spawner.points[i].y - spawner.y);
+                this.ctx.lineTo(screenX + spawner.points[i].x * zoom, screenY + spawner.points[i].y * zoom);
             }
             
             this.ctx.closePath();
@@ -844,10 +933,11 @@ class Renderer {
         } else {
             // Fallback to circle if no points
             this.ctx.beginPath();
-            this.ctx.arc(screenX, screenY, spawner.radius, 0, Math.PI * 2);
+            this.ctx.arc(screenX, screenY, screenRadius, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.stroke();
         }
+        this.ctx.restore();
     }
     
     /**
@@ -1173,7 +1263,7 @@ class Renderer {
                 const h = parseInt(matches[1]) / 360;
                 const s = parseInt(matches[2]) / 100;
                 const l = parseInt(matches[3]) / 100;
-                
+
                 const hue2rgb = (p, q, t) => {
                     if (t < 0) t += 1;
                     if (t > 1) t -= 1;
@@ -1275,7 +1365,7 @@ class MyceliumRenderer {
      * Generate a mycelium network for a biome
      */
     generateMyceliumNetwork(biome, density = 0.3) {
-        const cacheKey = `${biome.id}_${biome.width}_${biome.height}`;
+        const cacheKey = `${biome.id || `${biome.x}_${biome.y}`}_${biome.width}_${biome.height}_${density}`;
         
         if (this.networkCache.has(cacheKey)) {
             return this.networkCache.get(cacheKey);
@@ -1304,13 +1394,13 @@ class MyceliumRenderer {
             }
         };
         
-        // Generate nodes (mycelium connection points) - DENSE for massive biomes
+        // Generate nodes (mycelium connection points) with density that scales by biome size.
         const area = biome.width * biome.height;
-        const baseNodes = Math.floor(area * density / 4000); // More nodes for massive biomes
-        const minNodes = Math.max(20, baseNodes); // At least 20 nodes for small biomes
-        const numNodes = Math.min(minNodes, 50); // Cap at 50 nodes for massive biomes
-        const minDistance = Math.min(60, Math.min(biome.width, biome.height) / 10); // Adaptive distance
-        const maxAttempts = 2000; // More attempts for large areas
+        const baseNodes = Math.floor(area * density / 16000);
+        const numNodes = Math.max(24, Math.min(baseNodes, 180));
+        const idealSpacing = Math.sqrt(area / numNodes);
+        const minDistance = Math.max(30, Math.min(120, idealSpacing * 0.35));
+        const maxAttempts = Math.max(2000, numNodes * 80);
         
         
         for (let i = 0; i < numNodes; i++) {
@@ -1332,11 +1422,12 @@ class MyceliumRenderer {
                 }
                 
                 if (validPosition) {
+                    const nodeType = Math.random() < 0.15 ? 'major' : 'minor';
                     network.nodes.push({
                         x: x,
                         y: y,
-                        radius: 2, // Small, uniform dots
-                        type: Math.random() < 0.15 ? 'major' : 'minor' // 15% are major nodes
+                        radius: nodeType === 'major' ? 3 : 2,
+                        type: nodeType
                     });
                     placed = true;
                 }
@@ -1345,7 +1436,7 @@ class MyceliumRenderer {
         }
         
         // Generate connections between nearby nodes - ENSURING 100% CONNECTIVITY
-        const maxConnectionDistance = Math.min(200, Math.max(biome.width, biome.height) * 0.7); // Large distance for massive biomes
+        const maxConnectionDistance = Math.max(220, Math.min(520, idealSpacing * 2.2));
         for (let i = 0; i < network.nodes.length; i++) {
             const node = network.nodes[i];
             const connections = [];
@@ -1372,7 +1463,7 @@ class MyceliumRenderer {
             // Sort by distance and take more connections to ensure connectivity
             connections.sort((a, b) => a.distance - b.distance);
             
-            // Ensure at least 2 connections per node for connectivity, up to 5 for dense network
+            // Ensure at least 2 connections per node where available, up to 5 for dense network
             const minConnections = Math.min(2, connections.length);
             const maxConnections = Math.min(5, connections.length);
             const numConnections = Math.max(minConnections, maxConnections);
@@ -1406,15 +1497,30 @@ class MyceliumRenderer {
                             network.nodes[i].x - network.nodes[j].x,
                             network.nodes[i].y - network.nodes[j].y
                         );
-                        
+
                         if (distance < closestDistance && distance <= maxConnectionDistance) {
                             closestDistance = distance;
                             closestNode = j;
                         }
                     }
                 }
-                
+
                 // Connect to the closest node
+                if (closestNode === -1) {
+                    for (let j = 0; j < network.nodes.length; j++) {
+                        if (i === j) continue;
+                        const distance = Math.hypot(
+                            network.nodes[i].x - network.nodes[j].x,
+                            network.nodes[i].y - network.nodes[j].y
+                        );
+
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestNode = j;
+                        }
+                    }
+                }
+
                 if (closestNode !== -1) {
                     network.connections[i].push({
                         targetIndex: closestNode,
@@ -1446,7 +1552,7 @@ class MyceliumRenderer {
         }
         
         // Closer connections are thicker
-        thickness += (1 - distance / 200) * 2; // Thickness variation for large distances
+        thickness += Math.max(0, 1 - distance / 520) * 2; // Thickness variation for large distances
         
         return Math.max(1.5, thickness); // Minimum thickness
     }
@@ -1600,8 +1706,8 @@ class MyceliumRenderer {
                     y: (targetNode.y - camera.y) * zoom
                 };
                 
-                // Simple straight line
-                ctx.lineWidth = connection.thickness;
+                // Simple straight line with a visible minimum at low zoom.
+                ctx.lineWidth = Math.max(1.5, connection.thickness * zoom);
                 
                 ctx.beginPath();
                 ctx.moveTo(nodeScreenPos.x, nodeScreenPos.y);
@@ -1649,9 +1755,10 @@ class MyceliumRenderer {
                 y: (node.y - camera.y) * zoom
             };
             
-            // Simple dot
+            // Simple dot with a visible minimum at low zoom.
+            const nodeRadius = Math.max(2, node.radius * zoom);
             ctx.beginPath();
-            ctx.arc(screenPos.x, screenPos.y, node.radius, 0, Math.PI * 2);
+            ctx.arc(screenPos.x, screenPos.y, nodeRadius, 0, Math.PI * 2);
             ctx.fill();
         }
     }

@@ -5,7 +5,7 @@ document.addEventListener("keydown",(event)=>{
     const key = event.key.toLowerCase();
     const colorIndex = COLOR_KEYS.indexOf(key);
 
-    if(colorIndex >= 0 && running && colorIndex < availableColors){
+    if(colorIndex >= 0 && running && isColorActive(colorIndex)){
 
         event.preventDefault();
         shoot(COLORS[colorIndex]);
@@ -38,13 +38,15 @@ function spawnDot(){
 
     const colorPool =
         COLORS.slice(0, availableColors);
+    const colorIndex =
+        Math.floor(
+            Math.random()*colorPool.length
+        );
 
     const color =
-        colorPool[
-            Math.floor(
-                Math.random()*colorPool.length
-            )
-        ];
+        colorPool[colorIndex];
+
+    revealColor(colorIndex);
 
     const el = document.createElement("div");
 
@@ -94,9 +96,6 @@ function updateDifficulty(){
     level = availableColors;
 
     if(old !== availableColors){
-
-        comboPopup("NEW COLOR");
-
         updateButtons();
     }
 }
@@ -280,6 +279,7 @@ function resetGame(){
     level = 1;
 
     availableColors = 1;
+    revealedColors = 1;
 
     spawnRate = BASE_SPAWN_RATE;
     fallSpeed = BASE_FALL_SPEED;
