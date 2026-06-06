@@ -148,6 +148,22 @@ window.GAMEHUB_GAMES = [
         defaultRating: 4
     },
     {
+        folder: 'never-south',
+        name: 'Never South',
+        description: 'Grid roguelite deckbuilder where every card moves you north, west, or east, but never south.',
+        category: 'Strategy',
+        difficulty: 'Medium',
+        icon: 'NS',
+        tags: ['2d', 'roguelite', 'deckbuilder', 'puzzle', 'grid', 'canvas'],
+        author: 'GameHub',
+        estimatedPlayTime: 15,
+        aiEffortRating: 5,
+        defaultRating: 4,
+        input: 'Keyboard + Mouse',
+        rendering: 'Canvas',
+        saveSupport: 'None'
+    },
+    {
         folder: 'void_signal',
         name: 'Void Signal',
         category: 'Other',
