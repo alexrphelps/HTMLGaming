@@ -8,6 +8,7 @@ class TutorialManager {
         this.currentTutorial = null;
         this.isPaused = false;
         this.enabled = true; // Tutorial system can be disabled for testing
+        this.eventListeners = [];
         
         // Tutorial definitions for different game elements
         this.tutorials = {
@@ -172,16 +173,22 @@ class TutorialManager {
     setupEventListeners() {
         const continueBtn = document.getElementById('tutorial-continue');
         if (continueBtn) {
-            continueBtn.addEventListener('click', () => this.continueTutorial());
+            this.addManagedEventListener(continueBtn, 'click', () => this.continueTutorial());
         }
         
         // Keyboard support
-        document.addEventListener('keydown', (e) => {
+        this.addManagedEventListener(document, 'keydown', (e) => {
             if (this.isPaused && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) {
                 e.preventDefault();
                 this.continueTutorial();
             }
         });
+    }
+
+    addManagedEventListener(target, type, handler, options) {
+        if (!target || !target.addEventListener) return;
+        target.addEventListener(type, handler, options);
+        this.eventListeners.push({ target, type, handler, options });
     }
     
     /**
@@ -325,7 +332,7 @@ class TutorialManager {
         this.tutorialContainer.classList.remove('hidden');
         
         // Pause the game
-        this.game.pause();
+        this.game.pause('tutorial');
         
         console.log(`📚 Tutorial shown: ${tutorial.title}`);
     }
@@ -414,7 +421,7 @@ class TutorialManager {
         this.currentTutorial = null;
         
         // Resume the game
-        this.game.resume();
+        this.game.resume('tutorial');
         
         console.log('📚 Tutorial dismissed, game resumed');
     }
@@ -1055,5 +1062,16 @@ class TutorialManager {
         this.isPaused = false;
         this.tutorialContainer.classList.add('hidden');
         // Note: discoveredElements is NOT cleared - preserves tutorial progress
+    }
+
+    cleanup() {
+        this.eventListeners.forEach(({ target, type, handler, options }) => {
+            target.removeEventListener(type, handler, options);
+        });
+        this.eventListeners = [];
+        if (this.tutorialContainer && this.tutorialContainer.parentNode) {
+            this.tutorialContainer.parentNode.removeChild(this.tutorialContainer);
+        }
+        this.tutorialContainer = null;
     }
 }

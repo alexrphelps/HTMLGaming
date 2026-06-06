@@ -100,12 +100,12 @@ function togglePause() {
     const pauseBtn = document.getElementById('pause-btn');
     
     if (game.isPaused) {
-        game.resumeGame();
+        game.resumeGame('manual');
         if (pauseBtn) {
             pauseBtn.classList.remove('paused');
         }
     } else {
-        game.pauseGame();
+        game.pauseGame('manual');
         if (pauseBtn) {
             pauseBtn.classList.add('paused');
         }
@@ -119,14 +119,14 @@ document.addEventListener('visibilitychange', () => {
     if (game) {
         const pauseBtn = document.getElementById('pause-btn');
         if (document.hidden) {
-            game.pause();
+            game.pause('visibility');
             if (pauseBtn) {
                 pauseBtn.classList.add('paused');
             }
         } else {
-            game.resume();
+            game.resume('visibility');
             if (pauseBtn) {
-                pauseBtn.classList.remove('paused');
+                pauseBtn.classList.toggle('paused', game.isPaused);
             }
         }
     }

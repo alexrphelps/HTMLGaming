@@ -101,16 +101,17 @@ describe('Cellvive supporting systems', () => {
     document.body.innerHTML = '<div id="talent-popup" class="hidden"></div><div id="talent-grid"></div><div id="talent-info-panel"></div><button id="talent-select-btn"></button><button id="talent-cancel-btn"></button><div id="selected-talent-name"></div><div id="selected-talent-description"></div><div id="selected-talent-cost"></div>';
     const context = cellContext({
       CELLVIVE_CONSTANTS: {
-        TALENTS: { TALENT_TREE: { tier1: { RESILIENCE: { ID: 'resilience', NAME: 'Resilience', DESCRIPTION: 'desc', CATEGORY: 'Defense', ICON: 'R', EFFECT_PER_LEVEL: { VALUE: 0.5 }, COST_PER_LEVEL: 1 } } } }
+        PLAYER: { STARTING_MAX_HEALTH: 100 },
+        TALENTS: { TALENT_TREE: { tier1: { RAPID_MOVEMENT: { ID: 'rapid_movement', NAME: 'Rapid Movement', DESCRIPTION: 'desc', CATEGORY: 'Movement', ICON: 'R', EFFECT_PER_LEVEL: { VALUE: 0.5 }, COST_PER_LEVEL: 1 } } } }
       }
     });
-    const player = { updateMaxSpeed: jest.fn() };
+    const player = { updateMaxSpeed: jest.fn(), maxHealth: 100, health: 100 };
     const { TalentSystem } = loadCell(context, 'TalentSystem.js', ['TalentSystem']);
     const talents = new TalentSystem({ player, pauseGame: jest.fn(), resumeGame: jest.fn() });
-    talents.selectedTalent = talents.talents.RESILIENCE;
+    talents.selectedTalent = talents.talents.RAPID_MOVEMENT;
     talents.confirmSelection();
     talents.resetTalents();
-    expect([talents.hasTalent('resilience'), player.updateMaxSpeed.mock.calls.length, talents.getUnlockedTalents()]).toEqual([false, 2, []]);
+    expect([talents.hasTalent('rapid_movement'), player.updateMaxSpeed.mock.calls.length, talents.getUnlockedTalents()]).toEqual([false, 2, []]);
   });
 
   test('TutorialManager tolerates missing optional environment arrays and still finds supported nearby elements', () => {
@@ -179,5 +180,115 @@ describe('Cellvive supporting systems', () => {
       hazards: [],
       currents: []
     });
+  });
+
+  function spawnConstants() {
+    return {
+      WORLD: {
+        CANVAS_WIDTH: 800,
+        CANVAS_HEIGHT: 600,
+        SIZE_MULTIPLIER: 1,
+        BASE_WIDTH: 1000,
+        BASE_HEIGHT: 1000,
+        ZONES: {
+          SAFE_ZONE: { RADIUS: 100 },
+          NORMAL_ZONE: { RADIUS: 250 },
+          DANGER_ZONE: { RADIUS: 400 },
+          DEATH_ZONE: { RADIUS: Infinity }
+        }
+      },
+      CELLS: { INITIAL_COUNT: 3, MAX_COUNT: 4, SPAWN_RATE: 1, SPEED: 0.3 },
+      ENEMIES: { INITIAL_COUNT: 2, MAX_COUNT: 3, SPAWN_RATE: 1 },
+      POWERUPS: { SPAWN_RATE: 1, MAX_COUNT: 2 },
+      PERFORMANCE: { TARGET_FPS: 60, SIMULATION_DISTANCE: 500, MAX_DELTA_TIME: 50 },
+      ENVIRONMENT: {
+        BIOMES: { INITIAL_COUNT: 0, MAX_COUNT: 2, SPAWN_RATE: 0 },
+        FOOD_SPAWNERS: { INITIAL_COUNT: 0, MAX_COUNT: 2, SPAWN_RATE: 0 },
+        SPORE_TYPES: {
+          GREEN: { TYPE: 'growth_hormone', COLOR: '#90EE90', SPAWN_WEIGHT: 0.6, GROWTH_VALUES: { SMALL: { radius: 3, growth: 1 } } },
+          YELLOW: { TYPE: 'speed_boost', COLOR: '#FFD700', SPAWN_WEIGHT: 0.25, RADIUS: 6, GROWTH: 0, SPEED_BOOST: 1.5 },
+          ORANGE: { TYPE: 'talent_upgrade', COLOR: '#FFA500', SPAWN_WEIGHT: 0.15, RADIUS: 8, GROWTH: 0 }
+        }
+      },
+      TESTING: { ENABLED: false },
+      PLAYER: { STARTING_MAX_HEALTH: 100, STARTING_SPEED: 3, GROWTH_AMOUNT_MULTIPLIER: 0.1 },
+      EATING: {},
+      LOGGING: { ENABLED: false }
+    };
+  }
+
+  test('SpawnManager uses configured caps, weighted spores, and world-bound positions', () => {
+    const context = cellContext({
+      CELLVIVE_CONSTANTS: spawnConstants(),
+      AmoebaEnemy: function AmoebaEnemy(options) { Object.assign(this, options, { health: 100 }); },
+      VirusEnemy: function VirusEnemy(options) { Object.assign(this, options, { health: 100 }); }
+    });
+    loadCell(context, 'Cell.js', ['Cell']);
+    const { SpawnManager } = loadCell(context, 'SpawnManager.js', ['SpawnManager']);
+    const game = {
+      config: { worldWidth: 1000, worldHeight: 1000, maxCells: 4, maxEnemies: 3, cellSpawnRate: 1, enemySpawnRate: 1 },
+      player: { x: 995, y: 995, radius: 20 },
+      cells: [],
+      enemies: []
+    };
+    const spawns = new SpawnManager(game);
+
+    jest.spyOn(Math, 'random')
+      .mockReturnValue(0.5)
+      .mockReturnValueOnce(0.99)
+      .mockReturnValueOnce(0.25)
+      .mockReturnValueOnce(0.25)
+      .mockReturnValueOnce(0.5)
+      .mockReturnValueOnce(0.99);
+    const orange = spawns.createRandomCell();
+    spawns.spawnInitialCells(10);
+    spawns.spawnInitialEnemies(10);
+
+    expect([orange.sporeType, game.cells.length, game.enemies.length, game.cells.every(cell => cell.x >= 50 && cell.x <= 950 && cell.y >= 50 && cell.y <= 950)])
+      .toEqual(['talent_upgrade', 4, 3, true]);
+  });
+
+  test('CellviveGame cleanup removes managed listeners and cancels the active loop', () => {
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    const cancelAnimationFrame = jest.fn();
+    const context = cellContext({
+      CELLVIVE_CONSTANTS: spawnConstants(),
+      cancelAnimationFrame,
+      GameLogger: { gameInit: jest.fn(), gameEnd: jest.fn(), error: jest.fn() }
+    });
+    const { CellviveGame } = loadCell(context, 'Game.js', ['CellviveGame']);
+    const game = new CellviveGame();
+    let clicks = 0;
+    game.gameLoopId = 123;
+    game.inputHandler = { cleanup: jest.fn() };
+    game.particleSystem = { cleanup: jest.fn() };
+    game.cells = [{}];
+    game.enemies = [{}];
+    game.addManagedEventListener(button, 'click', () => { clicks++; });
+
+    button.click();
+    game.cleanup();
+    button.click();
+
+    expect([clicks, cancelAnimationFrame.mock.calls[0][0], game.cells.length, game.enemies.length, game.inputHandler]).toEqual([1, 123, 0, 0, null]);
+  });
+
+  test('CellviveGame pause reasons prevent one overlay from resuming another', () => {
+    const context = cellContext({
+      CELLVIVE_CONSTANTS: spawnConstants(),
+      GameLogger: { gameInit: jest.fn(), gameEnd: jest.fn(), error: jest.fn() }
+    });
+    const { CellviveGame } = loadCell(context, 'Game.js', ['CellviveGame']);
+    const game = new CellviveGame();
+    game.isRunning = true;
+
+    game.pauseGame('manual');
+    game.pause('tutorial');
+    game.resume('tutorial');
+    const stillPaused = game.isPaused;
+    game.resumeGame('manual');
+
+    expect([stillPaused, game.isPaused, game.pauseReasons.size]).toEqual([true, false, 0]);
   });
 });

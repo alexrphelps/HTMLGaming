@@ -7,6 +7,7 @@ class TestingManager {
         this.game = game;
         this.panel = null;
         this.isVisible = false;
+        this.eventListeners = [];
         
         // Testing state
         this.testingState = {
@@ -48,7 +49,7 @@ class TestingManager {
         // God mode toggle
         const godmodeToggle = document.getElementById('godmode-toggle');
         if (godmodeToggle) {
-            godmodeToggle.addEventListener('change', (e) => {
+            this.addManagedEventListener(godmodeToggle, 'change', (e) => {
                 this.testingState.godmode = e.target.checked;
                 this.onGodModeToggle(e.target.checked);
             });
@@ -57,7 +58,7 @@ class TestingManager {
         // No tutorial toggle
         const noTutorialToggle = document.getElementById('no-tutorial-toggle');
         if (noTutorialToggle) {
-            noTutorialToggle.addEventListener('change', (e) => {
+            this.addManagedEventListener(noTutorialToggle, 'change', (e) => {
                 this.testingState.noTutorial = e.target.checked;
                 this.onNoTutorialToggle(e.target.checked);
             });
@@ -66,7 +67,7 @@ class TestingManager {
         // Fast growth toggle
         const fastGrowthToggle = document.getElementById('fast-growth-toggle');
         if (fastGrowthToggle) {
-            fastGrowthToggle.addEventListener('change', (e) => {
+            this.addManagedEventListener(fastGrowthToggle, 'change', (e) => {
                 this.testingState.fastGrowth = e.target.checked;
                 this.onFastGrowthToggle(e.target.checked);
             });
@@ -75,7 +76,7 @@ class TestingManager {
         // Debug logging toggle
         const debugLoggingToggle = document.getElementById('debug-logging-toggle');
         if (debugLoggingToggle) {
-            debugLoggingToggle.addEventListener('change', (e) => {
+            this.addManagedEventListener(debugLoggingToggle, 'change', (e) => {
                 this.testingState.debugLogging = e.target.checked;
                 this.onDebugLoggingToggle(e.target.checked);
             });
@@ -84,7 +85,7 @@ class TestingManager {
         // Spawn more cells toggle
         const spawnCellsToggle = document.getElementById('spawn-cells-toggle');
         if (spawnCellsToggle) {
-            spawnCellsToggle.addEventListener('change', (e) => {
+            this.addManagedEventListener(spawnCellsToggle, 'change', (e) => {
                 this.testingState.spawnMoreCells = e.target.checked;
                 this.onSpawnCellsToggle(e.target.checked);
             });
@@ -93,7 +94,7 @@ class TestingManager {
         // Spawn more enemies toggle
         const spawnEnemiesToggle = document.getElementById('spawn-enemies-toggle');
         if (spawnEnemiesToggle) {
-            spawnEnemiesToggle.addEventListener('change', (e) => {
+            this.addManagedEventListener(spawnEnemiesToggle, 'change', (e) => {
                 this.testingState.spawnMoreEnemies = e.target.checked;
                 this.onSpawnEnemiesToggle(e.target.checked);
             });
@@ -102,7 +103,7 @@ class TestingManager {
         // Reset all button
         const resetButton = document.getElementById('reset-testing');
         if (resetButton) {
-            resetButton.addEventListener('click', () => {
+            this.addManagedEventListener(resetButton, 'click', () => {
                 this.resetAll();
             });
         }
@@ -110,7 +111,7 @@ class TestingManager {
         // Toggle panel button
         const toggleButton = document.getElementById('toggle-panel');
         if (toggleButton) {
-            toggleButton.addEventListener('click', () => {
+            this.addManagedEventListener(toggleButton, 'click', () => {
                 this.togglePanel();
             });
         }
@@ -121,6 +122,12 @@ class TestingManager {
         // Biome Spawner Event Listener
         this.setupBiomeSpawner();
     }
+
+    addManagedEventListener(target, type, handler, options) {
+        if (!target || !target.addEventListener) return;
+        target.addEventListener(type, handler, options);
+        this.eventListeners.push({ target, type, handler, options });
+    }
     
     /**
      * Setup biome spawner dropdown and button
@@ -130,7 +137,7 @@ class TestingManager {
         const spawnBiomeBtn = document.getElementById('spawn-biome-btn');
         
         if (spawnBiomeBtn && biomeSelect) {
-            spawnBiomeBtn.addEventListener('click', (e) => {
+            this.addManagedEventListener(spawnBiomeBtn, 'click', (e) => {
                 e.preventDefault();
                 const biomeType = biomeSelect.value;
                 try {
@@ -172,7 +179,7 @@ class TestingManager {
     addSpawnListener(buttonId, spawnFunction) {
         const button = document.getElementById(buttonId);
         if (button) {
-            button.addEventListener('click', (e) => {
+            this.addManagedEventListener(button, 'click', (e) => {
                 e.preventDefault();
                 try {
                     spawnFunction();
@@ -395,6 +402,14 @@ class TestingManager {
      */
     updateState(newState) {
         Object.assign(this.testingState, newState);
+    }
+
+    cleanup() {
+        this.eventListeners.forEach(({ target, type, handler, options }) => {
+            target.removeEventListener(type, handler, options);
+        });
+        this.eventListeners = [];
+        this.panel = null;
     }
 }
 

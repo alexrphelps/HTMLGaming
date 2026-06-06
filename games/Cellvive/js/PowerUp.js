@@ -197,8 +197,8 @@ class PowerUpManager {
         this.game = game;
         this.powerUps = [];
         this.config = {
-            maxPowerUps: 8,
-            spawnRate: 0.001, // Very low spawn rate
+            maxPowerUps: CELLVIVE_CONSTANTS.POWERUPS.MAX_COUNT,
+            spawnRate: CELLVIVE_CONSTANTS.POWERUPS.SPAWN_RATE,
             minSpawnDistance: 200, // Minimum distance from player
             maxSpawnDistance: 800  // Maximum distance from player
         };

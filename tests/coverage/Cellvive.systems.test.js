@@ -129,42 +129,65 @@ describe('Cellvive ErrorHandler', () => {
   });
 });
 
-// Behaviour under test: DebugLogger respects global testing flags while always logging warnings and errors.
-describe('Cellvive DebugLogger', () => {
-  test('category logging follows enabled flags and category toggles', () => {
+// Behaviour under test: Logger follows configured levels, production mode, and rate-limited buffering.
+describe('Cellvive Logger', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  function loggerContext(overrides = {}) {
+    return createBrowserContext({
+      CELLVIVE_CONSTANTS: {
+        LOGGING: {
+          ENABLED: true,
+          PRODUCTION_MODE: false,
+          LEVEL: 'debug',
+          SHOW_EMOJIS: false,
+          SHOW_TIMESTAMPS: false,
+          ...overrides.LOGGING
+        },
+        PERFORMANCE: { MAX_CONSOLE_LOGS_PER_SECOND: 10 }
+      },
+      console,
+      Date
+    });
+  }
+
+  test('debug, info, warn, and error respect configured log level', () => {
+    const context = loggerContext();
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const info = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    loadBrowserScript(context, 'games/Cellvive/js/Logger.js', ['Logger']);
+    const logger = new context.Logger();
+
+    logger.debug('debug');
+    logger.info('info');
+    logger.warn('warn');
+    logger.error('error');
+
+    expect([log.mock.calls.length, info.mock.calls.length, warn.mock.calls.length, error.mock.calls.length]).toEqual([1, 1, 1, 1]);
+  });
+
+  test('production mode suppresses console output and runtime level can be changed', () => {
     const context = createBrowserContext({
-      CELLVIVE_CONSTANTS: { TESTING: { ENABLED: true } },
+      CELLVIVE_CONSTANTS: {
+        LOGGING: { ENABLED: true, PRODUCTION_MODE: true, LEVEL: 'debug', SHOW_EMOJIS: false, SHOW_TIMESTAMPS: false },
+        PERFORMANCE: { MAX_CONSOLE_LOGS_PER_SECOND: 10 }
+      },
       console
     });
     const log = jest.spyOn(console, 'log').mockImplementation(() => {});
-    loadBrowserScript(context, 'games/Cellvive/js/DebugLogger.js', ['DebugLogger']);
-    const logger = new context.DebugLogger();
-
-    logger.collision('hit');
-    logger.movement('move');
-    logger.toggleCategory('MOVEMENT');
-    logger.movement('move');
-
-    expect(log.mock.calls.filter(call => String(call[0]).includes('MOVEMENT')).length).toBe(2);
-  });
-
-  test('disabled constants suppress debug logs while warn and error always log', () => {
-    const context = createBrowserContext({ CELLVIVE_CONSTANTS: { TESTING: { ENABLED: false } }, console });
-    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
-    loadBrowserScript(context, 'games/Cellvive/js/DebugLogger.js', ['DebugLogger']);
-    const logger = new context.DebugLogger();
+    loadBrowserScript(context, 'games/Cellvive/js/Logger.js', ['Logger']);
+    const logger = new context.Logger();
 
-    logger.spawn('spawn');
-    logger.warn('warn');
-    logger.error('error');
-    logger.toggleCategory('UNKNOWN');
+    logger.debug('hidden');
+    logger.warn('hidden');
+    logger.setProductionMode(false);
+    logger.setLevel('warn');
+    logger.debug('still hidden');
+    logger.warn('shown');
 
-    expect([
-      log.mock.calls.some(call => String(call[0]).includes('[SPAWN]')),
-      warn.mock.calls.length,
-      error.mock.calls.length
-    ]).toEqual([false, 1, 2]);
+    expect([log.mock.calls.length, warn.mock.calls.length]).toEqual([0, 1]);
   });
 });

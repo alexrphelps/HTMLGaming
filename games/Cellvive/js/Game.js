@@ -14,15 +14,16 @@ class CellviveGame {
         this.config = {
             canvasWidth: CELLVIVE_CONSTANTS.WORLD.CANVAS_WIDTH,
             canvasHeight: CELLVIVE_CONSTANTS.WORLD.CANVAS_HEIGHT,
-            // World size configuration - easily adjustable
             worldSizeMultiplier: CELLVIVE_CONSTANTS.WORLD.SIZE_MULTIPLIER,
             baseWorldWidth: CELLVIVE_CONSTANTS.WORLD.BASE_WIDTH,
             baseWorldHeight: CELLVIVE_CONSTANTS.WORLD.BASE_HEIGHT,
-            targetFPS: 60,
-            cellSpawnRate: 0.03, // cells per frame (increased for larger world)
-            maxCells: 75, // Increased max cells for larger world
-            enemySpawnRate: 0.05, // enemies per frame (increased for more activity)
-            maxEnemies: 50 // Maximum number of enemies (increased for dynamic world)
+            targetFPS: CELLVIVE_CONSTANTS.PERFORMANCE.TARGET_FPS,
+            cellSpawnRate: CELLVIVE_CONSTANTS.CELLS.SPAWN_RATE,
+            maxCells: CELLVIVE_CONSTANTS.CELLS.MAX_COUNT,
+            enemySpawnRate: CELLVIVE_CONSTANTS.ENEMIES.SPAWN_RATE,
+            maxEnemies: CELLVIVE_CONSTANTS.ENEMIES.MAX_COUNT,
+            powerUpSpawnRate: CELLVIVE_CONSTANTS.POWERUPS.SPAWN_RATE,
+            maxPowerUps: CELLVIVE_CONSTANTS.POWERUPS.MAX_COUNT
         };
         
         // Calculate actual world dimensions
@@ -39,8 +40,12 @@ class CellviveGame {
         this.frameCount = 0;
         this.lastCleanupFrame = 0;
         this.cleanupInterval = 300; // Cleanup every 5 seconds at 60fps
-        this.maxCells = this.config.maxCells || 75;
-        this.maxEnemies = this.config.maxEnemies || 50;
+        this.maxCells = this.config.maxCells;
+        this.maxEnemies = this.config.maxEnemies;
+        this.gameLoopId = null;
+        this.cleanupTimeoutId = null;
+        this.eventListeners = [];
+        this.pauseReasons = new Set();
         
         // Virus group management
         this.virusGroupManager = null;
@@ -113,6 +118,7 @@ class CellviveGame {
         this.initRenderer();
         this.initCollisionDetector();
         this.initEnhancedSystems();
+        this.initCells();
         this.initEnemies();
         this.initTutorialManager();
         this.initTestingManager();
@@ -128,6 +134,16 @@ class CellviveGame {
             GameLogger.error(`Failed to initialize Cellvive game: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * Initialize starting food spores from configured spawn counts
+     */
+    initCells() {
+        if (!this.spawnManager) return;
+        const initialCount = CELLVIVE_CONSTANTS.CELLS.INITIAL_COUNT || 0;
+        this.spawnManager.spawnInitialCells(initialCount);
+        console.log(`Initial cells spawned: ${this.cells.length}`);
     }
     
     /**
@@ -159,13 +175,9 @@ class CellviveGame {
      */
     initEnemies() {
         if (!this.spawnManager) return;
-        for (let i = 0; i < 3; i++) {
-            const enemy = this.spawnManager.createRandomEnemy();
-            if (enemy) {
-                this.enemies.push(enemy);
-            }
-        }
-        console.log('🔬 Initial enemies spawned');
+        const initialCount = CELLVIVE_CONSTANTS.ENEMIES.INITIAL_COUNT || 0;
+        this.spawnManager.spawnInitialEnemies(initialCount);
+        console.log(`Initial enemies spawned: ${this.enemies.length}`);
     }
     
     /**
@@ -379,13 +391,13 @@ class CellviveGame {
         // Restart button
         const restartBtn = document.getElementById('restart-btn');
         if (restartBtn) {
-            restartBtn.addEventListener('click', () => this.restart());
+            this.addManagedEventListener(restartBtn, 'click', () => this.restart());
         }
         
         // Talent tree button
         const talentTreeBtn = document.getElementById('talent-tree-btn');
         if (talentTreeBtn) {
-            talentTreeBtn.addEventListener('click', () => {
+            this.addManagedEventListener(talentTreeBtn, 'click', () => {
                 console.log('🌳 Talent tree button clicked');
                 this.openTalentSystem();
             });
@@ -395,9 +407,26 @@ class CellviveGame {
         }
         
         // Window resize
-        window.addEventListener('resize', () => this.handleResize());
+        this.addManagedEventListener(window, 'resize', () => this.handleResize());
         
         console.log('🔬 Event listeners initialized');
+    }
+
+    addManagedEventListener(target, type, handler, options) {
+        if (!target || !target.addEventListener) return;
+        target.addEventListener(type, handler, options);
+        this.eventListeners.push({ target, type, handler, options });
+    }
+
+    cleanupEventListeners() {
+        this.eventListeners.forEach(({ target, type, handler, options }) => {
+            try {
+                target.removeEventListener(type, handler, options);
+            } catch (error) {
+                console.warn(`Error removing ${type} listener:`, error);
+            }
+        });
+        this.eventListeners = [];
     }
     
     /**
@@ -424,7 +453,7 @@ class CellviveGame {
         console.log('🔬 Starting game cleanup...');
         
         // Stop the game loop first
-        this.isRunning = false;
+        this.stop();
         
         // Cancel animation frame - FIXED: Ensure proper cleanup
         if (this.gameLoopId) {
@@ -437,6 +466,8 @@ class CellviveGame {
             clearTimeout(this.cleanupTimeoutId);
             this.cleanupTimeoutId = null;
         }
+
+        this.cleanupEventListeners();
         
         // Clean up input handler
         if (this.inputHandler && typeof this.inputHandler.cleanup === 'function') {
@@ -450,6 +481,7 @@ class CellviveGame {
             'talentSystem',
             'audioManager',
             'powerUpManager',
+            'spawnManager',
             'enhancedUI',
             'tutorialManager',
             'testingManager',
@@ -471,9 +503,12 @@ class CellviveGame {
         // Clear arrays to prevent memory leaks
         this.cells = [];
         this.enemies = [];
+        this.pauseReasons.clear();
+        this.isPaused = false;
         
         // Clear references
         this.player = null;
+        this.inputHandler = null;
         this.renderer = null;
         this.collisionDetector = null;
         this.camera = null;
@@ -1203,24 +1238,34 @@ class CellviveGame {
      * Pause the game
      * Stops all game logic updates but continues rendering
      */
-    pause() {
-        if (!this.isPaused) {
-            this.isPaused = true;
-            console.log('⏸️ Game paused');
+    pause(reason = 'manual') {
+        const wasPaused = this.isPaused;
+        this.pauseReasons.add(reason);
+        this.isPaused = this.pauseReasons.size > 0;
+        if (!wasPaused && this.isPaused) {
+            console.log('Game paused');
         }
+        return true;
     }
 
     /**
      * Resume the game
      * Resumes game logic updates
      */
-    resume() {
-        if (this.isPaused) {
-            this.isPaused = false;
-            // Reset lastTime to prevent large delta on resume
-            this.lastTime = performance.now();
-            console.log('▶️ Game resumed');
+    resume(reason = 'manual') {
+        if (!this.pauseReasons.has(reason)) {
+            return false;
         }
+
+        this.pauseReasons.delete(reason);
+        this.isPaused = this.pauseReasons.size > 0;
+
+        if (!this.isPaused) {
+            this.lastTime = performance.now();
+            console.log('Game resumed');
+        }
+
+        return !this.isPaused;
     }
 
     /**
@@ -1479,13 +1524,13 @@ class CellviveGame {
         console.log('✅ Validation passed - opening talent system');
         
         try {
-            this.pauseGame();
+            this.pauseGame('talent');
             this.talentSystem.showPopup();
             console.log('🌳 Talent system opened successfully');
             return true;
         } catch (error) {
             console.error('[Game] Error opening talent system:', error);
-            this.resumeGame(); // Restore game state if opening failed
+            this.resumeGame('talent'); // Restore game state if opening failed
             return false;
         }
     }
@@ -1503,7 +1548,7 @@ class CellviveGame {
             try {
                 this.initTalentSystem();
                 if (this.talentSystem) {
-                    this.pauseGame();
+                    this.pauseGame('talent');
                     this.talentSystem.showPopup();
                 } else {
                     console.error('Failed to reinitialize talent system');
@@ -1518,36 +1563,26 @@ class CellviveGame {
      * Pause the game
      * @returns {boolean} Success status
      */
-    pauseGame() {
-        if (this.isPaused) {
-            console.warn('[Game] Game already paused');
-            return false;
-        }
-        
+    pauseGame(reason = 'manual') {
         if (!this.isRunning) {
             console.warn('[Game] Cannot pause - game not running');
             return false;
         }
         
-        this.isPaused = true;
-        console.log('⏸️ Game paused');
-        return true;
+        return this.pause(reason);
     }
     
     /**
      * Resume the game
      * @returns {boolean} Success status
      */
-    resumeGame() {
-        if (!this.isPaused) {
+    resumeGame(reason = 'manual') {
+        if (!this.isPaused && !this.pauseReasons.has(reason)) {
             console.warn('[Game] Game not paused');
             return false;
         }
-        
-        this.isPaused = false;
-        this.lastTime = performance.now(); // Prevent delta spike on resume
-        console.log('▶️ Game resumed');
-        return true;
+
+        return this.resume(reason);
     }
     
     spawnGreenSpore() { this.spawnManager?.spawnGreenSpore(); }
@@ -1596,287 +1631,6 @@ class CellviveGame {
             console.error('🧪 Error testing talent system:', error);
             return false;
         }
-    }
-    
-    /**
-     * Spawn a yellow speed spore for testing
-     */
-    spawnYellowSpore() {
-        if (!this.player) return;
-        
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 200 + Math.random() * 300;
-        const x = this.player.x + Math.cos(angle) * distance;
-        const y = this.player.y + Math.sin(angle) * distance;
-        
-        const spore = new Cell({
-            x: x,
-            y: y,
-            radius: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.YELLOW.RADIUS,
-            color: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.YELLOW.COLOR,
-            isSpore: true,
-            sporeType: 'speed_boost',
-            sporeData: {
-                radius: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.YELLOW.RADIUS,
-                growth: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.YELLOW.GROWTH,
-                type: 'speed_boost',
-                speedBoost: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.YELLOW.SPEED_BOOST
-            }
-        });
-        
-        this.cells.push(spore);
-        GameLogger.debug(`⚡ Spawned Yellow Speed Spore`);
-    }
-    
-    /**
-     * Spawn an orange talent spore for testing
-     */
-    spawnOrangeSpore() {
-        if (!this.player) return;
-        
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 200 + Math.random() * 300;
-        const x = this.player.x + Math.cos(angle) * distance;
-        const y = this.player.y + Math.sin(angle) * distance;
-        
-        const spore = new Cell({
-            x: x,
-            y: y,
-            radius: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.ORANGE.RADIUS,
-            color: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.ORANGE.COLOR,
-            isSpore: true,
-            sporeType: 'talent_upgrade',
-            sporeData: {
-                radius: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.ORANGE.RADIUS,
-                growth: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.ORANGE.GROWTH,
-                type: 'talent_upgrade'
-            }
-        });
-        
-        this.cells.push(spore);
-        GameLogger.debug(`🍊 Spawned Orange Talent Spore`);
-    }
-    
-    // ========================================
-    // INDIVIDUAL GREEN SPORE SPAWNING METHODS
-    // ========================================
-    
-    /**
-     * Spawn a small green growth spore (+1 size)
-     */
-    spawnGreenSmall() {
-        this.spawnSpecificGreenSpore('SMALL', '+1 size');
-    }
-    
-    /**
-     * Spawn a medium green growth spore (+2 size)
-     */
-    spawnGreenMedium() {
-        this.spawnSpecificGreenSpore('MEDIUM', '+2 size');
-    }
-    
-    /**
-     * Spawn a large green growth spore (+3 size)
-     */
-    spawnGreenLarge() {
-        this.spawnSpecificGreenSpore('LARGE', '+3 size');
-    }
-    
-    /**
-     * Spawn an xlarge green growth spore (+4 size)
-     */
-    spawnGreenXLarge() {
-        this.spawnSpecificGreenSpore('XLARGE', '+4 size');
-    }
-    
-    /**
-     * Spawn an xxlarge green growth spore (+5 size)
-     */
-    spawnGreenXXLarge() {
-        this.spawnSpecificGreenSpore('XXLARGE', '+5 size');
-    }
-    
-    /**
-     * Helper method to spawn specific green spore variants
-     */
-    spawnSpecificGreenSpore(variant, description) {
-        if (!this.player) return;
-        
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 200 + Math.random() * 300;
-        const x = this.player.x + Math.cos(angle) * distance;
-        const y = this.player.y + Math.sin(angle) * distance;
-        
-        const growthValue = CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.GREEN.GROWTH_VALUES[variant];
-        
-        // Map variant to size number (1-5) for large cell logic
-        const sizeMap = { SMALL: 1, MEDIUM: 2, LARGE: 3, XLARGE: 4, XXLARGE: 5 };
-        
-        const spore = new Cell({
-            x: x,
-            y: y,
-            radius: growthValue.radius,
-            color: CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.GREEN.COLOR,
-            isSpore: true,
-            sporeType: 'growth_hormone',
-            sporeData: {
-                radius: growthValue.radius,
-                growth: growthValue.growth,
-                size: sizeMap[variant] || 1, // Add size property for large cell logic
-                type: 'growth_hormone'
-            }
-        });
-        
-        this.cells.push(spore);
-        GameLogger.debug(`🌱 Spawned Green ${variant} Spore: ${description}`);
-    }
-    
-    // ========================================
-    // RANDOM SPORE SPAWNING METHODS
-    // ========================================
-    
-    /**
-     * Spawn a random green spore (any size variant)
-     */
-    spawnRandomGreenSpore() {
-        if (!this.player) return;
-        
-        const variants = Object.keys(CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.GREEN.GROWTH_VALUES);
-        const randomVariant = variants[Math.floor(Math.random() * variants.length)];
-        const description = `+${CELLVIVE_CONSTANTS.ENVIRONMENT.SPORE_TYPES.GREEN.GROWTH_VALUES[randomVariant].growth} size`;
-        
-        this.spawnSpecificGreenSpore(randomVariant, description);
-    }
-    
-    /**
-     * Spawn a completely random spore (any type)
-     */
-    spawnRandomSpore() {
-        if (!this.player) return;
-        
-        const sporeTypes = ['green', 'yellow', 'orange'];
-        const randomType = sporeTypes[Math.floor(Math.random() * sporeTypes.length)];
-        
-        switch (randomType) {
-            case 'green':
-                this.spawnRandomGreenSpore();
-                break;
-            case 'yellow':
-                this.spawnYellowSpore();
-                break;
-            case 'orange':
-                this.spawnOrangeSpore();
-                break;
-        }
-    }
-    
-    /**
-     * Test spawner functionality by forcing a spore spawn from all spawners
-     */
-    testSpawnerFunctionality() {
-        if (!this.environmentManager) return;
-        
-        let totalSpawners = 0;
-        let totalSporesSpawned = 0;
-        
-        this.environmentManager.foodSpawners.forEach(spawner => {
-            if (spawner.spawnSpore) {
-                totalSpawners++;
-                const initialSporeCount = this.cells.length;
-                spawner.spawnSpore(this);
-                const newSporeCount = this.cells.length;
-                totalSporesSpawned += (newSporeCount - initialSporeCount);
-            }
-        });
-        
-        GameLogger.debug(`🧪 Spawner Test: ${totalSpawners} spawners tested, ${totalSporesSpawned} spores spawned`);
-    }
-    
-    /**
-     * Test talent system by spawning orange spores
-     */
-    testTalentSystem() {
-        if (!this.player) return;
-        
-        // Spawn 3 orange spores near player for testing
-        for (let i = 0; i < 3; i++) {
-            const angle = (i * Math.PI * 2 / 3) + Math.random() * 0.5;
-            const distance = 100 + Math.random() * 100;
-            const x = this.player.x + Math.cos(angle) * distance;
-            const y = this.player.y + Math.sin(angle) * distance;
-            
-            this.spawnOrangeSpore();
-        }
-        
-        GameLogger.debug(`🧪 Talent Test: Spawned 3 orange spores for testing`);
-    }
-    
-    /**
-     * Test talent system popup directly (for debugging)
-     */
-    testTalentPopup() {
-        console.log('🧪 Testing talent popup directly...');
-        this.openTalentSystem();
-    }
-    
-    /**
-     * Test talent system functionality end-to-end
-     */
-    testTalentSystemEndToEnd() {
-        console.log('🧪 Testing talent system end-to-end...');
-        
-        // Check if talent system is initialized
-        if (!this.talentSystem) {
-            console.error('🧪 Talent system not initialized');
-            return false;
-        }
-        
-        // Check if HTML elements exist
-        const popup = document.getElementById('talent-popup');
-        const grid = document.getElementById('talent-grid');
-        
-        if (!popup || !grid) {
-            console.error('🧪 Required HTML elements missing');
-            return false;
-        }
-        
-        // Test opening the popup
-        try {
-            this.openTalentSystem();
-            console.log('🧪 Talent popup opened successfully');
-            
-            // Test closing the popup
-            setTimeout(() => {
-                if (this.talentSystem) {
-                    this.talentSystem.hidePopup();
-                    console.log('🧪 Talent popup closed successfully');
-                }
-            }, 1000);
-            
-            return true;
-        } catch (error) {
-            console.error('🧪 Error testing talent system:', error);
-            return false;
-        }
-    }
-    
-    /**
-     * Test speed boost system
-     */
-    testSpeedBoosts() {
-        if (!this.player) return;
-        
-        // Spawn 5 yellow spores for testing
-        for (let i = 0; i < 5; i++) {
-            const angle = (i * Math.PI * 2 / 5) + Math.random() * 0.5;
-            const distance = 100 + Math.random() * 100;
-            const x = this.player.x + Math.cos(angle) * distance;
-            const y = this.player.y + Math.sin(angle) * distance;
-            
-            this.spawnYellowSpore();
-        }
-        
-        GameLogger.debug(`🧪 Speed Test: Spawned 5 yellow spores for testing`);
     }
     
     /**
@@ -2122,6 +1876,7 @@ class CellviveGame {
         
         // Reset game state
         this.gameState = 'playing';
+        this.pauseReasons.clear();
         this.isPaused = false;
         this.score = 0;
         this.gameTime = 0;
@@ -2149,6 +1904,7 @@ class CellviveGame {
         
         // Reset player
         this.initPlayer();
+        this.initCells();
         
         // Reset enemies
         this.initEnemies();
@@ -2163,14 +1919,6 @@ class CellviveGame {
         this.start();
         
         console.log('✅ Game restarted');
-    }
-    
-    /**
-     * Handle window resize
-     */
-    handleResize() {
-        // For now, keep fixed canvas size
-        // Could implement responsive resizing here
     }
     
     /**
@@ -2203,29 +1951,11 @@ class CellviveGame {
     stop() {
         console.log('🔬 Stopping Cellvive game...');
         this.isRunning = false;
-        console.log('✅ Cellvive game stopped');
-    }
-    
-    /**
-     * Cleanup resources
-     */
-    cleanup() {
-        console.log('🔬 Cleaning up Cellvive game...');
-        
-        this.stop();
-        
-        if (this.inputHandler) {
-            this.inputHandler.cleanup();
+        if (this.gameLoopId) {
+            cancelAnimationFrame(this.gameLoopId);
+            this.gameLoopId = null;
         }
-        
-        this.player = null;
-        this.cells = [];
-        this.camera = null;
-        this.inputHandler = null;
-        this.renderer = null;
-        this.collisionDetector = null;
-        
-        console.log('✅ Cellvive game cleaned up');
+        console.log('✅ Cellvive game stopped');
     }
 }
 

@@ -16,10 +16,10 @@ class EnvironmentManager {
         
         // Configuration
         this.config = {
-            maxBiomes: 15,
-            maxFoodSpawners: 40,
-            biomeSpawnRate: 0.001,
-            spawnerSpawnRate: 0.003,
+            maxBiomes: CELLVIVE_CONSTANTS.ENVIRONMENT.BIOMES.MAX_COUNT,
+            maxFoodSpawners: CELLVIVE_CONSTANTS.ENVIRONMENT.FOOD_SPAWNERS.MAX_COUNT,
+            biomeSpawnRate: CELLVIVE_CONSTANTS.ENVIRONMENT.BIOMES.SPAWN_RATE,
+            spawnerSpawnRate: CELLVIVE_CONSTANTS.ENVIRONMENT.FOOD_SPAWNERS.SPAWN_RATE,
             spawnerDensity: 0.2
         };
         
@@ -38,7 +38,7 @@ class EnvironmentManager {
      */
     spawnInitialElements() {
         // Spawn some initial biomes
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < CELLVIVE_CONSTANTS.ENVIRONMENT.BIOMES.INITIAL_COUNT; i++) {
             const biome = this.createRandomBiome();
             if (biome) {
                 this.biomes.push(biome);
@@ -46,7 +46,7 @@ class EnvironmentManager {
         }
         
         // Spawn some initial food spawners
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < CELLVIVE_CONSTANTS.ENVIRONMENT.FOOD_SPAWNERS.INITIAL_COUNT; i++) {
             const spawner = this.createRandomFoodSpawner();
             if (spawner && this.isValidFoodSpawnerPosition(spawner)) {
                 this.foodSpawners.push(spawner);

@@ -12,7 +12,9 @@ class Logger {
             error: 3,
             none: 4
         };
-        this.currentLevel = this.levels[this.config.LEVEL] || this.levels.warn;
+        this.currentLevel = Object.prototype.hasOwnProperty.call(this.levels, this.config.LEVEL)
+            ? this.levels[this.config.LEVEL]
+            : this.levels.warn;
         
         // Rate limiting for performance
         this.logCount = 0;

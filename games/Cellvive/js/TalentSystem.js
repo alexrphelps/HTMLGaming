@@ -13,6 +13,7 @@ class TalentSystem {
         this.selectedTalent = null;
         this.playerTalents = new Set();
         this.talentLevels = {};
+        this.eventListeners = [];
 
         this.popup = document.getElementById('talent-popup');
         this.talentGrid = document.getElementById('talent-grid');
@@ -55,16 +56,22 @@ class TalentSystem {
 
     initEventListeners() {
         if (this.cancelBtn) {
-            this.cancelBtn.addEventListener('click', () => this.hidePopup());
+            this.addManagedEventListener(this.cancelBtn, 'click', () => this.hidePopup());
         }
         if (this.selectBtn) {
-            this.selectBtn.addEventListener('click', () => this.confirmSelection());
+            this.addManagedEventListener(this.selectBtn, 'click', () => this.confirmSelection());
         }
         if (this.popup) {
-            this.popup.addEventListener('click', (e) => {
+            this.addManagedEventListener(this.popup, 'click', (e) => {
                 if (e.target === this.popup) this.hidePopup();
             });
         }
+    }
+
+    addManagedEventListener(target, type, handler, options) {
+        if (!target || !target.addEventListener) return;
+        target.addEventListener(type, handler, options);
+        this.eventListeners.push({ target, type, handler, options });
     }
 
     showPopup() {
@@ -73,7 +80,7 @@ class TalentSystem {
         this.populateTalentGrid();
         this.hideInfoPanel();
         if (this.game && this.game.pauseGame) {
-            this.game.pauseGame();
+            this.game.pauseGame('talent');
         }
     }
 
@@ -83,7 +90,7 @@ class TalentSystem {
             this.selectedTalent = null;
             this.hideInfoPanel();
             if (this.game && this.game.resumeGame) {
-                this.game.resumeGame();
+                this.game.resumeGame('talent');
             }
         }
     }
@@ -235,7 +242,7 @@ class TalentSystem {
 
             case 'thick_membrane':
                 player.hasThickMembrane = true;
-                player.maxHealth = CELLVIVE_CONSTANTS.PLAYER.STARTING_MAX_HEALTH + (effect.MAX_HEALTH || 25) * level;
+                player.maxHealth = this.getStartingMaxHealth(player) + (effect.MAX_HEALTH || 25) * level;
                 player.damageReduction = (effect.DAMAGE_REDUCTION || 0.15) * level;
                 if (player.health > player.maxHealth) player.health = player.maxHealth;
                 GameLogger.debug(`Thick Membrane: maxHealth=${player.maxHealth}, dmgReduction=${Math.round(player.damageReduction * 100)}%`);
@@ -330,6 +337,13 @@ class TalentSystem {
         }
     }
 
+    getStartingMaxHealth(player = this.player) {
+        const constantsHealth = typeof CELLVIVE_CONSTANTS !== 'undefined'
+            ? CELLVIVE_CONSTANTS.PLAYER?.STARTING_MAX_HEALTH
+            : null;
+        return constantsHealth || player?.maxHealth || 100;
+    }
+
     resetTalents() {
         this.playerTalents.clear();
         this.talentLevels = {};
@@ -357,7 +371,7 @@ class TalentSystem {
             p.passiveGrowthRate = 0;
             p.sporeAttractionRadius = 0;
             p.sporeAttractionStrength = 0;
-            p.maxHealth = CELLVIVE_CONSTANTS.PLAYER.STARTING_MAX_HEALTH;
+            p.maxHealth = this.getStartingMaxHealth(p);
             p.health = Math.min(p.health, p.maxHealth);
 
             p.phaseShiftTriggerHealth = 0.25;
@@ -368,6 +382,14 @@ class TalentSystem {
 
             p.updateMaxSpeed();
         }
+    }
+
+    cleanup() {
+        this.eventListeners.forEach(({ target, type, handler, options }) => {
+            target.removeEventListener(type, handler, options);
+        });
+        this.eventListeners = [];
+        this.selectedTalent = null;
     }
 }
 
