@@ -147,6 +147,25 @@ describe('Never South playable v1', () => {
     expect(deck.drawPile.length + deck.discardPile.length).toBe(1);
   });
 
+  test('movement plays discard the used card without drawing a replacement', () => {
+    const ns = loadNeverSouthRuntime();
+    const run = new ns.NeverSouthRun('movement-discard-test');
+    const playedCard = run.deck.createCard('north');
+    const target = { col: run.player.col, row: run.player.row - 1 };
+
+    run.status = 'playing';
+    run.deck.hand = [playedCard];
+    run.deck.drawPile = run.deck.drawPile.filter((card) => card.instanceId !== playedCard.instanceId);
+    ns.setTile(run.world, target.col, target.row, ns.makeTile(ns.TILE_TYPES.SAFE));
+
+    const initialHandCount = run.deck.hand.length;
+
+    expect(target).toBeDefined();
+    expect(run.playSelectedTo(target).ok).toBe(true);
+    expect(run.deck.discardPile.some((card) => card.instanceId === playedCard.instanceId)).toBe(true);
+    expect(run.deck.hand.length).toBe(initialHandCount - 1);
+  });
+
   test('resource costs block unaffordable movement and allow affordable movement', () => {
     const ns = loadNeverSouthRuntime();
     const run = new ns.NeverSouthRun('cost-test');
@@ -161,6 +180,47 @@ describe('Never South playable v1', () => {
     expect(run.isValidMove(card, target)).toBe(true);
   });
 
+  test('default tile rules generate only basic passable tiles', () => {
+    const ns = loadNeverSouthRuntime();
+    const run = new ns.NeverSouthRun('basic-tiles-test');
+    const samples = [
+      { col: run.player.col, row: run.player.row },
+      { col: run.player.col, row: run.player.row - 1 },
+      { col: run.player.col - 20, row: run.player.row - 50 },
+      { col: run.player.col + 37, row: run.player.row - 91 }
+    ];
+
+    expect(ns.getTileRuleMode(run.world)).toBe('basic');
+    samples.forEach(point => {
+      const tile = ns.getTile(run.world, point.col, point.row);
+      expect(tile.type).toBe(ns.TILE_TYPES.SAFE);
+      expect(ns.canEnterTile(tile, { traits: [] }, run)).toBe(true);
+      expect(ns.isTilePathable(tile, run.world)).toBe(true);
+    });
+  });
+
+  test('basic tile landings do not apply passive resources damage or conversions', () => {
+    const ns = loadNeverSouthRuntime();
+    const run = new ns.NeverSouthRun('basic-landing-test');
+    const card = run.deck.createCard('north');
+    const target = { col: run.player.col, row: run.player.row - 1 };
+    const before = {
+      scrap: run.player.scrap,
+      glow: run.player.glow,
+      health: run.player.health
+    };
+
+    expect(run.isValidMove(card, target)).toBe(true);
+    run.movePlayer(target, card);
+    run.resolveLandingTile();
+
+    expect(run.player.scrap).toBe(before.scrap);
+    expect(run.player.glow).toBe(before.glow);
+    expect(run.player.health).toBe(before.health);
+    expect(ns.getTile(run.world, target.col, target.row).type).toBe(ns.TILE_TYPES.SAFE);
+    expect(run.pendingActions.map((action) => action.id)).toEqual(['basic-draw']);
+  });
+
   test('procedural worlds provide a non-south path or emergency fallback from the start', () => {
     const ns = loadNeverSouthRuntime();
 
@@ -169,6 +229,18 @@ describe('Never South playable v1', () => {
       const start = { col: ns.CONFIG.grid.startCol, row: ns.CONFIG.grid.startRow };
       expect(ns.hasNonSouthPath(run.world, start) || run.canUseEmergencyMove()).toBe(true);
     });
+  });
+
+  test('emergency movement still finds a basic northward tile', () => {
+    const ns = loadNeverSouthRuntime();
+    const run = new ns.NeverSouthRun('basic-emergency-test');
+    run.status = 'playing';
+    run.player.glow = ns.CONFIG.run.emergencyGlowCost;
+    run.deck.hand = [];
+
+    expect(run.useEmergencyMove()).toBe(true);
+    expect(run.player.row).toBe(ns.CONFIG.grid.startRow - 1);
+    expect(ns.getTile(run.world, run.player.col, run.player.row).type).toBe(ns.TILE_TYPES.SAFE);
   });
 
   test('world generation is deterministic, sparse, and caches tile mutations', () => {
@@ -181,11 +253,13 @@ describe('Never South playable v1', () => {
     const secondTile = ns.getTile(second, far.col, far.row);
 
     expect(first.tilesByKey).toBeDefined();
+    expect(first.tileRuleMode).toBe('basic');
     expect(first.tiles).toBeUndefined();
     expect(first.cols).toBeUndefined();
     expect(first.rows).toBeUndefined();
     expect(firstTile).toBe(firstAgain);
     expect(firstTile.type).toBe(secondTile.type);
+    expect(firstTile.type).toBe(ns.TILE_TYPES.SAFE);
 
     firstTile.visited = true;
     firstTile.collected = true;
@@ -230,19 +304,81 @@ describe('Never South playable v1', () => {
     expect(run.status).not.toBe('won');
   });
 
-  test('shops, shrines, and camps expose two or three contextual tile actions', () => {
+  test('default tile rules hide contextual actions while legacy rules preserve them', () => {
     const ns = loadNeverSouthRuntime();
     const run = new ns.NeverSouthRun('action-test');
+    expect(run.getTileActions(ns.makeTile(ns.TILE_TYPES.SHOP))).toEqual([]);
+    expect(run.getTileActions(ns.makeTile(ns.TILE_TYPES.SHRINE))).toEqual([]);
+    expect(run.getTileActions(ns.makeTile(ns.TILE_TYPES.CAMP))).toEqual([]);
+    expect(run.getTileActions(ns.makeTile(ns.TILE_TYPES.SAFE, { visited: true })).map(action => action.id)).toEqual(['basic-draw']);
+
+    ns.CONFIG.tiles.ruleMode = 'legacy';
+    const legacyRun = new ns.NeverSouthRun('legacy-action-test');
     const actionCounts = [
-      run.getTileActions(ns.makeTile(ns.TILE_TYPES.SHOP)).length,
-      run.getTileActions(ns.makeTile(ns.TILE_TYPES.SHRINE)).length,
-      run.getTileActions(ns.makeTile(ns.TILE_TYPES.CAMP)).length
+      legacyRun.getTileActions(ns.makeTile(ns.TILE_TYPES.SHOP)).length,
+      legacyRun.getTileActions(ns.makeTile(ns.TILE_TYPES.SHRINE)).length,
+      legacyRun.getTileActions(ns.makeTile(ns.TILE_TYPES.CAMP)).length
     ];
 
     actionCounts.forEach(count => {
       expect(count).toBeGreaterThanOrEqual(2);
       expect(count).toBeLessThanOrEqual(3);
     });
+    ns.CONFIG.tiles.ruleMode = 'basic';
+  });
+
+  test('basic tiles offer a one-time draw action that costs 3 scrap', () => {
+    const ns = loadNeverSouthRuntime();
+    const run = new ns.NeverSouthRun('basic-draw-action-test');
+    const card = run.deck.createCard('north');
+    const target = { col: run.player.col, row: run.player.row - 1 };
+
+    run.status = 'playing';
+    run.player.scrap = 3;
+    run.movePlayer(target, card);
+    run.resolveLandingTile();
+
+    const tile = ns.getTile(run.world, target.col, target.row);
+    const drawPileBefore = run.deck.drawPile.length;
+    expect(run.pendingActions.map(action => action.id)).toEqual(['basic-draw']);
+    expect(run.applyAction('basic-draw')).toBe(true);
+    expect(run.player.scrap).toBe(0);
+    expect(tile.basicDrawUsed).toBe(true);
+    expect(run.pendingActions).toEqual([]);
+    expect(run.deck.drawPile.length).toBe(drawPileBefore - 1);
+    expect(run.getTileActions(tile)).toEqual([]);
+  });
+
+  test('basic draw action is blocked when the player has less than 3 scrap', () => {
+    const ns = loadNeverSouthRuntime();
+    const run = new ns.NeverSouthRun('basic-draw-cost-test');
+    const card = run.deck.createCard('north');
+    const target = { col: run.player.col, row: run.player.row - 1 };
+
+    run.status = 'playing';
+    run.player.scrap = 2;
+    run.movePlayer(target, card);
+    run.resolveLandingTile();
+
+    expect(run.applyAction('basic-draw')).toBe(false);
+    expect(run.player.scrap).toBe(2);
+    expect(run.pendingActions.map(action => action.id)).toEqual(['basic-draw']);
+  });
+
+  test('closing pending tile actions dismisses the popup state and advances the turn', () => {
+    const ns = loadNeverSouthRuntime();
+    const run = new ns.NeverSouthRun('close-actions-test');
+    const card = run.deck.createCard('north');
+    const target = { col: run.player.col, row: run.player.row - 1 };
+
+    run.status = 'playing';
+    run.player.scrap = 3;
+    run.movePlayer(target, card);
+    run.resolveLandingTile();
+
+    expect(run.pendingActions.map(action => action.id)).toEqual(['basic-draw']);
+    expect(run.closePendingActions()).toBe(true);
+    expect(run.pendingActions).toEqual([]);
   });
 
   test('visual shell keeps canvas pixel art responsive without external assets', () => {
@@ -267,6 +403,9 @@ describe('Never South playable v1', () => {
     expect(render).toContain('drawUnexploredTile');
     expect(render).toContain('drawSquareTileBase');
     expect(world).toContain('tilesByKey');
+    expect(world).toContain('legacyGenerateTile');
+    expect(world).toContain('canEnterTile');
+    expect(world).toContain('applyLandingTile');
     expect(render).not.toContain('drawBorderTile');
     expect(render).not.toContain('run.world.cols');
     expect(render).not.toContain('run.world.rows');
@@ -292,7 +431,7 @@ describe('Never South playable v1', () => {
     expect(ns.getTile(run.world, run.player.col, run.player.row - 7).revealed).toBe(false);
   });
 
-  test('renderer keeps world, cards, actions, and log inside non-overlapping regions', () => {
+  test('renderer keeps world, cards, popup actions, and log inside intended regions', () => {
     const ns = loadNeverSouthWithRenderer();
     const run = new ns.NeverSouthRun('layout-test');
     const renderer = new ns.NeverSouthRenderer(createFakeCanvas());
@@ -303,7 +442,11 @@ describe('Never South playable v1', () => {
     expect(layout.world.y + layout.world.h).toBeLessThanOrEqual(layout.bottom.y);
     expect(layout.centerPanel.w).toBeGreaterThan(layout.leftPanel.w);
 
-    run.pendingActions = run.getTileActions(ns.makeTile(ns.TILE_TYPES.SHOP));
+    run.status = 'playing';
+    run.pendingActions = [
+      { id: "buy-card", label: "Buy Card", detail: "Spend 2 Scrap for a new movement card." },
+      { id: "repair", label: "Repair", detail: "Spend 1 Scrap to heal 6." }
+    ];
     renderer.render(run, 0);
 
     const areas = renderer.getHitAreas();
@@ -314,11 +457,13 @@ describe('Never South playable v1', () => {
       expect(area.y + area.h).toBeLessThanOrEqual(layout.centerPanel.y + layout.centerPanel.h);
     });
     areas.filter(area => area.type === 'action').forEach(area => {
-      expect(area.x).toBeGreaterThanOrEqual(layout.leftPanel.x);
-      expect(area.y).toBeGreaterThanOrEqual(layout.leftPanel.y);
-      expect(area.x + area.w).toBeLessThanOrEqual(layout.leftPanel.x + layout.leftPanel.w);
-      expect(area.y + area.h).toBeLessThanOrEqual(layout.leftPanel.y + layout.leftPanel.h);
+      expect(area.x).toBeGreaterThan(layout.world.x);
+      expect(area.y).toBeGreaterThan(layout.world.y);
+      expect(area.x + area.w).toBeLessThan(layout.world.x + layout.world.w + layout.rightPanel.w);
+      expect(area.y + area.h).toBeLessThan(layout.bottom.y + layout.bottom.h);
     });
+    const closeButtons = areas.filter(area => area.type === 'action-close');
+    expect(closeButtons).toHaveLength(1);
     expect(renderer.lastRunLogArea.x).toBeGreaterThanOrEqual(layout.rightPanel.x);
     expect(renderer.lastRunLogArea.y).toBeGreaterThanOrEqual(layout.rightPanel.y);
     expect(renderer.lastRunLogArea.x + renderer.lastRunLogArea.w).toBeLessThanOrEqual(layout.rightPanel.x + layout.rightPanel.w);

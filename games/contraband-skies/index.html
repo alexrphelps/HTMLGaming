@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contraband Skies</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="Contraband Skies">
+    <aside class="log-panel" aria-label="Captain log" data-tutorial-gate="advanced">
+      <button id="log-toggle-btn" class="log-toggle" type="button" aria-expanded="true" aria-controls="log-panel-body">
+        <span class="log-toggle-open">Hide Log</span>
+        <span class="log-toggle-closed">Log</span>
+      </button>
+      <div id="log-panel-body" class="log-panel-body">
+        <div class="section-head">
+          <p class="eyebrow">Log</p>
+          <h2>Recent entries</h2>
+        </div>
+        <ol id="log-list" class="log-list"></ol>
+      </div>
+    </aside>
+
+    <section class="map-panel" aria-label="Living sky route map">
+      <canvas id="sky-map" width="1200" height="760" aria-label="Campaign map"></canvas>
+      <div class="map-toolbar">
+        <div>
+          <p class="eyebrow">Contraband Skies</p>
+          <h1>Living Sky Ledger</h1>
+        </div>
+        <div class="toolbar-actions">
+          <button id="guide-btn" type="button">Guide</button>
+          <button id="new-season-btn" type="button" data-tutorial-gate="season-controls">New Season</button>
+          <button id="save-btn" type="button" data-tutorial-gate="season-controls">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="cockpit-panel" aria-label="Courier controls">
+      <section id="guide-panel" class="guide-panel" aria-label="Starting guide">
+        <div class="section-head">
+          <p class="eyebrow">Starting Guide</p>
+          <h2 id="guide-title">Read the map</h2>
+        </div>
+        <p id="guide-body">The map stays visible while the guide reveals one control at a time.</p>
+        <div class="guide-footer">
+          <span id="guide-progress">1 of 5</span>
+          <div class="guide-actions">
+            <button id="guide-skip-btn" type="button">Skip Guide</button>
+            <button id="guide-next-btn" type="button">Next</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="status-strip" aria-label="Campaign status" data-tutorial-gate="status">
+        <div><span>Day</span><strong id="stat-day">1</strong></div>
+        <div><span>Money</span><strong id="stat-money">0c</strong></div>
+        <div><span>Debt</span><strong id="stat-debt">0c</strong></div>
+        <div><span>Fuel</span><strong id="stat-fuel">0</strong></div>
+        <div><span>Hull</span><strong id="stat-hull">0</strong></div>
+        <div><span>Heat</span><strong id="stat-suspicion">0</strong></div>
+      </section>
+
+      <section aria-label="Contracts" data-tutorial-gate="contracts">
+        <div class="section-head">
+          <p class="eyebrow">Contracts</p>
+          <h2 id="current-port">Current Port</h2>
+        </div>
+        <div id="contract-list" class="contract-list"></div>
+      </section>
+
+      <section aria-label="Route planning" data-tutorial-gate="route">
+        <div class="section-head">
+          <p class="eyebrow">Route Dials</p>
+          <h2 id="selected-contract-title">Select a contract</h2>
+        </div>
+        <div class="dial-grid">
+          <label>Speed <output id="pace-value">55</output><input id="dial-pace" type="range" min="20" max="90" value="55"></label>
+          <label>Altitude <output id="altitude-value">50</output><input id="dial-altitude" type="range" min="10" max="90" value="50"></label>
+          <label>Engine <output id="engine-value">45</output><input id="dial-engine" type="range" min="15" max="85" value="45"></label>
+          <label>Stealth <output id="stealth-value">55</output><input id="dial-stealth" type="range" min="10" max="95" value="55"></label>
+          <label>Cargo Care <output id="care-value">60</output><input id="dial-care" type="range" min="15" max="95" value="60"></label>
+        </div>
+        <div id="route-preview" class="route-preview">Pick a contract to read the sky.</div>
+        <button id="fly-route-btn" class="primary-action" type="button" data-tutorial-gate="fly" disabled>Fly Route</button>
+      </section>
+
+    </aside>
+
+    <section class="shipyard-panel" aria-label="Ship upgrades" data-tutorial-gate="advanced">
+      <div class="section-head">
+        <p class="eyebrow">Shipyard</p>
+        <h2>Patch the old courier</h2>
+      </div>
+      <div id="upgrade-list" class="upgrade-list"></div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/rng.js"></script>
+  <script src="js/routeResolver.js"></script>
+  <script src="js/campaign.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/tutorial.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

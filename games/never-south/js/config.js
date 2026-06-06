@@ -18,6 +18,9 @@
       emergencyGlowCost: 1,
       emergencyHealthCost: 4
     },
+    tiles: {
+      ruleMode: "basic"
+    },
     render: {
       bottomPanelRatio: 0.28,
       minBottomPanelHeight: 210,

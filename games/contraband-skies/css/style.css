@@ -1,0 +1,493 @@
+:root {
+  color-scheme: dark;
+  --ink: #17120f;
+  --panel: rgba(38, 30, 24, 0.92);
+  --panel-soft: rgba(70, 55, 43, 0.78);
+  --brass: #d9a64d;
+  --amber: #f5c66a;
+  --teal: #69d8ca;
+  --cream: #f7e8c1;
+  --muted: #b9a98a;
+  --danger: #ef7564;
+  --ok: #92d783;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 22% 16%, rgba(105, 216, 202, 0.18), transparent 32%),
+    linear-gradient(145deg, #1a171d 0%, #2e251e 54%, #111015 100%);
+  color: var(--cream);
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  min-height: 38px;
+  border: 1px solid rgba(245, 198, 106, 0.45);
+  border-radius: 6px;
+  background: rgba(33, 26, 21, 0.84);
+  color: var(--cream);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+button:focus-visible {
+  border-color: var(--teal);
+  color: #ffffff;
+  outline: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.game-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) minmax(360px, 430px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "log map cockpit"
+    "shipyard shipyard shipyard";
+  gap: 12px;
+  width: 100vw;
+  height: 100vh;
+  padding: 12px;
+}
+
+.game-shell.log-collapsed {
+  grid-template-columns: 54px minmax(0, 1fr) minmax(360px, 430px);
+}
+
+.map-panel,
+.cockpit-panel,
+.log-panel,
+.shipyard-panel {
+  position: relative;
+  min-height: 0;
+  border: 1px solid rgba(245, 198, 106, 0.28);
+  border-radius: 8px;
+  background: rgba(13, 14, 20, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+}
+
+.map-panel {
+  grid-area: map;
+  overflow: hidden;
+}
+
+#sky-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-toolbar {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+[data-tutorial-hidden="true"],
+[hidden] {
+  display: none !important;
+}
+
+.map-toolbar h1,
+.section-head h2 {
+  margin: 2px 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--teal);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cockpit-panel {
+  grid-area: cockpit;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(54, 41, 31, 0.96), rgba(25, 21, 20, 0.96)),
+    repeating-linear-gradient(90deg, transparent 0 24px, rgba(245, 198, 106, 0.03) 24px 25px);
+}
+
+.cockpit-panel section,
+.log-panel,
+.shipyard-panel {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(245, 198, 106, 0.22);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.cockpit-panel section[aria-label="Route planning"] {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.log-panel {
+  grid-area: log;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(31, 34, 37, 0.96), rgba(19, 18, 20, 0.96)),
+    repeating-linear-gradient(0deg, transparent 0 24px, rgba(105, 216, 202, 0.04) 24px 25px);
+}
+
+.log-toggle {
+  width: 100%;
+  min-height: 34px;
+}
+
+.log-toggle-closed {
+  display: none;
+}
+
+.log-panel-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.log-collapsed .log-panel {
+  padding: 8px;
+}
+
+.log-collapsed .log-panel-body,
+.log-collapsed .log-toggle-open {
+  display: none;
+}
+
+.log-collapsed .log-toggle {
+  min-width: 0;
+  min-height: 100%;
+  padding: 6px 4px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.log-collapsed .log-toggle-closed {
+  display: inline;
+}
+
+.shipyard-panel {
+  grid-area: shipyard;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(43, 33, 26, 0.98), rgba(27, 25, 24, 0.98)),
+    repeating-linear-gradient(90deg, transparent 0 28px, rgba(245, 198, 106, 0.04) 28px 29px);
+}
+
+.guide-panel {
+  border-color: rgba(105, 216, 202, 0.55) !important;
+  background:
+    linear-gradient(180deg, rgba(29, 50, 51, 0.96), rgba(24, 24, 25, 0.96)),
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(105, 216, 202, 0.05) 18px 19px) !important;
+}
+
+.guide-panel p {
+  margin: 10px 0 0;
+  color: var(--cream);
+  line-height: 1.42;
+}
+
+.guide-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.guide-footer span {
+  color: var(--teal);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.guide-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.status-strip div {
+  min-width: 0;
+  border-radius: 6px;
+  background: rgba(12, 15, 18, 0.56);
+  padding: 8px;
+}
+
+.status-strip span,
+.contract-card span,
+.upgrade-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.status-strip strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: #ffffff;
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contract-list,
+.upgrade-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.shipyard-panel .upgrade-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 0;
+}
+
+.contract-card,
+.upgrade-card {
+  width: 100%;
+  min-height: 78px;
+  padding: 10px;
+  text-align: left;
+  background: rgba(21, 23, 27, 0.72);
+}
+
+.contract-card.selected {
+  border-color: var(--teal);
+  background: rgba(33, 48, 48, 0.9);
+}
+
+.contract-card strong,
+.upgrade-card strong {
+  display: block;
+  overflow: hidden;
+  color: var(--cream);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  border: 1px solid rgba(245, 198, 106, 0.25);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--amber);
+  font-size: 0.72rem;
+}
+
+.dial-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.dial-grid label {
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) 34px minmax(120px, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.dial-grid output {
+  color: var(--amber);
+  text-align: right;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--teal);
+}
+
+.route-preview {
+  min-height: 68px;
+  margin: 10px 0;
+  border-left: 3px solid var(--brass);
+  border-radius: 4px;
+  background: rgba(13, 14, 18, 0.55);
+  color: var(--cream);
+  padding: 9px 10px;
+  line-height: 1.35;
+}
+
+.primary-action {
+  width: 100%;
+  background: linear-gradient(180deg, rgba(94, 72, 40, 0.96), rgba(37, 28, 21, 0.96));
+  color: #fff4d5;
+  font-weight: 700;
+}
+
+.log-list {
+  display: grid;
+  gap: 8px;
+  max-height: none;
+  height: 100%;
+  margin: 10px 0 0;
+  overflow: auto;
+  padding: 0 0 0 18px;
+}
+
+.log-list li {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.outcome-solvent {
+  color: var(--ok);
+}
+
+.outcome-collapse {
+  color: var(--danger);
+}
+
+@media (max-width: 980px) {
+  body {
+    overflow: auto;
+  }
+
+  .game-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 56vh auto auto;
+    grid-template-areas:
+      "log"
+      "map"
+      "cockpit"
+      "shipyard";
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .game-shell.log-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .map-panel {
+    min-height: 56vh;
+  }
+
+  .cockpit-panel {
+    overflow: visible;
+    max-height: none;
+  }
+
+  .log-panel {
+    max-height: 220px;
+  }
+
+  .log-collapsed .log-panel {
+    max-height: 48px;
+  }
+
+  .log-collapsed .log-toggle {
+    min-height: 32px;
+    writing-mode: horizontal-tb;
+  }
+
+  .shipyard-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .shipyard-panel .upgrade-list {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .game-shell {
+    padding: 8px;
+  }
+
+  .map-toolbar {
+    flex-direction: column;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-actions button {
+    flex: 1;
+  }
+
+  .status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shipyard-panel .upgrade-list {
+    grid-template-columns: 1fr;
+  }
+
+  .dial-grid label {
+    grid-template-columns: 1fr 34px;
+  }
+
+  .dial-grid input {
+    grid-column: 1 / -1;
+  }
+}

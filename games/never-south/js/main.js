@@ -51,6 +51,9 @@
         } else if (area.type === "action") {
           run.applyAction(area.actionId);
           announce();
+        } else if (area.type === "action-close" || area.type === "action-backdrop") {
+          run.closePendingActions();
+          announce();
         } else if (area.type === "emergency") {
           run.useEmergencyMove();
           announce();
@@ -84,6 +87,9 @@
             const targets = run.getValidTargets();
             if (targets.length > 0) run.playSelectedTo(targets[run.selectedTargetIndex % targets.length]);
           }
+          announce();
+        } else if (code === "Escape" && run.pendingActions.length > 0) {
+          run.closePendingActions();
           announce();
         }
       }

@@ -164,6 +164,22 @@ window.GAMEHUB_GAMES = [
         saveSupport: 'None'
     },
     {
+        folder: 'contraband-skies',
+        name: 'Contraband Skies',
+        description: 'Run illegal sky-courier contracts through a living stormpunk atmosphere in a saved roguelite campaign.',
+        category: 'Strategy',
+        difficulty: 'Medium',
+        icon: 'CS',
+        tags: ['2d', 'strategy', 'roguelite', 'campaign', 'routes', 'canvas'],
+        author: 'GameHub',
+        estimatedPlayTime: 55,
+        aiEffortRating: 5,
+        defaultRating: 4,
+        input: 'Mouse + Keyboard',
+        rendering: 'Canvas',
+        saveSupport: 'Campaign'
+    },
+    {
         folder: 'void_signal',
         name: 'Void Signal',
         category: 'Other',

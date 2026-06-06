@@ -83,7 +83,8 @@
       return this.hand.find((card) => card.instanceId === instanceId);
     }
 
-    play(instanceId, resources) {
+    play(instanceId, resources, options) {
+      const settings = options || {};
       const index = this.hand.findIndex((card) => card.instanceId === instanceId);
       if (index < 0) return { ok: false, reason: "Card is not in hand." };
 
@@ -101,7 +102,9 @@
         this.discardPile.push(card);
       }
 
-      this.drawToHand();
+      if (settings.drawReplacement !== false) {
+        this.drawToHand();
+      }
       return { ok: true, card };
     }
   }

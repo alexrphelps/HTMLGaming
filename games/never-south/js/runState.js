@@ -102,9 +102,7 @@
       if (!matchesPattern) return false;
 
       const tile = ns.getTile(this.world, target.col, target.row);
-      if (!tile || tile.type === TILE.GAP) return false;
-      if (tile.type === TILE.RUBBLE && !card.traits.includes("clearRubble")) return false;
-      if (tile.type === TILE.FOG && !card.traits.includes("reveal") && !card.traits.includes("passFog")) return false;
+      if (!ns.canEnterTile(tile, card, this)) return false;
 
       const enemy = this.getEnemyAt(target.col, target.row);
       if (enemy) return false;
@@ -127,7 +125,7 @@
         { col: this.player.col + 1, row: this.player.row - 1 }
       ].find((candidate) => {
         const tile = ns.getTile(this.world, candidate.col, candidate.row);
-        return tile && tile.type !== TILE.GAP;
+        return ns.isTilePathable(tile, this.world);
       });
 
       if (!target) return false;
@@ -149,7 +147,7 @@
       const card = this.getSelectedCard();
       if (!this.isValidMove(card, target)) return { ok: false, reason: "That card cannot reach there." };
 
-      const result = this.deck.play(card.instanceId, this.player);
+      const result = this.deck.play(card.instanceId, this.player, { drawReplacement: false });
       if (!result.ok) {
         this.addLog(result.reason);
         return result;
@@ -168,10 +166,7 @@
 
     movePlayer(target, card) {
       const previous = ns.getTile(this.world, this.player.col, this.player.row);
-      if (previous && previous.type === TILE.CRACKED && !card.traits.includes("careful")) {
-        previous.type = TILE.GAP;
-        previous.broken = true;
-      }
+      ns.applyLeavingTile(previous, card, this);
 
       this.player.col = target.col;
       this.player.row = target.row;
@@ -181,10 +176,7 @@
 
       const tile = ns.getTile(this.world, target.col, target.row);
       if (tile) tile.visited = true;
-      if (tile && tile.type === TILE.RUBBLE && card.traits.includes("clearRubble")) {
-        tile.type = TILE.SAFE;
-        this.player.scrap += 1;
-      }
+      ns.applyMovedOntoTile(tile, card, this);
     }
 
     afterLanding() {
@@ -199,60 +191,22 @@
       const tile = ns.getTile(this.world, this.player.col, this.player.row);
       if (!tile) return;
 
-      if (tile.type === TILE.SCRAP && !tile.collected) {
-        this.player.scrap += 1;
-        tile.collected = true;
-        this.addLog("Collected 1 Scrap.");
-      } else if (tile.type === TILE.GLOW && !tile.collected) {
-        this.player.glow += 1;
-        tile.collected = true;
-        this.addLog("Gathered 1 Glow.");
-      } else if (tile.type === TILE.THORNS) {
-        this.player.health -= 3;
-        this.addLog("Thorns bite for 3 health.");
-      } else if (tile.type === TILE.CRACKED) {
-        this.addLog("The road cracks underfoot.");
-      }
-
+      ns.applyLandingTile(tile, null, this);
       this.pendingActions = this.getTileActions(tile);
     }
 
     getTileActions(tile) {
       const current = tile || ns.getTile(this.world, this.player.col, this.player.row);
-      if (!current) return [];
+      return ns.getTileActionsForRules(current, this);
+    }
 
-      if (current.type === TILE.SHOP) {
-        return [
-          { id: "buy-card", label: "Buy Card", detail: "Spend 2 Scrap for a new movement card." },
-          { id: "repair", label: "Repair", detail: "Spend 1 Scrap to heal 6." },
-          { id: "draw", label: "Draw", detail: "Draw 1 card before moving on." }
-        ];
-      }
-
-      if (current.type === TILE.SHRINE) {
-        return [
-          { id: "bless-card", label: "Bless Card", detail: "Spend 1 Glow to add return to your leftmost card." },
-          { id: "reveal", label: "Reveal", detail: "Spend 1 Glow to reveal nearby fog." },
-          { id: "heal-glow", label: "Cleansing Glow", detail: "Spend 1 Glow to heal 5." }
-        ];
-      }
-
-      if (current.type === TILE.CAMP) {
-        return [
-          { id: "camp-draw", label: "Draw", detail: "Draw 2 cards." },
-          { id: "camp-shuffle", label: "Shuffle", detail: "Shuffle discard into deck." },
-          { id: "camp-heal", label: "Rest", detail: "Heal 4." }
-        ];
-      }
-
-      if (current.type === TILE.RUBBLE) {
-        return [
-          { id: "clear-rubble", label: "Clear Rubble", detail: "Spend 1 Scrap to clear this tile." },
-          { id: "leave-rubble", label: "Move On", detail: "Leave the rubble intact." }
-        ];
-      }
-
-      return [];
+    closePendingActions() {
+      if (this.status !== "playing" || this.pendingActions.length === 0) return false;
+      this.pendingActions = [];
+      this.addLog("You move on.");
+      this.enemyTurn();
+      this.checkEndState();
+      return true;
     }
 
     applyAction(actionId) {
@@ -303,6 +257,13 @@
       } else if (actionId === "camp-heal") {
         this.heal(4);
         this.addLog("A quiet rest heals 4.");
+      } else if (actionId === "basic-draw") {
+        if (this.player.scrap < 3) return this.failAction("Need 3 Scrap.");
+        this.player.scrap -= 3;
+        this.deck.draw(1);
+        const tile = ns.getTile(this.world, this.player.col, this.player.row);
+        if (tile) tile.basicDrawUsed = true;
+        this.addLog("Spent 3 Scrap to draw 1 card.");
       } else if (actionId === "clear-rubble") {
         if (this.player.scrap < 1) return this.failAction("Need 1 Scrap.");
         this.player.scrap -= 1;
@@ -363,7 +324,7 @@
           const nextCol = enemy.col + direction;
           if (direction !== 0 && ns.inBounds(nextCol, enemy.row)) {
             const tile = ns.getTile(this.world, nextCol, enemy.row);
-            if (tile && tile.type !== TILE.GAP) enemy.col = nextCol;
+            if (ns.isTilePathable(tile, this.world)) enemy.col = nextCol;
           }
         }
 

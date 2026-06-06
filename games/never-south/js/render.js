@@ -109,6 +109,9 @@
 
       this.drawWorld(ctx, run);
       this.drawBottomPanel(ctx, run);
+      if (run.pendingActions.length > 0 && run.status === "playing") {
+        this.drawActionPopup(ctx, run);
+      }
 
       if (run.status === "title" || run.status === "won" || run.status === "lost") {
         this.drawOverlay(ctx, run);
@@ -215,7 +218,9 @@
       ctx.strokeRect(geometry.bounds.x + 0.5, geometry.bounds.y + 0.5, geometry.bounds.w - 1, geometry.bounds.h - 1);
       ctx.lineWidth = 1;
 
-      this.drawTileDetails(ctx, tile, geometry, camera, data);
+      if (ns.getTileRuleMode(run.world) === "legacy") {
+        this.drawTileDetails(ctx, tile, geometry, camera, data);
+      }
 
       if (isTarget) {
         this.hitAreas.push(Object.assign({ type: "target", col, row }, geometry.bounds));
@@ -444,7 +449,6 @@
         y += 50;
         this.wrapText(ctx, "Traits: " + card.traits.join(", "), panel.x + p, y, panel.w - p * 2, 12, "#acc9b7", 2);
       }
-      this.drawTileActionsInLeftPanel(ctx, run, panel);
     }
 
     drawPreviewList(ctx, run, panel, startY) {
@@ -456,25 +460,55 @@
       });
     }
 
-    drawTileActionsInLeftPanel(ctx, run, panel) {
-      if (run.pendingActions.length === 0) return;
-      const p = this.layout.padding;
-      const actionH = 32;
-      const gap = 6;
-      const total = run.pendingActions.length * actionH + (run.pendingActions.length - 1) * gap;
-      let y = panel.y + panel.h - p - total;
-      this.text(ctx, "Tile Actions", panel.x + p, y - 8, 14, "#f1e3b0", "bold");
+    drawActionPopup(ctx, run) {
+      const layout = this.layout;
+      const popupW = Math.min(420, Math.max(280, Math.floor(layout.width * 0.34)));
+      const actionH = 48;
+      const gap = 10;
+      const padding = 18;
+      const headerH = 54;
+      const footerH = 52;
+      const bodyH = run.pendingActions.length * actionH + Math.max(0, run.pendingActions.length - 1) * gap;
+      const popupH = headerH + bodyH + footerH + padding * 2;
+      const popup = rect(
+        Math.round((layout.width - popupW) / 2),
+        Math.round((layout.height - popupH) / 2),
+        popupW,
+        popupH
+      );
+
+      this.hitAreas.push({ type: "action-backdrop", x: 0, y: 0, w: layout.width, h: layout.height });
+      ctx.fillStyle = "rgba(4, 7, 8, 0.58)";
+      ctx.fillRect(0, 0, layout.width, layout.height);
+      ctx.fillStyle = "#162022";
+      ctx.fillRect(popup.x, popup.y, popup.w, popup.h);
+      ctx.strokeStyle = "#d7c079";
+      ctx.strokeRect(popup.x + 0.5, popup.y + 0.5, popup.w - 1, popup.h - 1);
+      ctx.fillStyle = "#223032";
+      ctx.fillRect(popup.x, popup.y, popup.w, headerH);
+      this.text(ctx, "Tile Actions", popup.x + padding, popup.y + 33, 18, "#f1e3b0", "bold");
+      this.text(ctx, "Choose one action or close the panel.", popup.x + padding, popup.y + 52, 11, "#c9cfbd");
+
+      let y = popup.y + headerH + padding;
       run.pendingActions.forEach((action) => {
-        const area = rect(panel.x + p, y, panel.w - p * 2, actionH);
+        const area = rect(popup.x + padding, y, popup.w - padding * 2, actionH);
         this.hitAreas.push(Object.assign({ type: "action", actionId: action.id }, area));
         ctx.fillStyle = "#2e3d3d";
         ctx.fillRect(area.x, area.y, area.w, area.h);
         ctx.strokeStyle = "#88906f";
         ctx.strokeRect(area.x + 0.5, area.y + 0.5, area.w - 1, area.h - 1);
-        this.text(ctx, action.label, area.x + 8, area.y + 14, 12, "#f4e7bf", "bold");
-        this.text(ctx, action.detail, area.x + 8, area.y + 28, 10, "#c4cab8");
+        this.text(ctx, action.label, area.x + 10, area.y + 18, 13, "#f4e7bf", "bold");
+        this.text(ctx, action.detail, area.x + 10, area.y + 36, 11, "#c4cab8");
         y += actionH + gap;
       });
+
+      const closeArea = rect(popup.x + popup.w - padding - 110, popup.y + popup.h - padding - 30, 110, 30);
+      this.hitAreas.push(Object.assign({ type: "action-close" }, closeArea));
+      ctx.fillStyle = "#4a4035";
+      ctx.fillRect(closeArea.x, closeArea.y, closeArea.w, closeArea.h);
+      ctx.strokeStyle = "#d7c079";
+      ctx.strokeRect(closeArea.x + 0.5, closeArea.y + 0.5, closeArea.w - 1, closeArea.h - 1);
+      this.text(ctx, "Close", closeArea.x + 34, closeArea.y + 20, 13, "#f7e5b4", "bold");
     }
 
     drawHandPanel(ctx, run, panel) {
