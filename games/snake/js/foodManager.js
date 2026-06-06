@@ -119,7 +119,13 @@ const FoodManager = {
       if (playerSnake[0].x === foods[i].x && playerSnake[0].y === foods[i].y) {
         const food = foods[i];
         score++;
+        console.log('Player ate food! New score:', score);
         playerGrow += food.grow;
+
+        if (typeof window.levelFoodCount !== 'undefined') {
+          window.levelFoodCount++;
+          console.log(`Player ate food! Total food eaten: ${window.levelFoodCount}`);
+        }
 
         if (food.speedInc) {
           // Apply permanent extra moves per tick to the player, but cap base (without temp boost) to MAX_MOVES_PER_SECOND
@@ -150,7 +156,10 @@ const FoodManager = {
         }
         
         // Emit food eaten event
-        EventSystem.emit('playerAteFood', { 
+        EventSystem.emit('playerAteFood', {
+          food,
+          score,
+          levelFoodCount: window.levelFoodCount,
           type: food.type, 
           grow: food.grow,
           speedInc: food.speedInc,
@@ -167,9 +176,10 @@ const FoodManager = {
   /**
    * Process AI snake eating food
    * @param {number} snakeIndex - Index of AI snake
+   * @param {number} now - Timestamp to use for temporary effects
    * @returns {boolean} True if food was eaten
    */
-  processAiEatsFood(snakeIndex) {
+  processAiEatsFood(snakeIndex, now = Date.now()) {
     const snake = aiSnakes[snakeIndex];
     if (!snake || !snake.alive) return false;
     
@@ -194,7 +204,7 @@ const FoodManager = {
         }
         if (food.tempSpeedInc) {
           snake.tempMoveRate = food.tempSpeedInc;
-          snake.speedBoostEnd = Date.now() + RUNTIME_TEMP_SPEED_BOOST_DURATION;
+          snake.speedBoostEnd = now + RUNTIME_TEMP_SPEED_BOOST_DURATION;
         }
         
         foods.splice(j, 1);

@@ -339,6 +339,8 @@ const LevelManager = {
         completionMessage = `🎉 Level Complete! 🎉\n\nCongratulations on completing this level!`;
     }
     
+    completionMessage = completionMessage.replace(/^.*Level Complete!.*\n\n/, '');
+
     // Show level completion UI with Next Level and Continue buttons
     this.showLevelCompletionUI(completionMessage, config);
   },
@@ -347,119 +349,32 @@ const LevelManager = {
    * Show level completion UI with Next Level and Continue buttons
    */
   showLevelCompletionUI(message, config) {
-    // Create or get the completion overlay
-    let completionOverlay = document.getElementById('levelCompletionOverlay');
-    if (!completionOverlay) {
-      completionOverlay = document.createElement('div');
-      completionOverlay.id = 'levelCompletionOverlay';
-      completionOverlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 10000;
-        font-family: Arial, sans-serif;
-      `;
-      document.body.appendChild(completionOverlay);
+    if (typeof stopSnakeCountdown === 'function') stopSnakeCountdown();
+    if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
+    if (typeof gameInterval !== 'undefined' && gameInterval) clearInterval(gameInterval);
+    if (typeof stopSnakeRenderLoop === 'function') stopSnakeRenderLoop();
+
+    if (typeof showSnakeDialogOverlay === 'function') {
+      showSnakeDialogOverlay({
+        id: 'winOverlay',
+        title: 'Level Complete!',
+        details: message,
+        buttons: [
+          { label: 'Next Level', onClick: () => this.handleNextLevel(), variant: 'primary' },
+          { label: 'Continue', onClick: () => this.handleContinueLevel(), variant: 'secondary' }
+        ]
+      });
+      return;
     }
-    
-    // Create the completion dialog
-    const dialog = document.createElement('div');
-    dialog.style.cssText = `
-      background: white;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-      max-width: 500px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    `;
-    
-    // Add the message
-    const messageDiv = document.createElement('div');
-    messageDiv.style.cssText = `
-      font-size: 18px;
-      margin-bottom: 30px;
-      white-space: pre-line;
-      line-height: 1.5;
-    `;
-    messageDiv.textContent = message;
-    dialog.appendChild(messageDiv);
-    
-    // Create button container
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = `
-      display: flex;
-      gap: 15px;
-      justify-content: center;
-    `;
-    
-    // Next Level button
-    const nextLevelBtn = document.createElement('button');
-    nextLevelBtn.textContent = 'Next Level';
-    nextLevelBtn.style.cssText = `
-      padding: 12px 24px;
-      font-size: 16px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.3s;
-    `;
-    nextLevelBtn.onmouseover = () => nextLevelBtn.style.background = '#45a049';
-    nextLevelBtn.onmouseout = () => nextLevelBtn.style.background = '#4CAF50';
-    nextLevelBtn.onclick = () => this.handleNextLevel();
-    
-    // Continue button
-    const continueBtn = document.createElement('button');
-    continueBtn.textContent = 'Continue';
-    continueBtn.style.cssText = `
-      padding: 12px 24px;
-      font-size: 16px;
-      background: #2196F3;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.3s;
-    `;
-    continueBtn.onmouseover = () => continueBtn.style.background = '#1976D2';
-    continueBtn.onmouseout = () => continueBtn.style.background = '#2196F3';
-    continueBtn.onclick = () => this.handleContinueLevel();
-    
-    // Add buttons to container
-    buttonContainer.appendChild(nextLevelBtn);
-    buttonContainer.appendChild(continueBtn);
-    dialog.appendChild(buttonContainer);
-    
-    // Add dialog to overlay
-    completionOverlay.innerHTML = '';
-    completionOverlay.appendChild(dialog);
-    completionOverlay.style.display = 'flex';
-    
-    // Pause the game
-    if (typeof gameInterval !== 'undefined' && gameInterval) {
-      clearInterval(gameInterval);
-    }
-    if (typeof stopSnakeRenderLoop === 'function') {
-      stopSnakeRenderLoop();
-    }
+
+    this.showMessage(message, true);
   },
   
   /**
    * Handle Next Level button click
    */
   handleNextLevel() {
-    // Hide completion overlay
-    const overlay = document.getElementById('levelCompletionOverlay');
-    if (overlay) {
-      overlay.style.display = 'none';
-    }
+    this.clearCompletionOverlays();
     
     // Complete current level and start next level
     const currentLevelId = this.currentLevel;
@@ -471,11 +386,26 @@ const LevelManager = {
       this.completeLevel(currentLevelId, score);
       
       // Start next level
-      this.startLevel(nextLevelId);
+      if (typeof LevelUI !== 'undefined' && LevelUI.startLevel) {
+        LevelUI.startLevel(nextLevelId);
+      } else {
+        this.startLevel(nextLevelId);
+      }
     } else {
-      // No more levels, show completion message
-      alert('Congratulations! You have completed all levels!');
-      this.returnToLevelSelection();
+      if (typeof showAllLevelsCompleteOverlay === 'function') {
+        showAllLevelsCompleteOverlay();
+      } else if (typeof showSnakeDialogOverlay === 'function') {
+        showSnakeDialogOverlay({
+          id: 'winOverlay',
+          title: 'All Levels Complete!',
+          details: 'Congratulations! You have completed all levels!',
+          buttons: [
+            { label: 'Return to Menu', onClick: () => this.returnToLevelSelection(), variant: 'primary' }
+          ]
+        });
+      } else {
+        this.returnToLevelSelection();
+      }
     }
   },
   
@@ -483,10 +413,11 @@ const LevelManager = {
    * Handle Continue button click
    */
   handleContinueLevel() {
-    // Hide completion overlay
-    const overlay = document.getElementById('levelCompletionOverlay');
-    if (overlay) {
-      overlay.style.display = 'none';
+    this.clearCompletionOverlays();
+
+    if (typeof window !== 'undefined' && typeof window.handleContinueLevel === 'function') {
+      window.handleContinueLevel();
+      return;
     }
     
     // Resume the game
@@ -503,6 +434,13 @@ const LevelManager = {
         startSnakeRenderLoop();
       }
     }
+  },
+
+  clearCompletionOverlays() {
+    ['winOverlay', 'levelCompletionOverlay'].forEach(id => {
+      const overlay = document.getElementById(id);
+      if (overlay) overlay.remove();
+    });
   },
   
   /**

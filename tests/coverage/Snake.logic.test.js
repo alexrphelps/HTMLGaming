@@ -157,3 +157,142 @@ describe('Snake AI logic', () => {
     ]).toEqual([7, false, false, expect.any(Object)]);
   });
 });
+
+// Behaviour under test: Snake lifecycle ownership prevents stale countdown callbacks and routes food setup through FoodManager.
+describe('Snake lifecycle and manager ownership', () => {
+  function createElement(overrides = {}) {
+    return {
+      style: {},
+      textContent: '',
+      classList: { add: jest.fn(), remove: jest.fn() },
+      getContext: jest.fn(() => ({})),
+      focus: jest.fn(),
+      querySelector: jest.fn(),
+      ...overrides
+    };
+  }
+
+  test('stopSnakeCountdown cancels pending countdown callbacks before they can start the loop', () => {
+    const elements = {
+      game: createElement({ width: 1000, height: 1000 }),
+      gameContainer: createElement(),
+      countdown: createElement(),
+      previewCanvas: createElement(),
+      colorPreview: createElement()
+    };
+    const callbacks = [];
+    const setTimeoutMock = jest.fn((callback) => {
+      const id = callbacks.length + 1;
+      callbacks.push({ id, callback });
+      return id;
+    });
+    const clearTimeoutMock = jest.fn();
+    const startSnakeGameLoop = jest.fn();
+    const context = createBrowserContext({
+      ANIMATION_INTERVAL: 16,
+      BASE_GAME_INTERVAL: 200,
+      COUNTDOWN_SECONDS: 1,
+      countdownActive: false,
+      setTimeout: setTimeoutMock,
+      clearTimeout: clearTimeoutMock,
+      startSnakeGameLoop,
+      drawGameState: jest.fn(),
+      document: {
+        getElementById: jest.fn(id => elements[id] || createElement()),
+        createElement: jest.fn(() => createElement()),
+        body: createElement()
+      }
+    });
+    const { startCountdown, stopSnakeCountdown } = loadSnake(context, 'gameState.js', ['startCountdown', 'stopSnakeCountdown']);
+
+    startCountdown();
+    const scheduledCountdown = callbacks[0];
+    stopSnakeCountdown();
+    scheduledCountdown.callback();
+
+    expect(clearTimeoutMock).toHaveBeenCalledWith(scheduledCountdown.id);
+    expect(startSnakeGameLoop).not.toHaveBeenCalled();
+    expect(elements.countdown.style.display).toBe('none');
+  });
+
+  test('GameManager initializes food through FoodManager instead of the legacy global helper', () => {
+    const FoodManager = { init: jest.fn() };
+    const context = createBrowserContext({
+      playerColor: 'lime',
+      BASE_GAME_INTERVAL: 200,
+      baseInterval: 200,
+      score: 0,
+      playerPermanentMoveRate: 0,
+      playerTempMoveRate: 0,
+      playerMoveAccumulator: 0,
+      gameOver: false,
+      gameWinner: null,
+      playerAlive: true,
+      playerSpeedBoostEnd: 0,
+      directionQueue: [],
+      removedTails: [],
+      animationProgress: 1,
+      lastGameUpdateTime: 0,
+      NUM_AI_SNAKES: 4,
+      FoodManager,
+      LevelManager: { currentLevel: 1 },
+      gameInterval: null,
+      stopSnakeCountdown: jest.fn(),
+      stopSnakeGameLoop: jest.fn(),
+      stopSnakeRenderLoop: jest.fn(),
+      initSnakes: jest.fn(),
+      initFoods: jest.fn(),
+      generateObstacles: jest.fn(),
+      setCanvasAndContainerSize: jest.fn(),
+      startSnakeRenderLoop: jest.fn(),
+      updateAiScores: jest.fn(),
+      startCountdown: jest.fn(),
+      enemiesLeftElem: createElement(),
+      playerStatusElem: createElement(),
+      statusMessageElement: createElement(),
+      gameControlsElement: createElement(),
+      scoreboard: createElement(),
+      startMenu: createElement(),
+      gameContainer: createElement(),
+      document: { getElementById: jest.fn(() => null) }
+    });
+    const { GameManager } = loadSnake(context, 'gameManager.js', ['GameManager']);
+
+    GameManager.initGame();
+
+    expect(FoodManager.init).toHaveBeenCalledTimes(1);
+    expect(context.initFoods).not.toHaveBeenCalled();
+  });
+
+  test('FoodManager preserves player food side effects when it owns eating', () => {
+    const emit = jest.fn();
+    const context = createBrowserContext({
+      foods: [{ x: 2, y: 3, type: 'red', grow: 2, speedInc: 0, tempSpeedInc: 0, noRespawn: true }],
+      playerAlive: true,
+      playerSnake: [{ x: 2, y: 3 }],
+      score: 0,
+      playerGrow: 0,
+      playerPermanentMoveRate: 0,
+      playerTempMoveRate: 0,
+      playerSpeedBoostEnd: 0,
+      baseInterval: 200,
+      MAX_MOVES_PER_SECOND: 10,
+      RUNTIME_TEMP_SPEED_BOOST_DURATION: 3000,
+      levelFoodCount: 0,
+      EventSystem: { emit }
+    });
+    const { FoodManager } = loadSnake(context, 'foodManager.js', ['FoodManager']);
+
+    expect(FoodManager.processPlayerEatsFood()).toBe(true);
+
+    expect(context.score).toBe(1);
+    expect(context.playerGrow).toBe(2);
+    expect(context.levelFoodCount).toBe(1);
+    expect(context.foods).toEqual([]);
+    expect(emit).toHaveBeenCalledWith('playerAteFood', expect.objectContaining({
+      score: 1,
+      levelFoodCount: 1,
+      type: 'red'
+    }));
+  });
+});

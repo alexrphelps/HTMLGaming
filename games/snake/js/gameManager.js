@@ -94,6 +94,7 @@ const GameManager = {
     console.log('GameManager.initGame() called');
     try {
       // Clear any existing loops
+      if (typeof stopSnakeCountdown === 'function') stopSnakeCountdown();
       if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
       if (gameInterval) clearInterval(gameInterval);
       if (typeof stopSnakeRenderLoop === 'function') stopSnakeRenderLoop();
@@ -142,7 +143,11 @@ const GameManager = {
       initSnakes(playerColor);
       console.log("Snakes initialized");
       console.log("About to initialize foods");
-      initFoods();
+      if (typeof FoodManager !== 'undefined' && FoodManager.init) {
+        FoodManager.init();
+      } else {
+        initFoods();
+      }
       console.log("Food initialized");
       console.log("About to generate obstacles");
       generateObstacles();
@@ -183,6 +188,7 @@ const GameManager = {
     console.log("GameManager: Returning to main menu and resetting state...");
     
     // Clear intervals
+    if (typeof stopSnakeCountdown === 'function') stopSnakeCountdown();
     if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
     if (gameInterval) clearInterval(gameInterval);
     if (typeof stopSnakeRenderLoop === 'function') stopSnakeRenderLoop();
@@ -304,6 +310,7 @@ const GameManager = {
    * Return to level selection
    */
   returnToLevelSelection() {
+    if (typeof stopSnakeCountdown === 'function') stopSnakeCountdown();
     if (typeof stopSnakeGameLoop === 'function') stopSnakeGameLoop();
     if (gameInterval) clearInterval(gameInterval);
     if (typeof stopSnakeRenderLoop === 'function') stopSnakeRenderLoop();

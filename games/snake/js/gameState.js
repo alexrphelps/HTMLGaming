@@ -2,6 +2,8 @@
 
 // Game loop abstraction (rAF)
 let snakeGameLoop = null;
+let snakeCountdownTimeout = null;
+let snakeCountdownToken = 0;
 function requestSnakeFrame(callback) {
   if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
     return { type: 'raf', id: window.requestAnimationFrame(callback) };
@@ -81,6 +83,25 @@ function stopSnakeRenderLoop() {
   if (!animationInterval) return;
   cancelSnakeFrame(animationInterval);
   animationInterval = null;
+}
+
+function scheduleSnakeCountdown(callback, delay) {
+  snakeCountdownTimeout = setTimeout(() => {
+    snakeCountdownTimeout = null;
+    callback();
+  }, delay);
+}
+
+function stopSnakeCountdown() {
+  snakeCountdownToken++;
+  if (snakeCountdownTimeout) {
+    clearTimeout(snakeCountdownTimeout);
+    snakeCountdownTimeout = null;
+  }
+  countdownActive = false;
+  if (countdownElement) {
+    countdownElement.style.display = 'none';
+  }
 }
 
 // DOM elements
@@ -271,79 +292,24 @@ function getPositionAwayFromCenter(minDistance) {
 
 // Spawn new food of same type at new location
 function placeNewFood(oldFood) {
-  // If this is a special "remains" food that should not respawn, skip
-  if (oldFood.noRespawn) return;
-  
-  let pos;
-  do {
-    pos = randomPosition();
-  } while (occupiesPosition(pos.x, pos.y));
-  
-  foods.push({
-    x: pos.x,
-    y: pos.y,
-    type: oldFood.type,
-    grow: oldFood.grow,
-    speedInc: oldFood.speedInc,
-    tempSpeedInc: oldFood.tempSpeedInc,
-    noRespawn: oldFood.noRespawn
-  });
+  if (typeof FoodManager !== 'undefined' && FoodManager.placeNewFood) {
+    return FoodManager.placeNewFood(oldFood);
+  }
 }
 
 // Initial foods spawn using FOOD_TYPES constant
 // Only spawn food types defined in CURRENT_LEVEL_CONFIG.settings.foodTypes if present
 function initFoods() {
-  foods = [];
-  let allowedTypes = null;
-  if (window.CURRENT_LEVEL_CONFIG && window.CURRENT_LEVEL_CONFIG.settings && window.CURRENT_LEVEL_CONFIG.settings.foodTypes) {
-    allowedTypes = Object.keys(window.CURRENT_LEVEL_CONFIG.settings.foodTypes);
-  }
-  for (const [type, props] of Object.entries(FOOD_TYPES)) {
-    if (type === 'remains') continue;
-    if (allowedTypes && !allowedTypes.includes(type)) continue;
-    let pos;
-    do {
-      pos = randomPosition();
-    } while (occupiesPosition(pos.x, pos.y));
-    foods.push({
-      x: pos.x,
-      y: pos.y,
-      type,
-      grow: props.grow,
-      speedInc: props.speedInc,
-      tempSpeedInc: props.tempSpeedInc,
-      noRespawn: props.noRespawn || false
-    });
+  if (typeof FoodManager !== 'undefined' && FoodManager.initFoods) {
+    return FoodManager.initFoods();
   }
 }
 
 // Create remains food when a snake dies
 function createRemainsFoodFromSnake(snake, color) {
-  if (snake.length < 3) return; // Need at least 3 segments
-  
-  // Get head, middle and tail positions
-  const head = snake[0];
-  const middle = snake[Math.floor(snake.length / 2)];
-  const tail = snake[snake.length - 1];
-  
-  const remainsColor = color.body || 'gray';
-  const remainsType = FOOD_TYPES.remains;
-  
-  // Create food at these positions if they're available
-  [head, middle, tail].forEach(pos => {
-    if (!occupiesPosition(pos.x, pos.y)) {
-      foods.push({
-        x: pos.x,
-        y: pos.y,
-        type: 'remains',
-        grow: remainsType.grow,
-        speedInc: remainsType.speedInc,
-        tempSpeedInc: remainsType.tempSpeedInc,
-        noRespawn: true,
-        color: remainsColor
-      });
-    }
-  });
+  if (typeof FoodManager !== 'undefined' && FoodManager.createRemainsFoodFromSnake) {
+    return FoodManager.createRemainsFoodFromSnake(snake, color);
+  }
 }
 
 // Position snakes in their starting positions
@@ -444,6 +410,8 @@ function initSnakes(playerColorChoice) {
 
 // Fix countdown functionality
 function startCountdown() {
+  stopSnakeCountdown();
+  const countdownToken = ++snakeCountdownToken;
   console.log("Starting countdown with COUNTDOWN_SECONDS:", COUNTDOWN_SECONDS);
   countdownActive = true;
   gameContainer.style.display = 'block';
@@ -462,6 +430,7 @@ function startCountdown() {
   
   // Use setTimeout for countdown (requestAnimationFrame is not suitable for 1s intervals)
   const countDown = () => {
+    if (countdownToken !== snakeCountdownToken) return;
     count--;
     countdownElement.textContent = count;
     console.log("Countdown:", count);
@@ -472,8 +441,9 @@ function startCountdown() {
     }
     
     if (count > 0) {
-      setTimeout(countDown, 1000); // 1 second interval
+      scheduleSnakeCountdown(countDown, 1000); // 1 second interval
     } else {
+      snakeCountdownTimeout = null;
       countdownElement.style.display = 'none';
       countdownActive = false;
       console.log("Countdown finished, starting game");
@@ -490,27 +460,28 @@ function startCountdown() {
       lastGameUpdateTime = Date.now();
       animationProgress = 0; // Start animation from beginning
       
-       // Start the game loop - prefer rAF-based GameLoop when available
-       if (typeof startSnakeGameLoop === 'function') {
-         startSnakeGameLoop();
-       } else if (typeof gameLoop === 'function') {
-         gameInterval = setInterval(gameLoop, baseInterval);
-       } else {
-         console.error("gameLoop function not defined - waiting for gameState.js to load");
-         // Retry after a short delay
-         setTimeout(() => {
-           if (typeof startSnakeGameLoop === 'function') {
-             startSnakeGameLoop();
-           } else if (typeof gameLoop === 'function') {
-             gameInterval = setInterval(gameLoop, baseInterval);
-           } else {
-             console.error("gameLoop function still not available after delay");
-           }
-         }, 100);
-       }
+      // Start the game loop - prefer rAF-based GameLoop when available
+      if (typeof startSnakeGameLoop === 'function') {
+        startSnakeGameLoop();
+      } else if (typeof gameLoop === 'function') {
+        gameInterval = setInterval(gameLoop, baseInterval);
+      } else {
+        console.error("gameLoop function not defined - waiting for gameState.js to load");
+        // Retry after a short delay
+        scheduleSnakeCountdown(() => {
+          if (countdownToken !== snakeCountdownToken) return;
+          if (typeof startSnakeGameLoop === 'function') {
+            startSnakeGameLoop();
+          } else if (typeof gameLoop === 'function') {
+            gameInterval = setInterval(gameLoop, baseInterval);
+          } else {
+            console.error("gameLoop function still not available after delay");
+          }
+        }, 100);
+      }
     }
   };
-  setTimeout(countDown, 1000); // Start first countdown after 1 second
+  scheduleSnakeCountdown(countDown, 1000); // Start first countdown after 1 second
 }
 
 // Compatibility function that redirects to GameManager.initGame
@@ -533,60 +504,10 @@ function moveSnake(snake, dir, grow) {
 }
 
 function processPlayerEatsFood() {
-  for (let i = foods.length - 1; i >= 0; i--) {
-    if (!playerAlive) break;
-    
-    if (playerSnake[0].x === foods[i].x && playerSnake[0].y === foods[i].y) {
-      const food = foods[i];
-      score++;
-      console.log('Player ate food! New score:', score);
-      playerGrow += food.grow;
-      
-      // Track level-specific food count for objectives
-      if (typeof window.levelFoodCount !== 'undefined') {
-        window.levelFoodCount++;
-        console.log(`Player ate food! Total food eaten: ${window.levelFoodCount}`);
-      }
-
-      if (food.speedInc) {
-        // Apply permanent extra moves per tick to the player, but cap base (without temp boost) to MAX_MOVES_PER_SECOND
-        const ticksPerSecond = 1000 / baseInterval;
-        const maxRatePerTick = MAX_MOVES_PER_SECOND / ticksPerSecond;
-        const baseOnly = 1 + playerPermanentMoveRate; // no temp
-        if (baseOnly < maxRatePerTick) {
-          const perTickInc = food.speedInc / ticksPerSecond; // convert moves/sec to moves/tick
-          playerPermanentMoveRate = Math.min(
-            playerPermanentMoveRate + perTickInc,
-            maxRatePerTick - 1
-          );
-        }
-        console.log(`Player base move rate now: ${(1 + playerPermanentMoveRate).toFixed(2)} moves/tick (cap ${maxRatePerTick.toFixed(2)})`);
-
-
-      }
-      if (food.tempSpeedInc) {
-        // Apply temporary extra moves per tick to the player
-        playerTempMoveRate = food.tempSpeedInc;
-        playerSpeedBoostEnd = Date.now() + RUNTIME_TEMP_SPEED_BOOST_DURATION;
-        console.log(`Player temporary move rate active: +${food.tempSpeedInc} moves/tick until ${new Date(playerSpeedBoostEnd).toLocaleTimeString()}`);
-      }
-
-      foods.splice(i, 1);
-      
-      // Emit event for level system
-      if (typeof EventSystem !== 'undefined') {
-        EventSystem.emit('playerAteFood', { food, score, levelFoodCount: window.levelFoodCount });
-      }
-      
-      // OLD OBJECTIVE CHECKING REMOVED - Using new checkWinConditions() in gameLoop instead
-      
-      // Only respawn regular food types
-      if (!food.noRespawn) {
-        placeNewFood(food);
-      }
-      break;
-    }
+  if (typeof FoodManager !== 'undefined' && FoodManager.processPlayerEatsFood) {
+    return FoodManager.processPlayerEatsFood();
   }
+  return false;
 }
 
 function showStatusMessage(message) {
@@ -1374,37 +1295,8 @@ function gameLoop() {
       // Move the snake with enhanced timing
       snake.grow = moveSnakeSmooth(snake.body, snake.dir, snake.grow);
       
-      // Process AI eating food
-      for (let j = foods.length - 1; j >= 0; j--) {
-        if (snake.body[0].x === foods[j].x && snake.body[0].y === foods[j].y) {
-          const food = foods[j];
-          snake.score += food.points || 1;
-          snake.grow += food.grow;
-          
-          // Apply speed boosts to AI
-          if (food.speedInc) {
-            const ticksPerSecond = 1000 / baseInterval;
-            const maxRatePerTick = MAX_MOVES_PER_SECOND / ticksPerSecond;
-            const baseOnly = 1 + snake.permanentMoveRate;
-            if (baseOnly < maxRatePerTick) {
-              const perTickInc = food.speedInc / ticksPerSecond;
-              snake.permanentMoveRate = Math.min(
-                snake.permanentMoveRate + perTickInc,
-                maxRatePerTick - 1
-              );
-            }
-          }
-          if (food.tempSpeedInc) {
-            snake.tempMoveRate = food.tempSpeedInc;
-            snake.speedBoostEnd = loopStartTime + RUNTIME_TEMP_SPEED_BOOST_DURATION;
-          }
-          
-          foods.splice(j, 1);
-          if (!food.noRespawn) {
-            placeNewFood(food);
-          }
-          break;
-        }
+      if (typeof FoodManager !== 'undefined' && FoodManager.processAiEatsFood) {
+        FoodManager.processAiEatsFood(i, loopStartTime);
       }
       
       // Check for collisions immediately after each movement
