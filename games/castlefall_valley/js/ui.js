@@ -13,28 +13,16 @@
     document.getElementById("incomeText").textContent = state.income;
     document.getElementById("waveText").textContent = state.wave;
 
-    const commandNames = {
-      rush: "Full Rush",
-      formation: "Formation",
-      retreat: "Retreat"
-    };
-    document.getElementById("commandText").textContent = commandNames[state.command];
+    document.getElementById("commandText").textContent = commandDefs[state.command].label;
 
-    for (const id of ["cmd_rush", "cmd_formation", "cmd_retreat"]) {
-      document.getElementById(id).classList.remove("active");
+    for (const type of COMMAND_ORDER) {
+      document.getElementById(commandDefs[type].id).classList.remove("active");
     }
-    document.getElementById("cmd_" + state.command).classList.add("active");
+    document.getElementById(commandDefs[state.command].id).classList.add("active");
 
-    for (const [type, def] of Object.entries(unitDefs)) {
-      const id = {
-        sword: "spawn_sword",
-        shield: "spawn_shield",
-        archer: "spawn_archer",
-        knight: "spawn_knight",
-        priest: "spawn_priest"
-      }[type];
-      if (!id) continue;
-      const button = document.getElementById(id);
+    for (const type of UNIT_ORDER) {
+      const def = unitDefs[type];
+      const button = document.getElementById("spawn_" + type);
       const cooldown = state.spawnCooldowns[type] || 0;
       const cooldownPct = clamp(cooldown / def.spawnCd, 0, 1);
       const blocked = state.gold < def.cost || cooldown > 0;
@@ -45,7 +33,21 @@
       if (fill) fill.style.width = cooldownPct * 100 + "%";
     }
 
+    for (const type of BUILD_ORDER) {
+      const def = buildDefs[type];
+      const button = document.getElementById(def.id);
+      const blocked = state.gold < def.cost;
+      button.disabled = blocked;
+      button.classList.toggle("disabled", blocked);
+    }
+
     updateArmyStrip();
+  }
+
+  function setupControlLabels() {
+    setupUnitCards();
+    setupCommandButtons();
+    setupBuildButtons();
   }
 
   function setupUnitCards() {
@@ -68,6 +70,24 @@
         <span class="cooldown-fill"></span>
       `;
       button.setAttribute("aria-label", `Spawn ${def.label}, ${def.cost} gold`);
+    }
+  }
+
+  function setupCommandButtons() {
+    for (const type of COMMAND_ORDER) {
+      const def = commandDefs[type];
+      const button = document.getElementById(def.id);
+      button.innerHTML = `${def.hotkey.toUpperCase()} ${def.label}<br><span>${def.description}</span>`;
+      button.setAttribute("aria-label", `Set command stance to ${def.label}`);
+    }
+  }
+
+  function setupBuildButtons() {
+    for (const type of BUILD_ORDER) {
+      const def = buildDefs[type];
+      const button = document.getElementById(def.id);
+      button.innerHTML = `${def.label}<br><span>${def.cost}g ${def.summary}</span>`;
+      button.setAttribute("aria-label", `${def.label}, ${def.cost} gold`);
     }
   }
 
@@ -101,4 +121,4 @@
     `;
   }
 
-Object.assign(window.CastlefallValley, { updateUI, setupUnitCards, unitCounts, updateArmyStrip });
+Object.assign(window.CastlefallValley, { updateUI, setupControlLabels, setupUnitCards, setupCommandButtons, setupBuildButtons, unitCounts, updateArmyStrip });

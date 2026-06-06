@@ -27,13 +27,14 @@ class UFO {
     this.lightAnimationOffset = Math.random() * Math.PI * 2; // Random light blinking start
   }
 
-  update() {
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     if (!this.active) return;
+    const frameScale = StickpersonGeometry.getFrameScale(deltaMs);
     
-    this.animationTime += 0.016; // ~60fps
+    this.animationTime += deltaMs / 1000;
     
     // Move horizontally
-    this.x += this.speed * this.direction;
+    this.x += this.speed * this.direction * frameScale;
     
     // Floating animation - gentle up and down movement
     this.y = this.baseY + Math.sin(this.animationTime * this.floatSpeed) * this.floatAmplitude;
@@ -54,14 +55,6 @@ class UFO {
     
     // Don't draw if off-screen
     if (screenX < -this.width || screenX > GAME_CONSTANTS.CANVAS.WIDTH + this.width) return;
-    
-    // Debug: Draw a simple red circle first to make sure UFOs are visible
-    ctx.save();
-    ctx.fillStyle = 'red';
-    ctx.beginPath();
-    ctx.arc(screenX, screenY, 15, 0, 2 * Math.PI); // Increased from 10 to 15
-    ctx.fill();
-    ctx.restore();
     
     ctx.save();
     
@@ -117,29 +110,20 @@ class UFO {
   checkCollision(player) {
     if (!this.active) return false;
     
-    // Calculate player's current height (considering crouch state)
-    const playerHeight = player.normalHeight + (player.crouchHeight - player.normalHeight) * player.crouchTransition;
-    
-    // Player Y position now represents the bottom of the player
-    const playerLeft = player.worldX - player.width / 2;
-    const playerRight = player.worldX + player.width / 2;
-    const playerTop = player.y - playerHeight; // Top of player
-    const playerBottom = player.y; // Bottom of player
-    
-    // UFO collision bounds (elliptical)
-    const ufoLeft = this.x - this.width / 2;
-    const ufoRight = this.x + this.width / 2;
-    const ufoTop = this.y - this.height / 2;
-    const ufoBottom = this.y + this.height / 2;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const ufoBounds = StickpersonGeometry.getRectBounds(this.x, this.y, this.width, this.height, 'center');
     
     // Add collision buffer for more forgiving detection
     const buffer = GAME_CONSTANTS.UFO.COLLISION_BUFFER;
+    const bufferedUfoBounds = {
+      left: ufoBounds.left + buffer,
+      right: ufoBounds.right - buffer,
+      top: ufoBounds.top + buffer,
+      bottom: ufoBounds.bottom - buffer
+    };
     
     // Simple rectangular collision with buffer
-    if (playerRight > ufoLeft + buffer && 
-        playerLeft < ufoRight - buffer && 
-        playerBottom > ufoTop + buffer && 
-        playerTop < ufoBottom - buffer) {
+    if (StickpersonGeometry.overlaps(playerBounds, bufferedUfoBounds)) {
       return true;
     }
     

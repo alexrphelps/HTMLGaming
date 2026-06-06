@@ -1,5 +1,14 @@
+  const inputCleanups = [];
+  const inputTimers = [];
+
+  function addInputListener(target, type, handler, options) {
+    target.addEventListener(type, handler, options);
+    inputCleanups.push(() => target.removeEventListener(type, handler, options));
+  }
+
   function bindButton(id, fn) {
-    document.getElementById(id).addEventListener("click", fn);
+    const el = document.getElementById(id);
+    addInputListener(el, "click", fn);
   }
 
   function bindHoldButton(id, key) {
@@ -12,74 +21,88 @@
       e.preventDefault();
       state.keys[key] = false;
     };
-    el.addEventListener("pointerdown", press);
-    el.addEventListener("pointerup", release);
-    el.addEventListener("pointercancel", release);
-    el.addEventListener("pointerleave", release);
+    addInputListener(el, "pointerdown", press);
+    addInputListener(el, "pointerup", release);
+    addInputListener(el, "pointercancel", release);
+    addInputListener(el, "pointerleave", release);
   }
 
-  bindButton("spawn_sword", () => window.CastlefallValley.spawnUnit("sword", 1, true));
-  bindButton("spawn_shield", () => window.CastlefallValley.spawnUnit("shield", 1, true));
-  bindButton("spawn_archer", () => window.CastlefallValley.spawnUnit("archer", 1, true));
-  bindButton("spawn_knight", () => window.CastlefallValley.spawnUnit("knight", 1, true));
-  bindButton("spawn_priest", () => window.CastlefallValley.spawnUnit("priest", 1, true));
+  function pulseKey(key) {
+    state.keys[key] = true;
+    const timer = setTimeout(() => {
+      state.keys[key] = false;
+    }, 80);
+    inputTimers.push(timer);
+  }
 
-  bindButton("cmd_rush", () => window.CastlefallValley.setCommand("rush"));
-  bindButton("cmd_formation", () => window.CastlefallValley.setCommand("formation"));
-  bindButton("cmd_retreat", () => window.CastlefallValley.setCommand("retreat"));
+  function setupInput() {
+    cleanupInput();
 
-  bindButton("build_wall", () => window.CastlefallValley.build("wall"));
-  bindButton("build_barracks", () => window.CastlefallValley.build("barracks"));
-  bindButton("build_tower", () => window.CastlefallValley.build("tower"));
-  bindButton("build_forge", () => window.CastlefallValley.build("forge"));
-  bindButton("build_chapel", () => window.CastlefallValley.build("chapel"));
-  bindButton("build_repair", () => window.CastlefallValley.build("repair"));
-  bindButton("restartButton", window.CastlefallValley.reset);
+    for (const type of UNIT_ORDER) {
+      bindButton("spawn_" + type, () => window.CastlefallValley.spawnUnit(type, 1, true));
+    }
 
-  bindHoldButton("touch_left", "a");
-  bindHoldButton("touch_jump", "w");
-  bindHoldButton("touch_right", "d");
-  bindHoldButton("touch_attack", "j");
+    for (const type of COMMAND_ORDER) {
+      const def = commandDefs[type];
+      bindButton(def.id, () => window.CastlefallValley.setCommand(type));
+    }
 
-  window.addEventListener("keydown", e => {
-    const key = e.key.toLowerCase();
-    window.CastlefallValley.state.keys[key] = true;
+    for (const type of BUILD_ORDER) {
+      const def = buildDefs[type];
+      bindButton(def.id, () => window.CastlefallValley.build(type));
+    }
 
-    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+    bindButton("restartButton", window.CastlefallValley.reset);
+
+    bindHoldButton("touch_left", "a");
+    bindHoldButton("touch_jump", "w");
+    bindHoldButton("touch_right", "d");
+    bindHoldButton("touch_attack", "j");
+
+    addInputListener(window, "keydown", e => {
+      const key = e.key.toLowerCase();
+      state.keys[key] = true;
+
+      if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+        e.preventDefault();
+      }
+
+      if (!e.repeat) {
+        const unitType = UNIT_ORDER.find(type => unitDefs[type].hotkey === key);
+        if (unitType) window.CastlefallValley.spawnUnit(unitType, 1, true);
+      }
+
+      const commandType = COMMAND_ORDER.find(type => commandDefs[type].hotkey === key);
+      if (commandType) window.CastlefallValley.setCommand(commandType);
+
+      if (key === "p") state.paused = !state.paused;
+      if (key === "r") window.CastlefallValley.reset();
+    });
+
+    addInputListener(window, "keyup", e => {
+      state.keys[e.key.toLowerCase()] = false;
+    });
+
+    const gameCanvas = document.getElementById("game");
+
+    addInputListener(gameCanvas, "mousedown", () => {
+      pulseKey("j");
+    });
+
+    addInputListener(gameCanvas, "touchstart", e => {
       e.preventDefault();
+      pulseKey("j");
+    }, { passive: false });
+  }
+
+  function cleanupInput() {
+    while (inputCleanups.length) {
+      inputCleanups.pop()();
     }
 
-    if (!e.repeat) {
-      if (key === "1") window.CastlefallValley.spawnUnit("sword", 1, true);
-      if (key === "2") window.CastlefallValley.spawnUnit("shield", 1, true);
-      if (key === "3") window.CastlefallValley.spawnUnit("archer", 1, true);
-      if (key === "4") window.CastlefallValley.spawnUnit("knight", 1, true);
-      if (key === "5") window.CastlefallValley.spawnUnit("priest", 1, true);
+    while (inputTimers.length) {
+      clearTimeout(inputTimers.pop());
     }
+  }
 
-    if (key === "z") window.CastlefallValley.setCommand("rush");
-    if (key === "x") window.CastlefallValley.setCommand("formation");
-    if (key === "c") window.CastlefallValley.setCommand("retreat");
-
-    if (key === "p") window.CastlefallValley.state.paused = !window.CastlefallValley.state.paused;
-    if (key === "r") window.CastlefallValley.reset();
-  });
-
-  window.addEventListener("keyup", e => {
-    window.CastlefallValley.state.keys[e.key.toLowerCase()] = false;
-  });
-
-  const gameCanvas = document.getElementById("game");
-
-  gameCanvas.addEventListener("mousedown", () => {
-    window.CastlefallValley.state.keys["j"] = true;
-    setTimeout(() => window.CastlefallValley.state.keys["j"] = false, 80);
-  });
-
-  gameCanvas.addEventListener("touchstart", e => {
-    e.preventDefault();
-    window.CastlefallValley.state.keys["j"] = true;
-    setTimeout(() => window.CastlefallValley.state.keys["j"] = false, 80);
-  }, { passive: false });
-
-Object.assign(window.CastlefallValley, { bindButton, bindHoldButton });
+Object.assign(window.CastlefallValley, { bindButton, bindHoldButton, setupInput, cleanupInput });

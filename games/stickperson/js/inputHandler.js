@@ -4,12 +4,21 @@
 class InputHandler {
   constructor() {
     this.keys = {};
-    window.addEventListener('keydown', (e) => {
+    this.handleKeyDown = (e) => {
       this.keys[e.key] = true;
-    });
-    window.addEventListener('keyup', (e) => {
+    };
+    this.handleKeyUp = (e) => {
       this.keys[e.key] = false;
-    });
+    };
+
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+  }
+
+  destroy() {
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    this.keys = {};
   }
 }
 

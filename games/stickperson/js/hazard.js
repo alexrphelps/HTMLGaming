@@ -65,8 +65,9 @@ class Hazard {
     }
   }
 
-  update() {
-    this.animationTime += 0.016; // ~60fps
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
+    const frameScale = StickpersonGeometry.getFrameScale(deltaMs);
+    this.animationTime += deltaMs / 1000;
     
     switch (this.type) {
       case 'fire':
@@ -75,33 +76,33 @@ class Hazard {
         
       case 'pendulum':
         // Pendulum swinging motion
-        this.angle += GAME_CONSTANTS.HAZARDS.PENDULUM_SWING_SPEED;
+        this.angle += GAME_CONSTANTS.HAZARDS.PENDULUM_SWING_SPEED * frameScale;
         break;
         
       case 'collapsing':
         // Handle collapsing platform logic
         if (this.collapseTimer > 0) {
-          this.collapseTimer -= 16; // ~60fps
+          this.collapseTimer -= deltaMs;
           if (this.collapseTimer <= 0) {
             this.collapsed = true;
           }
         }
         
         if (this.collapsed) {
-          this.y += this.fallSpeed;
+          this.y += this.fallSpeed * frameScale;
         }
         break;
         
       case 'wind':
         // Wind activation cycle
         if (this.isActive) {
-          this.activeTime += 16;
+          this.activeTime += deltaMs;
           if (this.activeTime >= this.duration) {
             this.isActive = false;
             this.cooldownTime = 0;
           }
         } else {
-          this.cooldownTime += 16;
+          this.cooldownTime += deltaMs;
           if (this.cooldownTime >= this.cooldown) {
             this.isActive = true;
             this.activeTime = 0;
@@ -272,20 +273,10 @@ class Hazard {
   }
 
   checkRectangularCollision(player) {
-    const playerLeft = player.worldX;
-    const playerRight = player.worldX + GAME_CONSTANTS.PLAYER.WIDTH;
-    const playerTop = player.y;
-    const playerBottom = player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT;
-    
-    const hazardLeft = this.x;
-    const hazardRight = this.x + this.width;
-    const hazardTop = this.y - this.height;
-    const hazardBottom = this.y;
-    
-    if (playerRight > hazardLeft && 
-        playerLeft < hazardRight && 
-        playerBottom > hazardTop && 
-        playerTop < hazardBottom) {
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const hazardBounds = StickpersonGeometry.getRectBounds(this.x, this.y, this.width, this.height, 'bottom-left');
+
+    if (StickpersonGeometry.overlaps(playerBounds, hazardBounds)) {
       return { type: 'damage', damage: this.damage };
     }
     
@@ -296,13 +287,9 @@ class Hazard {
     const chainX = this.x + this.chainLength * Math.sin(this.angle);
     const chainY = this.y - this.chainLength * Math.cos(this.angle);
     
-    const playerCenterX = player.worldX + GAME_CONSTANTS.PLAYER.CENTER_OFFSET;
-    const playerCenterY = player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT / 2;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
     
-    const distance = Math.sqrt(
-      Math.pow(playerCenterX - chainX, 2) + 
-      Math.pow(playerCenterY - chainY, 2)
-    );
+    const distance = StickpersonGeometry.distance(playerBounds.centerX, playerBounds.centerY, chainX, chainY);
     
     if (distance < this.radius + 10) { // Small buffer
       return { type: 'damage', damage: this.damage };
@@ -314,14 +301,15 @@ class Hazard {
   checkCollapsingCollision(player) {
     if (this.collapsed) return null;
     
-    const playerCenterX = player.worldX + GAME_CONSTANTS.PLAYER.CENTER_OFFSET;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const playerCenterX = playerBounds.centerX;
     const platformLeft = this.x;
     const platformRight = this.x + this.width;
     
     // Check if player is standing on platform
     if (playerCenterX >= platformLeft && 
         playerCenterX <= platformRight && 
-        player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT <= this.y + 10) {
+        Math.abs(playerBounds.bottom - this.y) <= 10) {
       
       // Start collapse timer if not already started
       if (this.collapseTimer === 0) {
@@ -335,13 +323,14 @@ class Hazard {
   }
 
   checkQuicksandCollision(player) {
-    const playerCenterX = player.worldX + GAME_CONSTANTS.PLAYER.CENTER_OFFSET;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const playerCenterX = playerBounds.centerX;
     const quicksandLeft = this.x;
     const quicksandRight = this.x + this.width;
     
     if (playerCenterX >= quicksandLeft && 
         playerCenterX <= quicksandRight && 
-        player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT >= this.y) {
+        playerBounds.bottom >= this.y) {
       return { type: 'quicksand', hazard: this };
     }
     
@@ -351,8 +340,9 @@ class Hazard {
   checkWindCollision(player) {
     if (!this.isActive) return null;
     
-    const playerCenterX = player.worldX + GAME_CONSTANTS.PLAYER.CENTER_OFFSET;
-    const playerCenterY = player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT / 2;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const playerCenterX = playerBounds.centerX;
+    const playerCenterY = playerBounds.centerY;
     
     if (playerCenterX >= this.x && 
         playerCenterX <= this.x + this.width &&
@@ -365,9 +355,11 @@ class Hazard {
   }
 
   // Static method to create random hazard
-  static createRandomHazard(x, y, game) {
+  static createRandomHazard(x, y, game, profile = null) {
     const hazardTypes = ['spike', 'fire', 'pendulum', 'collapsing', 'quicksand', 'wind'];
-    const weights = [0.3, 0.2, 0.1, 0.2, 0.1, 0.1]; // Probability weights
+    const weights = profile?.biome === 'windfield'
+      ? [0.2, 0.15, 0.1, 0.15, 0.1, 0.3]
+      : [0.3, 0.2, 0.1, 0.2, 0.1, 0.1]; // Probability weights
     
     let random = Math.random();
     let cumulativeWeight = 0;
@@ -375,10 +367,27 @@ class Hazard {
     for (let i = 0; i < hazardTypes.length; i++) {
       cumulativeWeight += weights[i];
       if (random < cumulativeWeight) {
-        return new Hazard(x, y, hazardTypes[i], game);
+        return new Hazard(x, Hazard.getYForType(hazardTypes[i], y), hazardTypes[i], game);
       }
     }
     
     return new Hazard(x, y, 'spike', game); // Default fallback
+  }
+
+  static getYForType(type, groundY) {
+    switch (type) {
+      case 'pendulum':
+        return groundY - 260;
+      case 'collapsing':
+        return groundY - 120 - Math.random() * 180;
+      case 'wind':
+        return groundY - 240;
+      default:
+        return groundY;
+    }
+  }
+
+  getTopY() {
+    return this.y;
   }
 }

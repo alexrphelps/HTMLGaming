@@ -124,7 +124,10 @@
   .fill.green { background: linear-gradient(90deg, #36bf6c, #a6ffcb); }
 
   .bottom-ui {
-    position: relative;
+    position: fixed;
+    left: var(--edge);
+    right: var(--edge);
+    bottom: var(--edge);
     z-index: 4;
     display: grid;
     grid-template-columns: minmax(540px, 1.25fr) minmax(260px, 0.8fr) minmax(360px, 1fr);

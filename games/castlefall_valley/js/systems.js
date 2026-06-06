@@ -1,63 +1,19 @@
   function reset() {
-    state.time = 0;
-    state.cameraX = 0;
-    state.paused = false;
-    state.gameOver = false;
-    state.gold = 130;
-    state.income = 8;
-    state.morale = 55;
-    state.wave = 1;
-    state.command = "formation";
-    state.shake = 0;
-
-    state.playerCastle = {
-      x: 130,
-      hp: 900,
-      maxHp: 900,
-      wallLevel: 0,
-      barracks: 0,
-      tower: 0,
-      forge: 0,
-      chapel: 0,
-      towerTimer: 0
+    const viewport = {
+      w: state.w,
+      h: state.h,
+      scale: state.scale,
+      last: performance.now(),
+      keys: {}
     };
 
-    state.enemyCastle = {
-      x: WORLD_W - 130,
-      hp: 980,
-      maxHp: 980,
-      towerTimer: 0
-    };
+    resetState(state);
+    Object.assign(state, viewport);
+    state.hero = createHeroState();
 
-    state.units = [];
-    state.projectiles = [];
-    state.particles = [];
-    state.floatTexts = [];
-    state.uiTimer = 0;
-    state.spawnCooldowns = {};
-    state.spawnTimers = { enemy: 0, income: 0, morale: 0 };
-
-    state.hero = {
-      x: 260,
-      y: terrainY(260) - 42,
-      vx: 0,
-      vy: 0,
-      w: 30,
-      h: 46,
-      hp: 220,
-      maxHp: 220,
-      facing: 1,
-      onGround: false,
-      attackTimer: 0,
-      hurtTimer: 0
-    };
-
-    spawnUnit("sword", 1, false);
-    spawnUnit("shield", 1, false);
-    spawnUnit("archer", 1, false);
-    spawnUnit("sword", -1, false);
-    spawnUnit("shield", -1, false);
-    spawnUnit("archer", -1, false);
+    for (const [type, side] of INITIAL_UNIT_LOADOUT) {
+      spawnUnit(type, side, false);
+    }
 
     document.getElementById("endOverlay").style.display = "none";
     showMessage("Hold the valley. Build your base. Break their castle.");
@@ -252,23 +208,28 @@
     const pressure = 4.2 - Math.min(2.2, state.time / 65) - Math.min(0.8, state.wave * 0.04);
     if (state.spawnTimers.enemy <= 0) {
       state.spawnTimers.enemy = rand(pressure * 0.7, pressure * 1.35);
+      spawnUnit(chooseEnemySpawnType(activeEnemyWave()), -1, false);
+    }
 
-      const roll = Math.random();
-      if (state.time < 20) {
-        spawnUnit(roll < 0.65 ? "sword" : "archer", -1, false);
-      } else if (state.time < 55) {
-        spawnUnit(roll < 0.35 ? "sword" : roll < 0.62 ? "shield" : roll < 0.88 ? "archer" : "knight", -1, false);
-      } else {
-        spawnUnit(roll < 0.25 ? "sword" : roll < 0.45 ? "shield" : roll < 0.67 ? "archer" : roll < 0.88 ? "knight" : "priest", -1, false);
+    if (Math.floor(state.time / enemyWavePlan.waveLength) + 1 > state.wave) {
+      state.wave++;
+      showMessage(activeEnemyWave().name + ": enemy wave " + state.wave + " arrives.");
+      for (const type of enemyWavePlan.reinforcements) {
+        spawnUnit(type, -1, false);
       }
     }
+  }
 
-    if (Math.floor(state.time / 35) + 1 > state.wave) {
-      state.wave++;
-      showMessage("Enemy wave " + state.wave + " arrives.");
-      spawnUnit("knight", -1, false);
-      spawnUnit("shield", -1, false);
-    }
+  function activeEnemyWave() {
+    if (state.time < enemyWavePlan.opening.until) return enemyWavePlan.opening;
+    if (state.time < enemyWavePlan.mid.until) return enemyWavePlan.mid;
+    return enemyWavePlan.late;
+  }
+
+  function chooseEnemySpawnType(plan) {
+    const roll = Math.random();
+    const match = plan.weights.find(([, threshold]) => roll < threshold);
+    return match ? match[0] : plan.weights[plan.weights.length - 1][0];
   }
 
   function updateEconomy(dt) {
@@ -295,9 +256,7 @@
       state.playerCastle.towerTimer -= dt;
       if (state.playerCastle.towerTimer <= 0) {
         state.playerCastle.towerTimer = Math.max(0.55, 1.6 - state.playerCastle.tower * 0.18);
-        const target = state.units
-          .filter(u => u.side === -1 && u.x < 1250)
-          .sort((a, b) => a.x - b.x)[0];
+        const target = selectTowerTarget(-1, 1250, "front");
         if (target) {
           const fake = {
             x: state.playerCastle.x + 35,
@@ -312,9 +271,7 @@
     state.enemyCastle.towerTimer -= dt;
     if (state.enemyCastle.towerTimer <= 0) {
       state.enemyCastle.towerTimer = Math.max(0.7, 2.1 - state.wave * 0.05);
-      const target = state.units
-        .filter(u => u.side === 1 && u.x > WORLD_W - 1250)
-        .sort((a, b) => b.x - a.x)[0];
+      const target = selectTowerTarget(1, WORLD_W - 1250, "rear");
       if (target) {
         const fake = {
           x: state.enemyCastle.x - 35,
@@ -324,6 +281,23 @@
         fireProjectile(fake, target);
       }
     }
+  }
+
+  function selectTowerTarget(side, boundary, priority) {
+    let best = null;
+    for (const unit of state.units) {
+      if (unit.side !== side) continue;
+      if (priority === "front" && unit.x >= boundary) continue;
+      if (priority === "rear" && unit.x <= boundary) continue;
+      if (!best) {
+        best = unit;
+      } else if (priority === "front" && unit.x < best.x) {
+        best = unit;
+      } else if (priority === "rear" && unit.x > best.x) {
+        best = unit;
+      }
+    }
+    return best;
   }
 
   function updateCamera(dt) {
@@ -356,71 +330,29 @@
   }
 
   function setCommand(cmd) {
+    const def = commandDefs[cmd];
+    if (!def) return;
+
     state.command = cmd;
-    const labels = {
-      rush: "Full Rush",
-      formation: "Formation",
-      retreat: "Retreat"
-    };
-    showMessage("Command stance: " + labels[cmd]);
+    showMessage("Command stance: " + def.label);
     updateUI();
   }
 
   function build(type) {
-    const c = state.playerCastle;
+    const def = buildDefs[type];
+    if (!def) return false;
 
-    const costs = {
-      wall: 160,
-      barracks: 190,
-      tower: 220,
-      forge: 240,
-      chapel: 210,
-      repair: 120
-    };
-
-    if (state.gold < costs[type]) {
+    if (state.gold < def.cost) {
       showMessage("Not enough gold for that build.");
-      return;
+      return false;
     }
 
-    state.gold -= costs[type];
-
-    if (type === "wall") {
-      c.wallLevel++;
-      c.maxHp += 180;
-      c.hp += 180;
-      showMessage("Stone wall raised. Castle HP increased.");
-    }
-
-    if (type === "barracks") {
-      c.barracks++;
-      state.income += 3;
-      showMessage("Barracks expanded. Income increased.");
-    }
-
-    if (type === "tower") {
-      c.tower++;
-      showMessage("Arrow tower built. Your castle now fires support volleys.");
-    }
-
-    if (type === "forge") {
-      c.forge++;
-      showMessage("Forge upgraded. New troops hit harder.");
-    }
-
-    if (type === "chapel") {
-      c.chapel++;
-      state.morale = clamp(state.morale + 18, 0, 100);
-      showMessage("Chapel sanctified. Morale and healing improved.");
-    }
-
-    if (type === "repair") {
-      c.hp = clamp(c.hp + 150, 0, c.maxHp);
-      state.morale = clamp(state.morale + 4, 0, 100);
-      showMessage("Castle fortified and repaired.");
-    }
+    state.gold -= def.cost;
+    def.apply(state);
+    showMessage(def.message);
 
     updateUI();
+    return true;
   }
 
   function updateHero(dt) {
@@ -482,4 +414,4 @@
     }
   }
 
-Object.assign(window.CastlefallValley, { reset, updateHero, updateUnits, updateEnemyAI, updateEconomy, updateCamera, checkEnd, endGame, setCommand, build, update, updateSpawnCooldowns });
+Object.assign(window.CastlefallValley, { reset, updateHero, updateUnits, updateEnemyAI, activeEnemyWave, chooseEnemySpawnType, updateEconomy, selectTowerTarget, updateCamera, checkEnd, endGame, setCommand, build, update, updateSpawnCooldowns });

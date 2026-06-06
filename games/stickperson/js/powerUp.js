@@ -45,8 +45,8 @@ class PowerUp {
     }
   }
 
-  update() {
-    this.animationTime += 0.016; // ~60fps
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
+    this.animationTime += deltaMs / 1000;
   }
 
   draw(ctx, camera) {
@@ -145,13 +145,11 @@ class PowerUp {
   checkCollision(player) {
     if (!this.active) return false;
     
-    const playerCenterX = player.worldX + GAME_CONSTANTS.PLAYER.CENTER_OFFSET;
-    const playerCenterY = player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT / 2;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const playerCenterX = playerBounds.centerX;
+    const playerCenterY = playerBounds.centerY;
     
-    const distance = Math.sqrt(
-      Math.pow(playerCenterX - this.x, 2) + 
-      Math.pow(playerCenterY - this.y, 2)
-    );
+    const distance = StickpersonGeometry.distance(playerCenterX, playerCenterY, this.x, this.y);
     
     return distance <= this.radius + 10; // Small buffer for easier collection
   }

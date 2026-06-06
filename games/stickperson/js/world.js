@@ -1,6 +1,26 @@
 // World class manages the infinite side-scrolling world
 // Handles procedural generation, cleanup, and world bounds
 
+class StickpersonRunDirector {
+  getProfile(distanceFromStart) {
+    const settings = GAME_CONSTANTS.DIRECTOR;
+    const rawProgress = (distanceFromStart - settings.WARMUP_DISTANCE) /
+      (settings.MAX_INTENSITY_DISTANCE - settings.WARMUP_DISTANCE);
+    const progress = Math.max(0, Math.min(1, rawProgress));
+    const warmupScale = distanceFromStart < settings.WARMUP_DISTANCE ? 0.25 : 1;
+    const biomes = ['meadow', 'windfield', 'scrapyard'];
+    const biomeIndex = Math.floor(distanceFromStart / settings.BIOME_LENGTH) % biomes.length;
+
+    return {
+      biome: biomes[biomeIndex],
+      intensity: progress,
+      hazardMultiplier: warmupScale * (1 + progress * (settings.HAZARD_MULTIPLIER_MAX - 1)),
+      rewardMultiplier: 1 + progress * (settings.REWARD_MULTIPLIER_MAX - 1),
+      airCollectibleChance: 0.55 + progress * 0.25
+    };
+  }
+}
+
 class World {
   constructor(camera, game) {
     this.camera = camera;
@@ -21,6 +41,7 @@ class World {
     this.chunkSize = GAME_CONSTANTS.WORLD.CHUNK_SIZE;
     this.generationDistance = GAME_CONSTANTS.WORLD.GENERATION_DISTANCE;
     this.cleanupDistance = GAME_CONSTANTS.WORLD.CLEANUP_DISTANCE;
+    this.director = new StickpersonRunDirector();
     
     // Initial world generation will be called by Game after player is created
   }
@@ -76,27 +97,13 @@ class World {
     
     const chunkStartX = chunkIndex * this.chunkSize;
     const chunkEndX = chunkStartX + this.chunkSize;
+    const chunkMidpoint = (chunkStartX + chunkEndX) / 2;
+    const distanceFromStart = Math.abs(chunkMidpoint - GAME_CONSTANTS.PLAYER.INITIAL_X);
+    const profile = this.director.getProfile(distanceFromStart);
     
-    // Generate obstacles in this chunk
-    this.generateObstaclesInChunk(chunkStartX, chunkEndX);
-    
-    // Generate collectibles in this chunk
-    this.generateCollectiblesInChunk(chunkStartX, chunkEndX);
-    
-    // Generate hazards in this chunk
-    this.generateHazardsInChunk(chunkStartX, chunkEndX);
-    
-    // Generate moving platforms in this chunk
-    this.generateMovingPlatformsInChunk(chunkStartX, chunkEndX);
-    
-    // Generate power-ups in this chunk
-    this.generatePowerUpsInChunk(chunkStartX, chunkEndX);
-    
-    // Generate UFOs in this chunk (pass player position for difficulty calculation)
-    this.generateUFOsInChunk(chunkStartX, chunkEndX, this.game.player.worldX);
-    
-    // Generate bombs in this chunk
-    this.generateBombsInChunk(chunkStartX, chunkEndX);
+    for (const generator of this.getChunkGenerators()) {
+      generator(chunkStartX, chunkEndX, profile);
+    }
     
     // Mark chunk as generated
     this.generatedChunks.add(chunkIndex);
@@ -108,24 +115,14 @@ class World {
    * @param {number} endX - Chunk end X position
    */
   generateObstaclesInChunk(startX, endX) {
-    let currentX = startX;
-    
-    while (currentX < endX) {
-      // Random spacing between obstacles
-      const spacing = GAME_CONSTANTS.OBSTACLES.MIN_SPACING + 
-        Math.random() * (GAME_CONSTANTS.OBSTACLES.MAX_SPACING - GAME_CONSTANTS.OBSTACLES.MIN_SPACING);
-      
-      currentX += spacing;
-      
-      // Chance to spawn obstacle (only platforms now)
-      if (Math.random() < GAME_CONSTANTS.OBSTACLES.SPAWN_CHANCE && currentX < endX) {
-        const obstacle = this.createObstacle(currentX, 'platform');
-        this.obstacles.push(obstacle);
-        
-        // Skip past this obstacle for next spawn
-        currentX += obstacle.width;
-      }
-    }
+    this.spawnAlongChunk(startX, endX, {
+      minSpacing: GAME_CONSTANTS.OBSTACLES.MIN_SPACING,
+      randomSpacing: GAME_CONSTANTS.OBSTACLES.MAX_SPACING - GAME_CONSTANTS.OBSTACLES.MIN_SPACING,
+      spawnChance: GAME_CONSTANTS.OBSTACLES.SPAWN_CHANCE,
+      create: (x) => this.createObstacle(x, 'platform'),
+      add: (obstacle) => this.obstacles.push(obstacle),
+      advanceBy: (obstacle) => obstacle.width
+    });
   }
 
   /**
@@ -133,8 +130,9 @@ class World {
    * @param {number} startX - Chunk start X position
    * @param {number} endX - Chunk end X position
    */
-  generateCollectiblesInChunk(startX, endX) {
-    const collectibleCount = Math.floor(Math.random() * 3) + 1; // 1-3 collectibles per chunk
+  generateCollectiblesInChunk(startX, endX, profile = this.director.getProfile(0)) {
+    const maxBonus = Math.round(profile.rewardMultiplier);
+    const collectibleCount = Math.floor(Math.random() * (3 + maxBonus)) + 1;
     
     for (let i = 0; i < collectibleCount; i++) {
       const x = startX + Math.random() * (endX - startX);
@@ -146,7 +144,7 @@ class World {
       if (placement < 0.1) {
         // On ground (reduced from 40% to 10%)
         y = GAME_CONSTANTS.CANVAS.GROUND_Y - GAME_CONSTANTS.COLLECTIBLES.RADIUS;
-      } else if (placement < 0.3) {
+      } else if (placement < 1 - profile.airCollectibleChance) {
         // On a platform (reduced from 30% to 20%)
         const nearbyPlatform = this.findNearbyPlatform(x);
         if (nearbyPlatform) {
@@ -172,25 +170,15 @@ class World {
    * @param {number} startX - Chunk start X position
    * @param {number} endX - Chunk end X position
    */
-  generateHazardsInChunk(startX, endX) {
-    let currentX = startX;
-    
-    while (currentX < endX) {
-      // Random spacing between hazards
-      const spacing = GAME_CONSTANTS.HAZARDS.HAZARD_MIN_SPACING + 
-        Math.random() * 200; // Additional random spacing
-      
-      currentX += spacing;
-      
-      // Chance to spawn hazard
-      if (Math.random() < GAME_CONSTANTS.HAZARDS.HAZARD_SPAWN_CHANCE && currentX < endX) {
-        const hazard = Hazard.createRandomHazard(currentX, GAME_CONSTANTS.CANVAS.GROUND_Y, this.game);
-        this.hazards.push(hazard);
-        
-        // Skip past this hazard for next spawn
-        currentX += 100; // Average hazard width
-      }
-    }
+  generateHazardsInChunk(startX, endX, profile = this.director.getProfile(0)) {
+    this.spawnAlongChunk(startX, endX, {
+      minSpacing: GAME_CONSTANTS.HAZARDS.HAZARD_MIN_SPACING,
+      randomSpacing: 200,
+      spawnChance: GAME_CONSTANTS.HAZARDS.HAZARD_SPAWN_CHANCE * profile.hazardMultiplier,
+      create: (x) => Hazard.createRandomHazard(x, GAME_CONSTANTS.CANVAS.GROUND_Y, this.game, profile),
+      add: (hazard) => this.hazards.push(hazard),
+      advanceBy: (hazard) => hazard.width || 100
+    });
   }
 
   /**
@@ -198,26 +186,18 @@ class World {
    * @param {number} startX - Chunk start X position
    * @param {number} endX - Chunk end X position
    */
-  generateMovingPlatformsInChunk(startX, endX) {
-    let currentX = startX;
-    
-    while (currentX < endX) {
-      // Random spacing between moving platforms
-      const spacing = GAME_CONSTANTS.MOVING_PLATFORMS.MIN_SPACING + 
-        Math.random() * 200; // Additional random spacing
-      
-      currentX += spacing;
-      
-      // Chance to spawn moving platform
-      if (Math.random() < GAME_CONSTANTS.MOVING_PLATFORMS.SPAWN_CHANCE && currentX < endX) {
-        const y = GAME_CONSTANTS.CANVAS.GROUND_Y - 100 - Math.random() * 200; // Above ground
-        const movingPlatform = MovingPlatform.createRandomMovingPlatform(currentX, y, this.game);
-        this.movingPlatforms.push(movingPlatform);
-        
-        // Skip past this platform for next spawn
-        currentX += movingPlatform.width;
-      }
-    }
+  generateMovingPlatformsInChunk(startX, endX, profile = this.director.getProfile(0)) {
+    this.spawnAlongChunk(startX, endX, {
+      minSpacing: GAME_CONSTANTS.MOVING_PLATFORMS.MIN_SPACING,
+      randomSpacing: 200,
+      spawnChance: GAME_CONSTANTS.MOVING_PLATFORMS.SPAWN_CHANCE * profile.rewardMultiplier,
+      create: (x) => {
+        const y = GAME_CONSTANTS.CANVAS.GROUND_Y - 100 - Math.random() * 200;
+        return MovingPlatform.createRandomMovingPlatform(x, y, this.game);
+      },
+      add: (platform) => this.movingPlatforms.push(platform),
+      advanceBy: (platform) => platform.width
+    });
   }
 
   /**
@@ -225,26 +205,18 @@ class World {
    * @param {number} startX - Chunk start X position
    * @param {number} endX - Chunk end X position
    */
-  generatePowerUpsInChunk(startX, endX) {
-    let currentX = startX;
-    
-    while (currentX < endX) {
-      // Random spacing between power-ups
-      const spacing = GAME_CONSTANTS.POWER_UPS.POWER_UP_MIN_SPACING + 
-        Math.random() * 300; // Additional random spacing
-      
-      currentX += spacing;
-      
-      // Chance to spawn power-up
-      if (Math.random() < GAME_CONSTANTS.POWER_UPS.POWER_UP_SPAWN_CHANCE && currentX < endX) {
-        const y = GAME_CONSTANTS.CANVAS.GROUND_Y - 50 - Math.random() * 150; // Above ground
-        const powerUp = PowerUp.createRandomPowerUp(currentX, y, this.game);
-        this.powerUps.push(powerUp);
-        
-        // Skip past this power-up for next spawn
-        currentX += 100; // Average power-up spacing
-      }
-    }
+  generatePowerUpsInChunk(startX, endX, profile = this.director.getProfile(0)) {
+    this.spawnAlongChunk(startX, endX, {
+      minSpacing: GAME_CONSTANTS.POWER_UPS.POWER_UP_MIN_SPACING,
+      randomSpacing: 300,
+      spawnChance: GAME_CONSTANTS.POWER_UPS.POWER_UP_SPAWN_CHANCE * profile.rewardMultiplier,
+      create: (x) => {
+        const y = GAME_CONSTANTS.CANVAS.GROUND_Y - 50 - Math.random() * 150;
+        return PowerUp.createRandomPowerUp(x, y, this.game);
+      },
+      add: (powerUp) => this.powerUps.push(powerUp),
+      advanceBy: () => 100
+    });
   }
 
   /**
@@ -253,33 +225,20 @@ class World {
    * @param {number} endX - Chunk end X position
    * @param {number} playerWorldX - Player's current world X position
    */
-  generateUFOsInChunk(startX, endX, playerWorldX) {
-    let currentX = startX;
-    
-    while (currentX < endX) {
-      // Random spacing between UFOs
-      const spacing = GAME_CONSTANTS.UFO.MIN_SPACING + 
-        Math.random() * 400; // Additional random spacing
-      
-      currentX += spacing;
-      
-      // Calculate progressive difficulty based on distance from starting point
-      const distanceFromStart = Math.abs(currentX - GAME_CONSTANTS.PLAYER.INITIAL_X);
-      const spawnChance = this.calculateUFOSpawnChance(distanceFromStart);
-      
-      // Chance to spawn UFO with progressive difficulty
-      if (Math.random() < spawnChance && currentX < endX) {
-        const y = GAME_CONSTANTS.CANVAS.GROUND_Y - 
-          GAME_CONSTANTS.UFO.MIN_HEIGHT - 
+  generateUFOsInChunk(startX, endX, profile = this.director.getProfile(0)) {
+    this.spawnAlongChunk(startX, endX, {
+      minSpacing: GAME_CONSTANTS.UFO.MIN_SPACING,
+      randomSpacing: 400,
+      getSpawnChance: (x) => this.calculateUFOSpawnChance(Math.abs(x - GAME_CONSTANTS.PLAYER.INITIAL_X)) * profile.hazardMultiplier,
+      create: (x) => {
+        const y = GAME_CONSTANTS.CANVAS.GROUND_Y -
+          GAME_CONSTANTS.UFO.MIN_HEIGHT -
           Math.random() * (GAME_CONSTANTS.UFO.MAX_HEIGHT - GAME_CONSTANTS.UFO.MIN_HEIGHT);
-        
-        const ufo = UFO.createRandomUFO(currentX, y, this.game);
-        this.ufos.push(ufo);
-        
-        // Skip past this UFO for next spawn
-        currentX += 200; // Average UFO spacing
-      }
-    }
+        return UFO.createRandomUFO(x, y, this.game);
+      },
+      add: (ufo) => this.ufos.push(ufo),
+      advanceBy: () => 200
+    });
   }
   
   /**
@@ -318,12 +277,12 @@ class World {
    * @param {number} startX - Chunk start X position
    * @param {number} endX - Chunk end X position
    */
-  generateBombsInChunk(startX, endX) {
+  generateBombsInChunk(startX, endX, profile = this.director.getProfile(0)) {
     let currentX = startX;
     
     while (currentX < endX) {
       // Check if we should spawn a bomb
-      if (Math.random() < GAME_CONSTANTS.BOMB.SPAWN_CHANCE) {
+      if (Math.random() < GAME_CONSTANTS.BOMB.SPAWN_CHANCE * profile.hazardMultiplier) {
         // Check minimum spacing from other bombs
         const tooClose = this.bombs.some(bomb => 
           Math.abs(bomb.x - currentX) < GAME_CONSTANTS.BOMB.MIN_SPACING
@@ -336,7 +295,6 @@ class World {
           
           const bomb = new Bomb(bombX, bombY);
           this.bombs.push(bomb);
-          console.log(`Bomb created at (${bombX}, ${bombY})`);
         }
       }
       
@@ -356,6 +314,61 @@ class World {
     return obstacle;
   }
 
+  getChunkGenerators() {
+    return [
+      (startX, endX, profile) => this.generateObstaclesInChunk(startX, endX, profile),
+      (startX, endX, profile) => this.generateCollectiblesInChunk(startX, endX, profile),
+      (startX, endX, profile) => this.generateHazardsInChunk(startX, endX, profile),
+      (startX, endX, profile) => this.generateMovingPlatformsInChunk(startX, endX, profile),
+      (startX, endX, profile) => this.generatePowerUpsInChunk(startX, endX, profile),
+      (startX, endX, profile) => this.generateUFOsInChunk(startX, endX, profile),
+      (startX, endX, profile) => this.generateBombsInChunk(startX, endX, profile)
+    ];
+  }
+
+  spawnAlongChunk(startX, endX, config) {
+    let currentX = startX;
+
+    while (currentX < endX) {
+      currentX += config.minSpacing + Math.random() * config.randomSpacing;
+
+      const spawnChance = typeof config.getSpawnChance === 'function'
+        ? config.getSpawnChance(currentX)
+        : config.spawnChance;
+
+      if (Math.random() < spawnChance && currentX < endX) {
+        const entity = config.create(currentX);
+        config.add(entity);
+        currentX += config.advanceBy(entity);
+      }
+    }
+  }
+
+  getContentGroups() {
+    return [
+      { items: this.obstacles, width: item => item.width, draw: item => item.draw },
+      { items: this.collectibles, width: item => item.radius * 2, draw: item => item.draw },
+      { items: this.hazards, width: item => item.width || 100, draw: item => item.draw },
+      { items: this.movingPlatforms, width: item => item.width, draw: item => item.draw },
+      { items: this.powerUps, width: item => item.radius * 2, draw: item => item.draw },
+      { items: this.ufos, width: item => item.width, draw: item => item.draw },
+      { items: this.bombs, width: item => item.width, draw: item => item.draw }
+    ];
+  }
+
+  reset() {
+    this.obstacles = [];
+    this.collectibles = [];
+    this.hazards = [];
+    this.movingPlatforms = [];
+    this.powerUps = [];
+    this.ufos = [];
+    this.bombs = [];
+    this.generatedChunks.clear();
+    this.lastPlayerChunk = 0;
+    this.generateInitialWorld();
+  }
+
   /**
    * Find platform near a given X position
    * @param {number} x - X position to search near
@@ -373,47 +386,9 @@ class World {
    * @param {number} playerWorldX - Player's world X position
    */
   cleanupDistantContent(playerWorldX) {
-    // Remove distant obstacles
-    this.obstacles = this.obstacles.filter(obstacle => {
-      const distance = Math.abs(obstacle.x - playerWorldX);
-      return distance < this.cleanupDistance;
-    });
-    
-    // Remove distant collectibles
-    this.collectibles = this.collectibles.filter(collectible => {
-      const distance = Math.abs(collectible.x - playerWorldX);
-      return distance < this.cleanupDistance;
-    });
-    
-    // Remove distant hazards
-    this.hazards = this.hazards.filter(hazard => {
-      const distance = Math.abs(hazard.x - playerWorldX);
-      return distance < this.cleanupDistance;
-    });
-    
-    // Remove distant moving platforms
-    this.movingPlatforms = this.movingPlatforms.filter(platform => {
-      const distance = Math.abs(platform.x - playerWorldX);
-      return distance < this.cleanupDistance;
-    });
-    
-    // Remove distant power-ups
-    this.powerUps = this.powerUps.filter(powerUp => {
-      const distance = Math.abs(powerUp.x - playerWorldX);
-      return distance < this.cleanupDistance;
-    });
-    
-    // Remove distant UFOs
-    this.ufos = this.ufos.filter(ufo => {
-      const distance = Math.abs(ufo.x - playerWorldX);
-      return distance < this.cleanupDistance;
-    });
-    
-    // Remove distant bombs
-    this.bombs = this.bombs.filter(bomb => {
-      const distance = Math.abs(bomb.x - playerWorldX);
-      return distance < this.cleanupDistance;
-    });
+    for (const key of ['obstacles', 'collectibles', 'hazards', 'movingPlatforms', 'powerUps', 'ufos', 'bombs']) {
+      this[key] = this[key].filter(item => Math.abs(item.x - playerWorldX) < this.cleanupDistance);
+    }
     
     // Clean up chunk tracking for very distant chunks
     const currentChunk = Math.floor(playerWorldX / this.chunkSize);
@@ -450,54 +425,13 @@ class World {
     // Draw ground
     this.drawGround(ctx);
     
-    // Draw obstacles that are visible
-    this.obstacles.forEach(obstacle => {
-      if (this.camera.isVisible(obstacle.x, obstacle.width)) {
-        obstacle.draw(ctx, this.camera);
-      }
-    });
-    
-    // Draw collectibles that are visible
-    this.collectibles.forEach(collectible => {
-      if (this.camera.isVisible(collectible.x, collectible.radius * 2)) {
-        collectible.draw(ctx, this.camera);
-      }
-    });
-    
-    // Draw hazards that are visible
-    this.hazards.forEach(hazard => {
-      if (this.camera.isVisible(hazard.x, hazard.width || 100)) {
-        hazard.draw(ctx, this.camera);
-      }
-    });
-    
-    // Draw moving platforms that are visible
-    this.movingPlatforms.forEach(platform => {
-      if (this.camera.isVisible(platform.x, platform.width)) {
-        platform.draw(ctx, this.camera);
-      }
-    });
-    
-    // Draw power-ups that are visible
-    this.powerUps.forEach(powerUp => {
-      if (this.camera.isVisible(powerUp.x, powerUp.radius * 2)) {
-        powerUp.draw(ctx, this.camera);
-      }
-    });
-    
-    // Draw UFOs that are visible
-    this.ufos.forEach(ufo => {
-      if (this.camera.isVisible(ufo.x, ufo.width)) {
-        ufo.draw(ctx, this.camera);
-      }
-    });
-    
-    // Draw bombs that are visible
-    this.bombs.forEach(bomb => {
-      if (this.camera.isVisible(bomb.x, bomb.width)) {
-        bomb.draw(ctx, this.camera);
-      }
-    });
+    for (const group of this.getContentGroups()) {
+      group.items.forEach(item => {
+        if (this.camera.isVisible(item.x, group.width(item)) && typeof group.draw(item) === 'function') {
+          item.draw(ctx, this.camera);
+        }
+      });
+    }
   }
 
   /**

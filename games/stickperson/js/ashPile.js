@@ -39,8 +39,9 @@ class AshPile {
     }
   }
 
-  update() {
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     if (!this.active) return;
+    const frameScale = StickpersonGeometry.getFrameScale(deltaMs);
     
     let allParticlesDead = true;
     
@@ -51,30 +52,30 @@ class AshPile {
         // Update particle physics
         if (!particle.onGround) {
           // Apply gravity
-          particle.vy += 0.1; // Gravity effect
+          particle.vy += 0.1 * frameScale; // Gravity effect
           
           // Update position
-          particle.x += particle.vx;
-          particle.y += particle.vy;
+          particle.x += particle.vx * frameScale;
+          particle.y += particle.vy * frameScale;
           
           // Check if particle hits ground
           if (particle.y >= GAME_CONSTANTS.CANVAS.GROUND_Y) {
             particle.y = GAME_CONSTANTS.CANVAS.GROUND_Y;
             particle.vy = 0;
-            particle.vx *= 0.5; // Slow down on ground
+            particle.vx *= Math.pow(0.5, frameScale); // Slow down on ground
             particle.onGround = true;
           }
         } else {
           // On ground - slow down horizontal movement
-          particle.vx *= 0.95;
-          particle.x += particle.vx;
+          particle.vx *= Math.pow(0.95, frameScale);
+          particle.x += particle.vx * frameScale;
         }
         
         // Update rotation
-        particle.rotation += particle.rotationSpeed;
+        particle.rotation += particle.rotationSpeed * frameScale;
         
         // Decrease life
-        particle.life -= particle.decayRate;
+        particle.life -= particle.decayRate * frameScale;
         
         // Ensure life doesn't go below 0
         if (particle.life < 0) {

@@ -151,6 +151,7 @@ const GAME_CONSTANTS = {
   PERFORMANCE: {
     TARGET_FPS: 60,
     FRAME_TIME: 1000 / 60, // ~16.67ms per frame
+    MAX_DELTA_TIME: 100, // Clamp long tab stalls so physics does not jump wildly
   },
 
   // === COLLECTIBLES & SCORING ===
@@ -201,6 +202,15 @@ const GAME_CONSTANTS = {
     CHUNK_SIZE: 1000, // Size of world chunks for procedural generation
     GENERATION_DISTANCE: 2000, // How far ahead to generate content
     CLEANUP_DISTANCE: 3000, // How far behind to clean up content
+  },
+
+  // === RUN DIRECTOR ===
+  DIRECTOR: {
+    WARMUP_DISTANCE: 1500, // Keep the opening stretch gentler and readable
+    MAX_INTENSITY_DISTANCE: 12000,
+    HAZARD_MULTIPLIER_MAX: 1.8,
+    REWARD_MULTIPLIER_MAX: 1.35,
+    BIOME_LENGTH: 3500,
   },
 
   // === OBSTACLES ===
@@ -436,5 +446,80 @@ GAME_CONSTANTS.CALCULATED = {
   CROUCH_SPEED: GAME_CONSTANTS.PLAYER.SPEED * GAME_CONSTANTS.PLAYER.CROUCH_SPEED_MULTIPLIER,
 };
 
+const StickpersonGeometry = {
+  getFrameScale(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
+    return deltaMs / GAME_CONSTANTS.PERFORMANCE.FRAME_TIME;
+  },
+
+  getPlayerHeight(player) {
+    const normalHeight = player.normalHeight ?? GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT;
+    const crouchHeight = player.crouchHeight ?? GAME_CONSTANTS.PLAYER.CROUCH_HEIGHT;
+    const crouchTransition = player.crouchTransition ?? 0;
+    return normalHeight + (crouchHeight - normalHeight) * crouchTransition;
+  },
+
+  getPlayerBounds(player) {
+    const width = player.width ?? GAME_CONSTANTS.PLAYER.WIDTH;
+    const height = this.getPlayerHeight(player);
+    const centerX = player.worldX;
+    const bottom = player.y;
+
+    return {
+      left: centerX - width / 2,
+      right: centerX + width / 2,
+      top: bottom - height,
+      bottom,
+      centerX,
+      centerY: bottom - height / 2,
+      width,
+      height
+    };
+  },
+
+  getRectBounds(x, y, width, height, anchor = 'top-left') {
+    if (anchor === 'center') {
+      return {
+        left: x - width / 2,
+        right: x + width / 2,
+        top: y - height / 2,
+        bottom: y + height / 2,
+        centerX: x,
+        centerY: y
+      };
+    }
+
+    if (anchor === 'bottom-left') {
+      return {
+        left: x,
+        right: x + width,
+        top: y - height,
+        bottom: y,
+        centerX: x + width / 2,
+        centerY: y - height / 2
+      };
+    }
+
+    return {
+      left: x,
+      right: x + width,
+      top: y,
+      bottom: y + height,
+      centerX: x + width / 2,
+      centerY: y + height / 2
+    };
+  },
+
+  overlaps(a, b) {
+    return a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
+  },
+
+  distance(x1, y1, x2, y2) {
+    const deltaX = x1 - x2;
+    const deltaY = y1 - y2;
+    return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  }
+};
+
 // Export for use in other files
 window.GAME_CONSTANTS = GAME_CONSTANTS;
+window.StickpersonGeometry = StickpersonGeometry;

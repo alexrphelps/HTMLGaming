@@ -37,6 +37,7 @@ resize();
   // FUTURE FEATURE: Add campaign progression with persistent castle upgrades.
   // FUTURE FEATURE: Add a smart unit-card cooldown system to prevent spam and encourage timed waves.
 
-window.CastlefallValley.setupUnitCards();
+window.CastlefallValley.setupControlLabels();
+window.CastlefallValley.setupInput();
 window.CastlefallValley.reset();
 requestAnimationFrame(loop);

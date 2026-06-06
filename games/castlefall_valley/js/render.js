@@ -88,30 +88,16 @@
   }
 
   function drawTerraceLines() {
-    const terraces = [
-      [280, 500, 310, 380],
-      [710, 960, 380, 455],
-      [1190, 1390, 455, 525],
-      [2010, 2210, 525, 455],
-      [2440, 2690, 455, 380],
-      [2900, 3120, 380, 310]
-    ];
-
-    for (const [x1, x2, y1, y2] of terraces) {
+    for (const [x1, x2] of TERRACE_SEGMENTS) {
       ctx.strokeStyle = "rgba(0,0,0,0.18)";
       ctx.lineWidth = 8;
       ctx.beginPath();
-      ctx.moveTo(x1, y1 + 17);
-      ctx.lineTo(x2, y2 + 17);
+      ctx.moveTo(x1, terrainY(x1) + 17);
+      ctx.lineTo(x2, terrainY(x2) + 17);
       ctx.stroke();
     }
 
-    const flats = [
-      [0, 280], [500, 710], [960, 1190],
-      [1390, 2010], [2210, 2440], [2690, 2900], [3120, WORLD_W]
-    ];
-
-    for (const [a, b] of flats) {
+    for (const [a, b] of TERRAIN_FLATS) {
       const y = terrainY((a + b) / 2);
       ctx.strokeStyle = "rgba(255,255,255,0.06)";
       ctx.lineWidth = 2;
@@ -234,6 +220,64 @@
     ctx.restore();
   }
 
+  const unitRenderers = {
+    shield: drawShieldUnit,
+    archer: drawArcherUnit,
+    knight: drawKnightUnit,
+    priest: drawPriestUnit,
+    sword: drawSwordUnit
+  };
+
+  function drawShieldUnit(u, sideColor) {
+    ctx.fillRect(-u.size * 0.75, -u.size * 1.8, u.size * 1.5, u.size * 2.4);
+    ctx.fillStyle = sideColor;
+    ctx.fillRect(-u.size * 0.52, -u.size * 1.55, u.size * 1.04, u.size * 1.55);
+  }
+
+  function drawArcherUnit(u) {
+    ctx.beginPath();
+    ctx.arc(0, -u.size * 1.35, u.size * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#d8c7ac";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(u.side * 7, -u.size, 13, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+  }
+
+  function drawKnightUnit(u, sideColor) {
+    ctx.fillRect(-u.size, -u.size * 1.65, u.size * 2, u.size * 1.35);
+    ctx.fillStyle = sideColor;
+    ctx.beginPath();
+    ctx.moveTo(u.side * 4, -u.size * 2.4);
+    ctx.lineTo(u.side * 32, -u.size * 2.0);
+    ctx.lineTo(u.side * 4, -u.size * 1.7);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawPriestUnit(u) {
+    ctx.beginPath();
+    ctx.arc(0, -u.size * 1.2, u.size * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff5bd";
+    ctx.fillRect(-2, -u.size * 2.1, 4, 18);
+    ctx.fillRect(-8, -u.size * 1.75, 16, 4);
+  }
+
+  function drawSwordUnit(u) {
+    ctx.beginPath();
+    ctx.arc(0, -u.size * 1.4, u.size * 0.78, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(-u.size * 0.55, -u.size * 1.2, u.size * 1.1, u.size * 1.45);
+    ctx.strokeStyle = "#d8c7ac";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(u.side * 7, -u.size);
+    ctx.lineTo(u.side * 22, -u.size * 2.2);
+    ctx.stroke();
+  }
+
   function drawUnit(u) {
     const x = u.x;
     const y = terrainY(u.x) - u.size + u.lane * 5;
@@ -254,47 +298,8 @@
       ctx.fillStyle = u.color;
     }
 
-    if (u.type === "shield") {
-      ctx.fillRect(-u.size * 0.75, -u.size * 1.8, u.size * 1.5, u.size * 2.4);
-      ctx.fillStyle = sideColor;
-      ctx.fillRect(-u.size * 0.52, -u.size * 1.55, u.size * 1.04, u.size * 1.55);
-    } else if (u.type === "archer") {
-      ctx.beginPath();
-      ctx.arc(0, -u.size * 1.35, u.size * 0.72, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#d8c7ac";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(u.side * 7, -u.size, 13, -Math.PI / 2, Math.PI / 2);
-      ctx.stroke();
-    } else if (u.type === "knight") {
-      ctx.fillRect(-u.size, -u.size * 1.65, u.size * 2, u.size * 1.35);
-      ctx.fillStyle = sideColor;
-      ctx.beginPath();
-      ctx.moveTo(u.side * 4, -u.size * 2.4);
-      ctx.lineTo(u.side * 32, -u.size * 2.0);
-      ctx.lineTo(u.side * 4, -u.size * 1.7);
-      ctx.closePath();
-      ctx.fill();
-    } else if (u.type === "priest") {
-      ctx.beginPath();
-      ctx.arc(0, -u.size * 1.2, u.size * 0.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#fff5bd";
-      ctx.fillRect(-2, -u.size * 2.1, 4, 18);
-      ctx.fillRect(-8, -u.size * 1.75, 16, 4);
-    } else {
-      ctx.beginPath();
-      ctx.arc(0, -u.size * 1.4, u.size * 0.78, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillRect(-u.size * 0.55, -u.size * 1.2, u.size * 1.1, u.size * 1.45);
-      ctx.strokeStyle = "#d8c7ac";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(u.side * 7, -u.size);
-      ctx.lineTo(u.side * 22, -u.size * 2.2);
-      ctx.stroke();
-    }
+    const drawShape = unitRenderers[u.type] || drawSwordUnit;
+    drawShape(u, sideColor);
 
     ctx.globalAlpha = 1;
     ctx.fillStyle = "rgba(0,0,0,0.58)";
@@ -524,4 +529,4 @@
     }
   }
 
-Object.assign(window.CastlefallValley, { drawSky, drawParallaxLayer, drawTerrain, drawTerraceLines, drawCastle, drawFrontlineMarkers, drawUnits, drawUnit, drawStackIndicators, drawHero, drawProjectiles, drawParticles, drawMinimap, render });
+Object.assign(window.CastlefallValley, { drawSky, drawParallaxLayer, drawTerrain, drawTerraceLines, drawCastle, drawFrontlineMarkers, drawUnits, drawUnit, unitRenderers, drawStackIndicators, drawHero, drawProjectiles, drawParticles, drawMinimap, render });

@@ -66,7 +66,9 @@ class Player {
     this.invincibilityTimer = 0;
   }
 
-  update(input) {
+  update(input, deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
+    const frameScale = StickpersonGeometry.getFrameScale(deltaMs);
+
     // Check for active input
     const leftPressed = GAME_CONSTANTS.CONTROLS.LEFT.some(key => input.keys[key]);
     const rightPressed = GAME_CONSTANTS.CONTROLS.RIGHT.some(key => input.keys[key]);
@@ -83,21 +85,21 @@ class Player {
     
     // Apply input-based acceleration to horizontal velocity
     if (leftPressed) {
-      this.vx -= currentSpeed * 0.3; // Gradual acceleration
+      this.vx -= currentSpeed * 0.3 * frameScale; // Gradual acceleration
       this.direction = -1;
     }
     if (rightPressed) {
-      this.vx += currentSpeed * 0.3; // Gradual acceleration  
+      this.vx += currentSpeed * 0.3 * frameScale; // Gradual acceleration
       this.direction = 1;
     }
     
     // Apply air resistance or ground friction to horizontal velocity
     if (this.isGrounded) {
       // On ground: apply friction
-      this.vx *= GAME_CONSTANTS.PLAYER.GROUND_FRICTION;
+      this.vx *= Math.pow(GAME_CONSTANTS.PLAYER.GROUND_FRICTION, frameScale);
     } else {
       // In air: apply air resistance (maintains momentum better)
-      this.vx *= GAME_CONSTANTS.PLAYER.AIR_RESISTANCE;
+      this.vx *= Math.pow(GAME_CONSTANTS.PLAYER.AIR_RESISTANCE, frameScale);
     }
     
     // Limit maximum horizontal velocity
@@ -109,11 +111,11 @@ class Player {
     
     // Apply wind force
     if (this.windForce !== 0) {
-      this.vx += this.windForce;
+      this.vx += this.windForce * frameScale;
     }
 
     // Apply horizontal movement to world position
-    this.worldX += this.vx;
+    this.worldX += this.vx * frameScale;
 
     // Jumping with keys from constants
     const jumpPressed = GAME_CONSTANTS.CONTROLS.JUMP.some(key => input.keys[key]);
@@ -162,12 +164,13 @@ class Player {
 
     // Crouching with smooth transition using constants
     const targetCrouch = GAME_CONSTANTS.CONTROLS.CROUCH.some(key => input.keys[key]) ? 1 : 0;
-    this.crouchTransition += (targetCrouch - this.crouchTransition) * GAME_CONSTANTS.PLAYER.CROUCH_TRANSITION_SPEED;
+    const crouchBlend = 1 - Math.pow(1 - GAME_CONSTANTS.PLAYER.CROUCH_TRANSITION_SPEED, frameScale);
+    this.crouchTransition += (targetCrouch - this.crouchTransition) * crouchBlend;
     this.isCrouching = this.crouchTransition > 0.5;
 
     // Apply gravity
-    this.vy += this.gravity;
-    this.y += this.vy;
+    this.vy += this.gravity * frameScale;
+    this.y += this.vy * frameScale;
 
     // Current height based on crouch transition (smooth height change)
     const height = this.normalHeight + (this.crouchHeight - this.normalHeight) * this.crouchTransition;
@@ -177,15 +180,15 @@ class Player {
     
     if (!this.isGrounded) {
       // Track air time for momentum effects using constants
-      this.airTime += GAME_CONSTANTS.PLAYER.AIR_TIME_INCREMENT;
+      this.airTime += deltaMs / 1000;
       
       // Airborne: update jump phase and tilt
-      this.jumpPhase = Math.min(this.jumpPhase + 0.02, 2); // Progress jump phase
+      this.jumpPhase = Math.min(this.jumpPhase + 0.02 * frameScale, 2); // Progress jump phase
       if (this.isMoving) {
-        this.airTilt += this.direction * 0.01; // Gradual tilt
+        this.airTilt += this.direction * 0.01 * frameScale; // Gradual tilt
         this.airTilt = Math.max(Math.min(this.airTilt, GAME_CONSTANTS.LIMITS.MAX_AIR_TILT), GAME_CONSTANTS.LIMITS.MIN_AIR_TILT);
       } else {
-        this.airTilt *= GAME_CONSTANTS.LIMITS.AIR_TILT_DAMPING; // Dampen tilt when not moving
+        this.airTilt *= Math.pow(GAME_CONSTANTS.LIMITS.AIR_TILT_DAMPING, frameScale); // Dampen tilt when not moving
       }
     }
 
@@ -195,7 +198,7 @@ class Player {
     // Update walking cycle if moving on ground (either from input or momentum)
     const isActuallyMoving = this.isMoving || this.hasHorizontalMomentum;
     if (this.isGrounded && isActuallyMoving && !this.isCrouching) {
-      this.walkCycle += this.animationSpeed * Math.abs(this.vx) / this.speed; // Speed-based animation
+      this.walkCycle += this.animationSpeed * Math.abs(this.vx) / this.speed * frameScale; // Speed-based animation
       if (this.walkCycle > 2 * Math.PI) this.walkCycle -= 2 * Math.PI;
     } else if (!isActuallyMoving && this.isGrounded) {
       this.walkCycle = 0; // Reset to idle only when grounded and no momentum
@@ -203,7 +206,7 @@ class Player {
 
     // Update crouch walking cycle
     if (this.isGrounded && isActuallyMoving && this.isCrouching) {
-      this.crouchCycle += this.crouchAnimationSpeed * Math.abs(this.vx) / this.speed;
+      this.crouchCycle += this.crouchAnimationSpeed * Math.abs(this.vx) / this.speed * frameScale;
       if (this.crouchCycle > 2 * Math.PI) this.crouchCycle -= 2 * Math.PI;
     } else if (!isActuallyMoving) {
       this.crouchCycle = 0;
@@ -214,8 +217,6 @@ class Player {
    * Handle collision with ground
    */
   handleGroundCollision() {
-    const height = this.normalHeight + (this.crouchHeight - this.normalHeight) * this.crouchTransition;
-    
     // Player Y position represents bottom of player
     if (this.y > GAME_CONSTANTS.CANVAS.GROUND_Y) {
       this.y = GAME_CONSTANTS.CANVAS.GROUND_Y;
@@ -237,7 +238,7 @@ class Player {
    * @param {Obstacle} platform - Platform to land on
    */
   handlePlatformCollision(platform) {
-    if (platform.type === 'platform' && this.vy >= 0) { // Only land when falling
+    if (this.vy >= 0 && typeof platform.getTopY === 'function') { // Only land when falling
       this.y = platform.getTopY(); // Player's Y position is now the bottom (surface level)
       this.vy = 0;
       this.isGrounded = true;
@@ -272,10 +273,10 @@ class Player {
   /**
    * Update power-up timers and effects
    */
-  updatePowerUps() {
+  updatePowerUps(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     // Update speed boots timer
     if (this.powerUpTimers.speed > 0) {
-      this.powerUpTimers.speed -= 16; // ~60fps
+      this.powerUpTimers.speed -= deltaMs;
       if (this.powerUpTimers.speed <= 0) {
         this.speedMultiplier = 1.0;
       }
@@ -283,7 +284,7 @@ class Player {
 
     // Update magnet timer
     if (this.powerUpTimers.magnet > 0) {
-      this.powerUpTimers.magnet -= 16; // ~60fps
+      this.powerUpTimers.magnet -= deltaMs;
       if (this.powerUpTimers.magnet <= 0) {
         this.magnetActive = false;
       }
@@ -291,7 +292,7 @@ class Player {
 
     // Update size timer
     if (this.powerUpTimers.size > 0) {
-      this.powerUpTimers.size -= 16; // ~60fps
+      this.powerUpTimers.size -= deltaMs;
       if (this.powerUpTimers.size <= 0) {
         this.sizeState = 'normal';
       }
@@ -299,7 +300,7 @@ class Player {
     
     // Update invincibility timer
     if (this.invincibilityTimer > 0) {
-      this.invincibilityTimer -= 16; // ~60fps
+      this.invincibilityTimer -= deltaMs;
       if (this.invincibilityTimer <= 0) {
         this.invincible = false;
       }
@@ -382,6 +383,41 @@ class Player {
     this.invincibilityTimer = 2000; // 2 seconds of invincibility
     
     return true; // Damage was applied
+  }
+
+  resetForRun(groundY) {
+    this.worldX = GAME_CONSTANTS.PLAYER.INITIAL_X;
+    this.x = GAME_CONSTANTS.PLAYER.INITIAL_X;
+    this.y = groundY;
+    this.vx = 0;
+    this.vy = 0;
+    this.isGrounded = true;
+    this.isCrouching = false;
+    this.direction = 1;
+    this.isMoving = false;
+    this.hasHorizontalMomentum = false;
+    this.walkCycle = 0;
+    this.jumpPhase = 0;
+    this.crouchTransition = 0;
+    this.airTilt = 0;
+    this.crouchCycle = 0;
+    this.airTime = 0;
+    this.canDoubleJump = GAME_CONSTANTS.PLAYER.DOUBLE_JUMP_ENABLED;
+    this.hasDoubleJumped = false;
+    this.jumpKeyWasPressed = false;
+    this.standingOnPlatform = null;
+    this.resetTemporaryEffects();
+  }
+
+  resetTemporaryEffects() {
+    this.speedMultiplier = 1.0;
+    this.magnetActive = false;
+    this.sizeState = 'normal';
+    this.powerUpTimers = { speed: 0, magnet: 0, size: 0 };
+    this.inQuicksand = false;
+    this.windForce = 0;
+    this.invincible = false;
+    this.invincibilityTimer = 0;
   }
 
   draw(ctx) {
@@ -530,8 +566,8 @@ class Player {
       const momentumFlow = this.direction * momentum; // Flow in movement direction
       
       // Add random variations for unique jump animations!
-      const randomArmOffset = (Math.sin(this.jumpRandomSeed + side === 'left' ? 0 : 100) * GAME_CONSTANTS.ANIMATION.JUMP_ARM_RANDOM_VARIATION);
-      const randomMomentumMultiplier = 1 + (Math.cos(this.jumpRandomSeed + side === 'left' ? 50 : 150) * GAME_CONSTANTS.ANIMATION.JUMP_MOMENTUM_RANDOM_VARIATION);
+      const randomArmOffset = Math.sin(this.jumpRandomSeed + (side === 'left' ? 0 : 100)) * GAME_CONSTANTS.ANIMATION.JUMP_ARM_RANDOM_VARIATION;
+      const randomMomentumMultiplier = 1 + (Math.cos(this.jumpRandomSeed + (side === 'left' ? 50 : 150)) * GAME_CONSTANTS.ANIMATION.JUMP_MOMENTUM_RANDOM_VARIATION);
       
       upperArmAngle = GAME_CONSTANTS.ANIMATION.ARM_JUMP_RAISE + (momentumFlow * randomMomentumMultiplier * sideMultiplier) + randomArmOffset + airFlail * sideMultiplier;
       lowerArmAngle = GAME_CONSTANTS.ANIMATION.ARM_JUMP_BEND + randomArmOffset * 0.3 + airFlail * sideMultiplier * 0.5;

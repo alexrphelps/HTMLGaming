@@ -28,9 +28,9 @@ class WorldCollectible {
   /**
    * Update collectible animation
    */
-  update() {
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     if (!this.collected) {
-      this.animationTime += this.bobSpeed;
+      this.animationTime += this.bobSpeed * StickpersonGeometry.getFrameScale(deltaMs);
     }
   }
 

@@ -54,6 +54,28 @@ describe('Stickperson camera and score', () => {
 describe('Stickperson object logic', () => {
   afterEach(() => jest.restoreAllMocks());
 
+  test('shared geometry exposes feet-based player bounds', () => {
+    const context = stickContext();
+    const bounds = context.StickpersonGeometry.getPlayerBounds(player({
+      worldX: 50,
+      y: 200,
+      width: 40,
+      normalHeight: 100,
+      crouchHeight: 50,
+      crouchTransition: 0.5
+    }));
+    expect(bounds).toEqual({
+      left: 30,
+      right: 70,
+      top: 125,
+      bottom: 200,
+      centerX: 50,
+      centerY: 162.5,
+      width: 40,
+      height: 75
+    });
+  });
+
   test('obstacles detect collision direction and standability', () => {
     const context = stickContext();
     jest.spyOn(Math, 'random').mockReturnValue(0);
@@ -72,6 +94,29 @@ describe('Stickperson object logic', () => {
     const hit = bomb.checkCollision(player());
     bomb.explode();
     expect([hit, bomb.isActive()]).toEqual([true, false]);
+  });
+
+  test('moving platforms, hazards, and powerups use player bottom coordinates consistently', () => {
+    const context = stickContext();
+    const { MovingPlatform } = loadStick(context, 'movingPlatform.js', ['MovingPlatform']);
+    const { Hazard } = loadStick(context, 'hazard.js', ['Hazard']);
+    const { PowerUp } = loadStick(context, 'powerUp.js', ['PowerUp']);
+    const platformPlayer = player({ worldX: 100, y: 250, width: 30, normalHeight: 60 });
+    const platform = new MovingPlatform(80, 250, 'horizontal', { player: platformPlayer });
+    platform.playerOnPlatform = true;
+    platform.update(context.GAME_CONSTANTS.PERFORMANCE.FRAME_TIME);
+    const quicksand = new Hazard(80, 300, 'quicksand', {});
+    const wind = new Hazard(40, 200, 'wind', {});
+    wind.isActive = true;
+    const powerUp = new PowerUp(100, 270, 'speed', {});
+
+    expect([
+      platform.canStandOn(platformPlayer),
+      platformPlayer.worldX,
+      quicksand.checkCollision(player({ worldX: 100, y: 300, normalHeight: 60 })).type,
+      wind.checkCollision(player({ worldX: 100, y: 260, normalHeight: 60 })).type,
+      powerUp.checkCollision(player({ worldX: 100, y: 300, normalHeight: 60 }))
+    ]).toEqual([true, 101, 'quicksand', 'wind', true]);
   });
 
   test('collectibles and world collectibles collect once and cleanup behind player', () => {
@@ -125,5 +170,46 @@ describe('Stickperson world logic', () => {
     world.removeCollectible(collectible);
     expect([chunkCount, world.collectibles.includes(collectible), Boolean(platform), world.calculateUFOSpawnChance(100000) > world.calculateUFOSpawnChance(0)])
       .toEqual([1, false, true, true]);
+  });
+
+  test('run director profiles scale hazard and reward pacing over distance', () => {
+    const context = stickContext();
+    const { StickpersonRunDirector } = loadStick(context, 'world.js', ['StickpersonRunDirector']);
+    const director = new StickpersonRunDirector();
+    const near = director.getProfile(0);
+    const far = director.getProfile(context.GAME_CONSTANTS.DIRECTOR.MAX_INTENSITY_DISTANCE);
+
+    expect([
+      near.hazardMultiplier < far.hazardMultiplier,
+      near.rewardMultiplier < far.rewardMultiplier,
+      ['meadow', 'windfield', 'scrapyard'].includes(far.biome)
+    ]).toEqual([true, true, true]);
+  });
+});
+
+describe('Stickperson lifecycle helpers', () => {
+  test('input handler removes the exact listeners it registered', () => {
+    const listeners = {};
+    const windowStub = {
+      addEventListener: jest.fn((eventName, handler) => {
+        listeners[eventName] = handler;
+      }),
+      removeEventListener: jest.fn()
+    };
+    const context = createBrowserContext({ window: windowStub });
+    const { InputHandler } = loadStick(context, 'inputHandler.js', ['InputHandler']);
+    const input = new InputHandler();
+
+    listeners.keydown({ key: 'a' });
+    listeners.keyup({ key: 'a' });
+    input.destroy();
+
+    expect([
+      input.keys,
+      windowStub.removeEventListener.mock.calls[0][0],
+      windowStub.removeEventListener.mock.calls[1][0],
+      windowStub.removeEventListener.mock.calls[0][1] === listeners.keydown,
+      windowStub.removeEventListener.mock.calls[1][1] === listeners.keyup
+    ]).toEqual([{}, 'keydown', 'keyup', true, true]);
   });
 });

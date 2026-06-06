@@ -15,11 +15,12 @@ class Bomb {
     this.rotation = 0; // Slight rotation for visual interest
   }
 
-  update() {
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     if (!this.active) return;
+    const frameScale = StickpersonGeometry.getFrameScale(deltaMs);
     
     // Animate fuse flicker
-    this.fuseFlicker += GAME_CONSTANTS.BOMB.FUSE_FLICKER_SPEED;
+    this.fuseFlicker += GAME_CONSTANTS.BOMB.FUSE_FLICKER_SPEED * frameScale;
     
     // Slight rotation animation
     this.rotation = Math.sin(this.fuseFlicker * 0.5) * 0.1;
@@ -128,28 +129,11 @@ class Bomb {
   checkCollision(player) {
     if (!this.active) return false;
     
-    // Calculate player's current height (considering crouch state)
-    const playerHeight = player.normalHeight + (player.crouchHeight - player.normalHeight) * player.crouchTransition;
-    
-    // Simple AABB collision detection
-    // Player Y position represents the bottom of the player
-    const playerLeft = player.worldX - player.width / 2;
-    const playerRight = player.worldX + player.width / 2;
-    const playerTop = player.y - playerHeight; // Top of player
-    const playerBottom = player.y; // Bottom of player (at ground level when standing)
-    
-    const bombLeft = this.x - this.width / 2;
-    const bombRight = this.x + this.width / 2;
-    const bombTop = this.y - this.height / 2;
-    const bombBottom = this.y + this.height / 2;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const bombBounds = StickpersonGeometry.getRectBounds(this.x, this.y, this.width, this.height, 'center');
     
     // Check collision detection
-    const collision = playerLeft < bombRight && 
-                     playerRight > bombLeft && 
-                     playerTop < bombBottom && 
-                     playerBottom > bombTop;
-    
-    return collision;
+    return StickpersonGeometry.overlaps(playerBounds, bombBounds);
   }
 
   explode() {

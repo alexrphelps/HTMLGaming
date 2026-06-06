@@ -73,31 +73,17 @@ class Obstacle {
    * @returns {Object|null} Collision info or null
    */
   checkCollision(player) {
-    // Simple AABB (Axis-Aligned Bounding Box) collision detection
-    // Use player's world coordinates for collision detection
-    // Player Y position now represents the bottom of the player
-    const playerHeight = player.normalHeight + (player.crouchHeight - player.normalHeight) * player.crouchTransition;
-    const playerLeft = player.worldX - player.width / 2;
-    const playerRight = player.worldX + player.width / 2;
-    const playerTop = player.y - playerHeight; // Top of player
-    const playerBottom = player.y; // Bottom of player
-    
-    const obstacleLeft = this.x;
-    const obstacleRight = this.x + this.width;
-    const obstacleTop = this.y;
-    const obstacleBottom = this.y + this.height;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const obstacleBounds = this.getBounds();
     
     // Check if rectangles overlap
-    if (playerRight > obstacleLeft && 
-        playerLeft < obstacleRight && 
-        playerBottom > obstacleTop && 
-        playerTop < obstacleBottom) {
+    if (StickpersonGeometry.overlaps(playerBounds, obstacleBounds)) {
       
       // Determine collision type and direction
-      const overlapLeft = playerRight - obstacleLeft;
-      const overlapRight = obstacleRight - playerLeft;
-      const overlapTop = playerBottom - obstacleTop;
-      const overlapBottom = obstacleBottom - playerTop;
+      const overlapLeft = playerBounds.right - obstacleBounds.left;
+      const overlapRight = obstacleBounds.right - playerBounds.left;
+      const overlapTop = playerBounds.bottom - obstacleBounds.top;
+      const overlapBottom = obstacleBounds.bottom - playerBounds.top;
       
       // Find the smallest overlap (collision direction)
       const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
@@ -131,18 +117,16 @@ class Obstacle {
   canStandOn(player) {
     if (this.type !== 'platform') return false;
     
-    // Use player's world coordinates for collision detection
-    const playerLeft = player.worldX - player.width / 2;
-    const playerRight = player.worldX + player.width / 2;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
     const platformLeft = this.x;
     const platformRight = this.x + this.width;
     
     // Check if player is above the platform and within its horizontal bounds
     // Player Y position is now the bottom, so check if player bottom is near platform top
     // Player can stand if any part of their body is on the platform
-    return playerRight > platformLeft && 
-           playerLeft < platformRight && 
-           Math.abs(player.y - this.y) <= 10; // Small tolerance
+    return playerBounds.right > platformLeft &&
+           playerBounds.left < platformRight &&
+           Math.abs(playerBounds.bottom - this.y) <= 10; // Small tolerance
   }
 
   /**

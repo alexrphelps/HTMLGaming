@@ -40,10 +40,14 @@ class MovingPlatform {
     }
   }
 
-  update() {
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
+    const frameScale = StickpersonGeometry.getFrameScale(deltaMs);
+    const previousX = this.x;
+    const previousY = this.y;
+
     // Update platform position
     if (this.movementType === 'horizontal') {
-      this.x += this.speed * this.direction;
+      this.x += this.speed * this.direction * frameScale;
       
       // Reverse direction at bounds
       if (this.x >= this.endX) {
@@ -54,7 +58,7 @@ class MovingPlatform {
         this.direction = 1;
       }
     } else {
-      this.y += this.speed * this.direction;
+      this.y += this.speed * this.direction * frameScale;
       
       // Reverse direction at bounds
       if (this.y >= this.endY) {
@@ -68,22 +72,22 @@ class MovingPlatform {
     
     // Update player position if on platform
     if (this.playerOnPlatform) {
-      this.updatePlayerPosition();
+      this.updatePlayerPosition(this.x - previousX, this.y - previousY);
     }
   }
 
-  updatePlayerPosition() {
+  updatePlayerPosition(deltaX, deltaY) {
     const player = this.game.player;
     
     if (this.movementType === 'horizontal') {
       // Move player horizontally with platform
-      player.worldX += this.speed * this.direction;
+      player.worldX += deltaX;
     } else {
       // Move player vertically with platform
-      player.y += this.speed * this.direction;
+      player.y += deltaY;
       
       // Check if player is still on platform
-      if (player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT > this.y + 10) {
+      if (Math.abs(StickpersonGeometry.getPlayerBounds(player).bottom - this.y) > 10) {
         this.playerOnPlatform = false;
         player.standingOnPlatform = null;
       }
@@ -153,30 +157,20 @@ class MovingPlatform {
   }
 
   checkCollision(player) {
-    const playerLeft = player.worldX;
-    const playerRight = player.worldX + GAME_CONSTANTS.PLAYER.WIDTH;
-    const playerTop = player.y;
-    const playerBottom = player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT;
-    
-    const platformLeft = this.x;
-    const platformRight = this.x + this.width;
-    const platformTop = this.y;
-    const platformBottom = this.y + this.height;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const platformBounds = StickpersonGeometry.getRectBounds(this.x, this.y, this.width, this.height);
     
     // Check if rectangles overlap
-    if (playerRight > platformLeft && 
-        playerLeft < platformRight && 
-        playerBottom > platformTop && 
-        playerTop < platformBottom) {
+    if (StickpersonGeometry.overlaps(playerBounds, platformBounds)) {
       
       // Determine collision direction
-      const overlapX = Math.min(playerRight, platformRight) - Math.max(playerLeft, platformLeft);
-      const overlapY = Math.min(playerBottom, platformBottom) - Math.max(playerTop, platformTop);
+      const overlapX = Math.min(playerBounds.right, platformBounds.right) - Math.max(playerBounds.left, platformBounds.left);
+      const overlapY = Math.min(playerBounds.bottom, platformBounds.bottom) - Math.max(playerBounds.top, platformBounds.top);
       
       if (overlapX < overlapY) {
         return { direction: player.worldX < this.x ? 'left' : 'right' };
       } else {
-        return { direction: player.y < this.y ? 'top' : 'bottom' };
+        return { direction: playerBounds.bottom <= this.y + this.height ? 'top' : 'bottom' };
       }
     }
     
@@ -184,14 +178,15 @@ class MovingPlatform {
   }
 
   canStandOn(player) {
-    const playerCenterX = player.worldX + GAME_CONSTANTS.PLAYER.CENTER_OFFSET;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(player);
+    const playerCenterX = playerBounds.centerX;
     const platformLeft = this.x;
     const platformRight = this.x + this.width;
     
     // Check if player is above the platform and within its horizontal bounds
     return playerCenterX >= platformLeft && 
            playerCenterX <= platformRight && 
-           player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT <= this.y + 10; // Small tolerance
+           Math.abs(playerBounds.bottom - this.y) <= 10; // Small tolerance
   }
 
   getTopY() {

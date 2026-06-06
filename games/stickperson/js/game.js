@@ -29,9 +29,12 @@ class Game {
     this.showGameOver = false; // Whether to show game over screen
     this.gameOverAlpha = 0; // Current alpha for fade-in effect
     this.deathCause = null; // Track what caused death ('ufo' or 'bomb')
+    this.isRunning = false;
+    this.animationFrameId = null;
+    this.lastFrameTimestamp = 0;
     
     // Set initial player position on ground (bottom of player at ground level)
-    this.player.y = this.groundY;
+    this.player.resetForRun(this.groundY);
     
     // Generate initial world now that player exists
     this.world.generateInitialWorld();
@@ -41,17 +44,17 @@ class Game {
   }
 
   // Update game state
-  update() {
+  update(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     // Only update game logic if playing
     if (this.gameState === GAME_CONSTANTS.GAME_STATES.PLAYING) {
       // Update player
-      this.player.update(this.input);
+      this.player.update(this.input, deltaMs);
       
       // Update player power-ups
-      this.player.updatePowerUps();
+      this.player.updatePowerUps(deltaMs);
       
       // Handle collision detection
-      this.handleCollisions();
+      this.handleCollisions(deltaMs);
       
       // Update camera to follow player with directional offset
       this.camera.update(this.player.worldX, this.player.direction);
@@ -63,15 +66,16 @@ class Game {
       this.world.update(this.player.worldX);
       
       // Update world objects
-      this.world.getCollectibles().forEach(collectible => collectible.update());
-      this.world.getHazards().forEach(hazard => hazard.update());
-      this.world.getMovingPlatforms().forEach(platform => platform.update());
-      this.world.getPowerUps().forEach(powerUp => powerUp.update());
-      this.world.getUFOs().forEach(ufo => ufo.update());
+      this.world.getCollectibles().forEach(collectible => collectible.update(deltaMs));
+      this.world.getHazards().forEach(hazard => hazard.update(deltaMs));
+      this.world.getMovingPlatforms().forEach(platform => platform.update(deltaMs));
+      this.world.getPowerUps().forEach(powerUp => powerUp.update(deltaMs));
+      this.world.getUFOs().forEach(ufo => ufo.update(deltaMs));
+      this.world.getBombs().forEach(bomb => bomb.update(deltaMs));
     } else if (this.gameState === GAME_CONSTANTS.GAME_STATES.GAME_OVER) {
       // Update ash pile animation during game over
       if (this.ashPile) {
-        this.ashPile.update();
+        this.ashPile.update(deltaMs);
       }
       
       // Update death animation timing
@@ -83,7 +87,7 @@ class Game {
   }
 
   // Handle all collision detection
-  handleCollisions() {
+  handleCollisions(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     // Check ground collision
     this.player.handleGroundCollision();
     
@@ -120,13 +124,8 @@ class Game {
       const playerLeft = this.player.worldX - this.player.width / 2;
       const playerRight = this.player.worldX + this.player.width / 2;
       
-      // Debug logging
-      console.log(`Platform check: Player(${this.player.worldX.toFixed(1)}) L:${playerLeft.toFixed(1)} R:${playerRight.toFixed(1)} | Platform(${platform.x.toFixed(1)}-${(platform.x + platform.width).toFixed(1)})`);
-      
       // Player falls off if any part of their body is off the platform
       if (playerRight <= platform.x || playerLeft >= platform.x + platform.width) {
-        // Player walked off platform
-        console.log(`Player fell off platform! Right:${playerRight.toFixed(1)} <= Platform:${platform.x.toFixed(1)} OR Left:${playerLeft.toFixed(1)} >= Platform:${(platform.x + platform.width).toFixed(1)}`);
         this.player.isGrounded = false;
         this.player.standingOnPlatform = null;
       }
@@ -143,6 +142,8 @@ class Game {
     
     // Check hazard collisions
     const hazards = this.world.getHazards();
+    let touchingQuicksand = false;
+    let touchingWind = false;
     for (const hazard of hazards) {
       const collision = hazard.checkCollision(this.player);
       if (collision) {
@@ -155,11 +156,19 @@ class Game {
         } else if (collision.type === 'quicksand') {
           // Apply quicksand effect
           this.player.applyHazardEffect('quicksand', collision.hazard);
+          touchingQuicksand = true;
         } else if (collision.type === 'wind') {
           // Apply wind effect
           this.player.applyHazardEffect('wind', collision);
+          touchingWind = true;
         }
       }
+    }
+    if (!touchingQuicksand) {
+      this.player.removeHazardEffect('quicksand');
+    }
+    if (!touchingWind) {
+      this.player.removeHazardEffect('wind');
     }
     
     // Check moving platform collisions
@@ -178,9 +187,9 @@ class Game {
         } else if ((collision.direction === 'left' || collision.direction === 'right')) {
           // Player is hitting side of platform - stop horizontal movement
           if (collision.direction === 'left') {
-            this.player.worldX = platform.x - GAME_CONSTANTS.PLAYER.WIDTH;
+            this.player.worldX = platform.x - this.player.width / 2;
           } else {
-            this.player.worldX = platform.x + platform.width;
+            this.player.worldX = platform.x + platform.width + this.player.width / 2;
           }
           this.player.vx = 0;
         }
@@ -202,7 +211,7 @@ class Game {
     
     // Handle magnet effect
     if (this.player.magnetActive) {
-      this.handleMagnetEffect();
+      this.handleMagnetEffect(deltaMs);
     }
     
     // Check UFO collisions
@@ -220,7 +229,6 @@ class Game {
     for (const bomb of bombs) {
       if (bomb.checkCollision(this.player)) {
         // Player hit bomb - trigger explosion and game over
-        console.log('Bomb collision detected!');
         bomb.explode();
         this.triggerGameOver('bomb');
         break; // Only one collision needed
@@ -267,44 +275,32 @@ class Game {
     }
     
     // Player took damage - respawn at starting position
-    this.player.worldX = GAME_CONSTANTS.PLAYER.INITIAL_X;
-    this.player.y = this.groundY;
-    this.player.vx = 0;
-    this.player.vy = 0;
-    this.player.isGrounded = true;
-    this.player.standingOnPlatform = null;
-    
-    // Reset power-ups
-    this.player.speedMultiplier = 1.0;
-    this.player.magnetActive = false;
-    this.player.sizeState = 'normal';
-    this.player.powerUpTimers = { speed: 0, magnet: 0, size: 0 };
-    
-    // Reset hazard effects
-    this.player.inQuicksand = false;
-    this.player.windForce = 0;
+    const invincibilityTimer = this.player.invincibilityTimer;
+    this.player.resetForRun(this.groundY);
+    this.player.invincible = true;
+    this.player.invincibilityTimer = invincibilityTimer;
   }
 
   // Handle magnet effect - attract nearby collectibles
-  handleMagnetEffect() {
+  handleMagnetEffect(deltaMs = GAME_CONSTANTS.PERFORMANCE.FRAME_TIME) {
     const collectibles = this.world.getCollectibles();
-    const playerCenterX = this.player.worldX + GAME_CONSTANTS.PLAYER.CENTER_OFFSET;
-    const playerCenterY = this.player.y + GAME_CONSTANTS.PLAYER.NORMAL_HEIGHT / 2;
+    const playerBounds = StickpersonGeometry.getPlayerBounds(this.player);
+    const playerCenterX = playerBounds.centerX;
+    const playerCenterY = playerBounds.centerY;
     
     for (const collectible of collectibles) {
-      const distance = Math.sqrt(
-        Math.pow(collectible.x - playerCenterX, 2) + 
-        Math.pow(collectible.y - playerCenterY, 2)
-      );
+      const distance = StickpersonGeometry.distance(collectible.x, collectible.y, playerCenterX, playerCenterY);
       
       if (distance <= GAME_CONSTANTS.POWER_UPS.MAGNET_RANGE) {
         // Move collectible towards player
         const deltaX = playerCenterX - collectible.x;
         const deltaY = playerCenterY - collectible.y;
-        const moveDistance = GAME_CONSTANTS.POWER_UPS.MAGNET_FORCE;
+        const moveDistance = GAME_CONSTANTS.POWER_UPS.MAGNET_FORCE * StickpersonGeometry.getFrameScale(deltaMs);
         
-        collectible.x += (deltaX / distance) * moveDistance;
-        collectible.y += (deltaY / distance) * moveDistance;
+        if (distance > 0) {
+          collectible.x += (deltaX / distance) * moveDistance;
+          collectible.y += (deltaY / distance) * moveDistance;
+        }
       }
     }
   }
@@ -369,42 +365,12 @@ class Game {
     this.deathCause = null;
     
     // Reset player
-    this.player.worldX = GAME_CONSTANTS.PLAYER.INITIAL_X;
-    this.player.y = this.groundY;
-    this.player.vx = 0;
-    this.player.vy = 0;
-    this.player.isGrounded = true;
-    this.player.standingOnPlatform = null;
-    
-    // Reset power-ups
-    this.player.speedMultiplier = 1.0;
-    this.player.magnetActive = false;
-    this.player.sizeState = 'normal';
-    this.player.powerUpTimers = { speed: 0, magnet: 0, size: 0 };
-    
-    // Reset hazard effects
-    this.player.inQuicksand = false;
-    this.player.windForce = 0;
-    
-    // Reset invincibility
-    this.player.invincible = false;
-    this.player.invincibilityTimer = 0;
+    this.player.resetForRun(this.groundY);
     
     // Reset score
     this.score.reset();
     
-    // Reset world (clear all objects)
-    this.world.obstacles = [];
-    this.world.collectibles = [];
-    this.world.hazards = [];
-    this.world.movingPlatforms = [];
-    this.world.powerUps = [];
-    this.world.ufos = [];
-    this.world.bombs = [];
-    this.world.generatedChunks.clear();
-    
-    // Regenerate initial world
-    this.world.generateInitialWorld();
+    this.world.reset();
     
     // Reset camera
     this.camera.setPosition(this.player.worldX - GAME_CONSTANTS.WORLD.CAMERA_OFFSET_X);
@@ -496,11 +462,43 @@ class Game {
     this.ctx.fillText(`Ground Y: ${GAME_CONSTANTS.CANVAS.GROUND_Y}`, 20, 540);
   }
 
+  start() {
+    if (this.isRunning) return;
+
+    this.isRunning = true;
+    this.lastFrameTimestamp = 0;
+    this.animationFrameId = requestAnimationFrame((timestamp) => this.loop(timestamp));
+  }
+
+  stop() {
+    this.isRunning = false;
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  destroy() {
+    this.stop();
+    this.input.destroy();
+  }
+
   // Main game loop
-  loop() {
-    this.update();
+  loop(timestamp = 0) {
+    if (!this.isRunning) return;
+
+    if (!this.lastFrameTimestamp) {
+      this.lastFrameTimestamp = timestamp;
+    }
+    const rawDelta = timestamp - this.lastFrameTimestamp;
+    const deltaMs = Math.min(
+      rawDelta || GAME_CONSTANTS.PERFORMANCE.FRAME_TIME,
+      GAME_CONSTANTS.PERFORMANCE.MAX_DELTA_TIME
+    );
+    this.lastFrameTimestamp = timestamp;
+
+    this.update(deltaMs);
     this.draw();
-    requestAnimationFrame(() => this.loop());
+    this.animationFrameId = requestAnimationFrame((nextTimestamp) => this.loop(nextTimestamp));
   }
 }
-

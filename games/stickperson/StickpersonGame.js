@@ -98,7 +98,9 @@ class StickpersonGame {
         // Focus the iframe to ensure keyboard input works
         if (this.iframe) {
             this.iframe.focus();
+            this.iframe.contentWindow?.stickpersonGame?.start?.();
         }
+        this.isRunning = true;
         
         console.log('🦯 Stickperson game started');
     }
@@ -107,6 +109,7 @@ class StickpersonGame {
      * Stop the Stickperson game
      */
     stop() {
+        this.iframe?.contentWindow?.stickpersonGame?.stop?.();
         console.log('🦯 Stopping Stickperson game...');
         this.isRunning = false;
         console.log('🦯 Stickperson game stopped');
@@ -121,6 +124,7 @@ class StickpersonGame {
         
         // Clean up iframe
         if (this.iframe && this.iframe.parentNode) {
+            this.iframe.contentWindow?.stickpersonGame?.destroy?.();
             this.iframe.parentNode.removeChild(this.iframe);
             this.iframe = null;
         }
