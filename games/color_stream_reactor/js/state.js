@@ -30,6 +30,7 @@ let fallSpeed = BASE_FALL_SPEED;
 
 let availableColors = 1;
 let revealedColors = 1;
+let currentDifficulty = DIFFICULTY_SETTINGS.basic;
 
 let lastTime = 0;
 let lastWarningTime = -Infinity;

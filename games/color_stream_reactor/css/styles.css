@@ -83,6 +83,22 @@ body{
     transform:scale(1.08);
 }
 
+.difficultyButtons{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:14px;
+}
+
+.difficultyButton{
+    min-width:140px;
+}
+
+.difficultyButton.recommended{
+    background:linear-gradient(135deg, #ffffff 0%, #9fe7ff 100%);
+    box-shadow:0 0 24px rgba(159, 231, 255, 0.35);
+}
+
 #hud{
     position:absolute;
     top:18px;
@@ -255,6 +271,12 @@ body{
     margin-bottom:14px;
 }
 
+.gameOverPrompt{
+    margin-bottom:24px;
+    font-size:clamp(16px, 2.8vw, 22px);
+    opacity:0.85;
+}
+
 .warning{
     animation:dangerFlash 0.25s linear;
 }
@@ -268,6 +290,15 @@ body{
     #hud{
         top:10px;
         gap:10px 18px;
+    }
+
+    .difficultyButtons{
+        gap:10px;
+    }
+
+    .difficultyButton{
+        min-width:0;
+        width:min(220px, 100%);
     }
 
     #controls{

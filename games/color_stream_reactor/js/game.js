@@ -16,7 +16,11 @@ document.addEventListener("keydown",(event)=>{
         if(menuEl.style.display !== "none"){
 
             event.preventDefault();
-            startGame();
+            startGame("basic");
+        }else if(gameOverEl.style.display !== "none"){
+
+            event.preventDefault();
+            restartGame("basic");
         }
     }
 });
@@ -32,6 +36,21 @@ game.addEventListener("animationend",(event)=>{
 function perspectiveScale(y){
 
     return 0.35 + (y / window.innerHeight) * 1.7;
+}
+
+function getDifficultyConfig(difficultyKey){
+
+    return DIFFICULTY_SETTINGS[difficultyKey] || DIFFICULTY_SETTINGS.basic;
+}
+
+function getScaledSpawnRateStep(){
+
+    return SPAWN_RATE_STEP * currentDifficulty.spawnRateStepMultiplier;
+}
+
+function getScaledFallSpeedStep(){
+
+    return FALL_SPEED_STEP * currentDifficulty.fallSpeedStepMultiplier;
 }
 
 function spawnDot(){
@@ -87,11 +106,25 @@ function updateDifficulty(){
 
     const old = availableColors;
 
+    if(!currentDifficulty.progressionEnabled){
+
+        availableColors = currentDifficulty.maxColors;
+        level = availableColors;
+
+        if(old !== availableColors){
+            updateButtons();
+        }
+
+        return;
+    }
+
     availableColors = COLOR_UNLOCKS.reduce((unlocked,threshold)=>{
 
         return score >= threshold.score ? threshold.colors : unlocked;
 
-    },1);
+    },currentDifficulty.startColors);
+
+    availableColors = Math.min(currentDifficulty.maxColors,availableColors);
 
     level = availableColors;
 
@@ -134,10 +167,10 @@ function gameLoop(timestamp){
 
         if(spawnRate > MIN_SPAWN_RATE){
 
-            spawnRate = Math.max(MIN_SPAWN_RATE,spawnRate - SPAWN_RATE_STEP);
+            spawnRate = Math.max(MIN_SPAWN_RATE,spawnRate - getScaledSpawnRateStep());
         }
 
-        fallSpeed += FALL_SPEED_STEP;
+        fallSpeed += getScaledFallSpeedStep();
     }
 
     for(let i=dots.length-1;i>=0;i--){
@@ -248,25 +281,28 @@ function gameLoop(timestamp){
     rafId = requestAnimationFrame(gameLoop);
 }
 
-function startGame(){
+function startGame(difficultyKey = "basic"){
 
     menuEl.style.display = "none";
+    gameOverEl.style.display = "none";
 
-    resetGame();
+    resetGame(difficultyKey);
 
     beginRun();
 }
 
-function restartGame(){
+function restartGame(difficultyKey = "basic"){
 
     gameOverEl.style.display = "none";
 
-    resetGame();
+    resetGame(difficultyKey);
 
     beginRun();
 }
 
-function resetGame(){
+function resetGame(difficultyKey = currentDifficulty.key){
+
+    currentDifficulty = getDifficultyConfig(difficultyKey);
 
     dots.forEach(d=>d.el.remove());
     projectiles.forEach(p=>p.el.remove());
@@ -276,17 +312,18 @@ function resetGame(){
 
     score = 0;
     combo = 0;
-    level = 1;
+    level = currentDifficulty.startColors;
 
-    availableColors = 1;
-    revealedColors = 1;
+    availableColors = currentDifficulty.startColors;
+    revealedColors = currentDifficulty.revealedColors;
 
-    spawnRate = BASE_SPAWN_RATE;
-    fallSpeed = BASE_FALL_SPEED;
+    spawnRate = BASE_SPAWN_RATE * currentDifficulty.spawnRateMultiplier;
+    fallSpeed = BASE_FALL_SPEED * currentDifficulty.fallSpeedMultiplier;
     spawnTimer = 0;
     lastTime = 0;
     lastWarningTime = -Infinity;
 
+    updateDifficulty();
     updateButtons();
     updateHUD();
 }
@@ -316,6 +353,7 @@ window.ColorStreamReactor = {
     COLORS,
     COLOR_KEYS,
     COLOR_UNLOCKS,
+    DIFFICULTY_SETTINGS,
     startGame,
     restartGame,
     resetGame,
@@ -334,6 +372,8 @@ window.ColorStreamReactor = {
             spawnRate,
             fallSpeed,
             availableColors,
+            revealedColors,
+            currentDifficulty: currentDifficulty.key,
             lastTime,
             highScore,
             rafId

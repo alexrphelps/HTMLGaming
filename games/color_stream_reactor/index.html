@@ -21,9 +21,17 @@
             More colors unlock over time. Survive the chaos.
         </p>
 
-        <button class="button" onclick="startGame()">
-            START GAME
-        </button>
+        <div class="difficultyButtons" aria-label="Choose difficulty">
+            <button class="button difficultyButton" type="button" onclick="startGame('noob')">
+                NOOB
+            </button>
+            <button class="button difficultyButton recommended" type="button" onclick="startGame('basic')">
+                BASIC
+            </button>
+            <button class="button difficultyButton" type="button" onclick="startGame('pro')">
+                PRO
+            </button>
+        </div>
 
     </div>
 
@@ -47,9 +55,19 @@
         <div id="finalScore"></div>
         <div id="highScore"></div>
 
-        <button class="button" onclick="restartGame()">
-            PLAY AGAIN
-        </button>
+        <p class="gameOverPrompt">Pick your next difficulty.</p>
+
+        <div class="difficultyButtons" aria-label="Choose difficulty to play again">
+            <button class="button difficultyButton" type="button" onclick="restartGame('noob')">
+                NOOB
+            </button>
+            <button class="button difficultyButton recommended" type="button" onclick="restartGame('basic')">
+                BASIC
+            </button>
+            <button class="button difficultyButton" type="button" onclick="restartGame('pro')">
+                PRO
+            </button>
+        </div>
 
     </div>
 

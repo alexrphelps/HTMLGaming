@@ -22,6 +22,45 @@ const COLOR_UNLOCKS = [
     { score:73, colors:8 }
 ];
 
+const DIFFICULTY_SETTINGS = {
+    noob: {
+        key: "noob",
+        label: "Noob",
+        progressionEnabled: true,
+        startColors: 1,
+        revealedColors: 1,
+        maxColors: 4,
+        spawnRateMultiplier: 1,
+        fallSpeedMultiplier: 1,
+        spawnRateStepMultiplier: 1,
+        fallSpeedStepMultiplier: 1
+    },
+    basic: {
+        key: "basic",
+        label: "Basic",
+        progressionEnabled: true,
+        startColors: 1,
+        revealedColors: 1,
+        maxColors: COLORS.length,
+        spawnRateMultiplier: 1,
+        fallSpeedMultiplier: 1,
+        spawnRateStepMultiplier: 1,
+        fallSpeedStepMultiplier: 1
+    },
+    pro: {
+        key: "pro",
+        label: "Pro",
+        progressionEnabled: false,
+        startColors: COLORS.length,
+        revealedColors: COLORS.length,
+        maxColors: COLORS.length,
+        spawnRateMultiplier: 0.8,
+        fallSpeedMultiplier: 1.25,
+        spawnRateStepMultiplier: 1.25,
+        fallSpeedStepMultiplier: 1.25
+    }
+};
+
 const STORAGE_KEY = "colorStreamReactorHighScore";
 const BASE_SPAWN_RATE = 1000;
 const MIN_SPAWN_RATE = 350;
