@@ -144,6 +144,12 @@
     const drain = em.CONFIG.fuelDrainPerSecond * (1 - focus * 0.15);
     p.fuel = Math.max(0, p.fuel - drain * dt);
 
+    if (state.gameMode === 'beginner') {
+      state.danger = 0;
+      updateLanternVision(state);
+      return;
+    }
+
     if (p.fuel <= p.maxFuel * 0.24) {
       raiseDanger(state, dt * (0.035 + state.anchors * 0.008));
     } else {

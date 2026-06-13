@@ -6,6 +6,10 @@
   function itemForCell(state, x, y) {
     const k = em.keyOf(x, y);
 
+    if (state.gameMode === 'beginner') {
+      return em.tutorialItemForCell ? em.tutorialItemForCell(state, x, y) : null;
+    }
+
     if (state.collected.has(k)) return null;
     if (Math.abs(x) + Math.abs(y) < 5) return null;
     if (state.objective && x === state.objective.x && y === state.objective.y) return null;
@@ -116,6 +120,10 @@
     em.addParticles(state, cx, cy, item.data.color, 18);
     em.addFloatingText(state, '+' + score, cx, cy - 8, item.data.color);
     em.addMessage(state, item.data.label + ': ' + item.data.message + ' +' + score + '.');
+
+    if (state.gameMode === 'beginner' && em.handleTutorialItemCollected) {
+      em.handleTutorialItemCollected(state, x, y, item);
+    }
   }
 
   Object.assign(em, { itemForCell, collectNearbyItems, canReachItemForPickup, collectItem });

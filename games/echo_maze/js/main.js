@@ -20,30 +20,58 @@
     };
   }
 
-  function resetRun(app, seed) {
-    app.state = em.createRun(seed);
+  function resetRun(app, seed, options) {
+    app.state = em.createRun(seed, options);
     app.input.keys.clear();
     em.renderOverlay(app);
     em.updateHud(app);
     return app.state;
   }
 
+  function openMainMenu(app) {
+    resetRun(app);
+    em.returnToMainMenu(app.state);
+    return app.state;
+  }
+
+  function startMode(app, gameMode) {
+    return resetRun(app, undefined, { gameMode, mode: 'playing' });
+  }
+
   function handlePrimaryAction(app) {
     if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[0]);
+    else if (app.state.mode === 'tutorialInfo') em.continueTutorial(app.state);
+    else if (app.state.mode === 'mainMenu') startMode(app, 'classic');
     else if (app.state.mode === 'start') em.startRun(app.state);
     else if (app.state.mode === 'paused') em.pauseRun(app.state);
-    else if (app.state.mode === 'victory' || app.state.mode === 'gameover') resetRun(app, app.state.seed);
+    else if (app.state.mode === 'victory' || app.state.mode === 'gameover') openMainMenu(app);
   }
 
   function handleSecondaryAction(app) {
     if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[1]);
-    else if (app.state.mode === 'paused') resetRun(app, app.state.seed);
-    else resetRun(app);
+    else if (app.state.mode === 'paused') openMainMenu(app);
   }
 
   function handleTertiaryAction(app) {
     if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[2]);
-    else if (app.state.mode === 'paused') resetRun(app);
+  }
+
+  function handleOverlayStatsAction(app, event) {
+    const target = event.target && event.target.closest ? event.target : null;
+    if (!target) return;
+
+    const btn = target.closest('[data-upgrade-id]');
+    if (btn) {
+      event.preventDefault();
+      em.chooseUpgrade(app.state, btn.getAttribute('data-upgrade-id'));
+      return;
+    }
+
+    const modeBtn = target.closest('[data-menu-mode]');
+    if (modeBtn) {
+      event.preventDefault();
+      em.startMode(app, modeBtn.getAttribute('data-menu-mode'));
+    }
   }
 
   function bootstrap(doc = document, win = window) {
@@ -95,10 +123,8 @@
     app.addListener(app.dom.primaryBtn, 'click', () => em.handlePrimaryAction(app));
     app.addListener(app.dom.secondaryBtn, 'click', () => em.handleSecondaryAction(app));
     app.addListener(app.dom.tertiaryBtn, 'click', () => em.handleTertiaryAction(app));
-    app.addListener(app.dom.overlayStats, 'click', (event) => {
-      const btn = event.target.closest('[data-upgrade-id]');
-      if (btn) em.chooseUpgrade(app.state, btn.getAttribute('data-upgrade-id'));
-    });
+    app.addListener(app.dom.overlayStats, 'pointerdown', (event) => em.handleOverlayStatsAction(app, event));
+    app.addListener(app.dom.overlayStats, 'click', (event) => em.handleOverlayStatsAction(app, event));
 
     function gameLoop(now) {
       if (app.isDestroyed) {
@@ -120,9 +146,12 @@
   Object.assign(em, {
     collectDom,
     resetRun,
+    openMainMenu,
+    startMode,
     handlePrimaryAction,
     handleSecondaryAction,
     handleTertiaryAction,
+    handleOverlayStatsAction,
     bootstrap
   });
 

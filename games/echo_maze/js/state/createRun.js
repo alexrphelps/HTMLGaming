@@ -3,10 +3,12 @@
 
   const em = window.EchoMaze || {};
 
-  function createRun(seed = Math.floor(Math.random() * 1_000_000_000)) {
+  function createRun(seed = Math.floor(Math.random() * 1_000_000_000), options = {}) {
+    const gameMode = options.gameMode || 'classic';
     const state = {
       seed,
-      mode: 'start',
+      mode: options.mode || 'mainMenu',
+      gameMode,
       previousMode: 'playing',
       time: 0,
       anchorClock: 0,
@@ -67,15 +69,26 @@
       objective: null,
       exitPortal: null,
       warden: null,
-      finalStats: null
+      finalStats: null,
+      tutorialStep: 0,
+      tutorialSequence: [],
+      tutorialTarget: null,
+      tutorialTargets: [],
+      tutorialInfo: null,
+      tutorialCompleted: false
     };
 
     em.ensureSpawnRoom(state);
     if (em.updateLanternVision) em.updateLanternVision(state);
     em.revealAround(state, 0, 0, em.CONFIG.baseVision);
-    state.objective = em.makeObjective(state, 1);
-    em.addMessage(state, 'Follow the compass and stabilize five Echo Anchors.');
-    em.addMessage(state, 'Seed ' + seed + '. Press Enter to begin.');
+
+    if (gameMode === 'beginner' && em.initBeginnerTutorial) {
+      em.initBeginnerTutorial(state);
+    } else {
+      state.objective = em.makeObjective(state, 1);
+      em.addMessage(state, 'Follow the compass and stabilize five Echo Anchors.');
+      em.addMessage(state, 'Classic Run ready.');
+    }
 
     return state;
   }

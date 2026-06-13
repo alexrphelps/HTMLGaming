@@ -73,6 +73,7 @@
   ];
 
   function biomeForChunk(state, cx, cy) {
+    if (state && state.gameMode === 'beginner') return em.BIOMES[0];
     if (cx === 0 && cy === 0) return em.BIOMES[0];
     const index = em.hash32(state, cx, cy, 12121) % em.BIOMES.length;
     return em.BIOMES[index];

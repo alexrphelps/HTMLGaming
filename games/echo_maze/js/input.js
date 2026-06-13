@@ -27,7 +27,9 @@
   }
 
   function bindInput(app) {
-    app.window.addEventListener('keydown', (e) => {
+    const addListener = app.addListener ? app.addListener.bind(app) : (target, type, handler) => target.addEventListener(type, handler);
+
+    addListener(app.window, 'keydown', (e) => {
       const k = e.key.toLowerCase();
 
       if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'escape'].includes(k)) {
@@ -35,6 +37,8 @@
       }
 
       if (k === 'enter') em.handlePrimaryAction(app);
+      else if (app.state.mode === 'tutorialInfo') return;
+      else if (k === 'escape' && app.state.mode === 'mainMenu') return;
       else if (k === 'escape') em.pauseRun(app.state);
       else if (app.state.mode === 'upgrade' && ['1', '2', '3'].includes(k)) em.chooseUpgrade(app.state, app.state.pendingUpgrades[Number(k) - 1]);
       else if (k === 'm') app.state.showMini = !app.state.showMini;
@@ -43,7 +47,7 @@
       app.input.keys.add(k);
     });
 
-    app.window.addEventListener('keyup', (e) => {
+    addListener(app.window, 'keyup', (e) => {
       app.input.keys.delete(e.key.toLowerCase());
     });
   }

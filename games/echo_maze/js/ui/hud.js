@@ -74,7 +74,13 @@
     if (state.mode === 'victory') {
       app.dom.goalText.innerHTML = '<strong>Victory:</strong> The Anchor chain is stable.';
     } else if (state.mode === 'gameover') {
-      app.dom.goalText.innerHTML = '<strong>Run lost:</strong> Start a new seed or retry this one.';
+      app.dom.goalText.innerHTML = '<strong>Run lost:</strong> Return to the main menu when you are ready.';
+    } else if (state.mode === 'mainMenu') {
+      app.dom.goalText.innerHTML = '<strong>Mode:</strong> Choose Beginner or Classic.';
+    } else if (state.mode === 'tutorialInfo') {
+      app.dom.goalText.innerHTML = '<strong>Lesson:</strong> Read the note, then continue.';
+    } else if (state.gameMode === 'beginner' && state.tutorialTarget) {
+      app.dom.goalText.innerHTML = beginnerGoalText(state);
     } else if (state.mode === 'upgrade') {
       app.dom.goalText.innerHTML = '<strong>Upgrade:</strong> Choose one Echo upgrade before the maze shifts.';
     } else if (state.exitPortal) {
@@ -92,6 +98,12 @@
         '.';
     } else {
       app.dom.goalText.innerHTML = '<strong>Goal:</strong> Signal stabilizing...';
+    }
+
+    if (state.gameMode === 'beginner') {
+      updateBeginnerHud(app, phase, pc);
+      renderMessages(app);
+      return;
     }
 
     app.dom.runStats.innerHTML = `
@@ -123,6 +135,61 @@
     renderMessages(app);
   }
 
+  function updateBeginnerHud(app, phase, pc) {
+    const state = app.state;
+    const p = state.player;
+    const sequenceLength = state.tutorialSequence && state.tutorialSequence.length ? state.tutorialSequence.length : em.BEGINNER_SEQUENCE.length;
+    const learned = Math.min(state.tutorialStep, sequenceLength);
+    const runStats = [
+      `<div class="stat"><span>Mode</span><strong>Beginner</strong></div>`,
+      `<div class="stat"><span>Lessons</span><strong>${learned}/${sequenceLength}</strong></div>`
+    ];
+
+    if (em.hasDiscoveredTutorial(state, 'relic')) {
+      runStats.push(`<div class="stat"><span>Score</span><strong>${state.score}</strong></div>`);
+      runStats.push(`<div class="stat"><span>Items</span><strong>${state.items}</strong></div>`);
+    }
+
+    if (em.hasDiscoveredTutorial(state, 'shield')) {
+      runStats.push(`<div class="stat"><span>Integrity</span><strong>${p.health} HP / ${p.shields} SH</strong></div>`);
+    }
+
+    if (em.hasDiscoveredTutorial(state, 'anchor')) {
+      runStats.push(`<div class="stat"><span>Anchors</span><strong>${state.anchors}/${em.CONFIG.runAnchors}</strong></div>`);
+      runStats.push(`<div class="stat"><span>Tier</span><strong>${state.tier}</strong></div>`);
+    }
+
+    app.dom.runStats.innerHTML = runStats.join('');
+
+    const meters = [];
+    if (em.hasDiscoveredTutorial(state, 'lantern')) {
+      meters.push(meter('Fuel', p.fuel, p.maxFuel, em.ITEM_DATA.lantern.color, Math.round(p.fuel) + '/' + Math.round(p.maxFuel)));
+      meters.push(meter('Vision', p.vision - em.CONFIG.baseVision, em.CONFIG.maxVision - em.CONFIG.baseVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1)));
+    }
+    if (em.hasDiscoveredTutorial(state, 'phase')) {
+      meters.push(pips('Phase', p.phaseTimer > 0 ? 1 : p.phaseCharges, 9, em.ITEM_DATA.phase.color, phase));
+    }
+    if (em.hasDiscoveredTutorial(state, 'compass')) {
+      meters.push(pips('Compass', p.compass + p.compassObjective, 8, em.ITEM_DATA.compass.color, (p.compass + p.compassObjective) + '/8'));
+    }
+    if (em.hasDiscoveredTutorial(state, 'boots')) {
+      meters.push(meter('Speed', p.speed - em.CONFIG.baseSpeed, 255 - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, Math.round(p.speed)));
+    }
+    if (em.hasDiscoveredTutorial(state, 'battery')) {
+      meters.push(pips('Battery', p.battery, 5, em.ITEM_DATA.battery.color, p.battery + '/5'));
+    }
+    if (em.hasDiscoveredTutorial(state, 'map')) {
+      meters.push(`<div class="item-total" style="--meter-color: ${em.ITEM_DATA.map.color}"><span>Revealed</span><strong>${state.revealed.size}</strong></div>`);
+    }
+
+    app.dom.itemMeters.innerHTML = meters.length ? meters.join('') : '';
+
+    const secondary = [];
+    if (em.hasDiscoveredTutorial(state, 'map')) secondary.push(`<span>Depth ${state.maxDepth}</span>`);
+    if (em.hasDiscoveredTutorial(state, 'compass')) secondary.push(`<span>${pc.x}, ${pc.y}</span>`);
+    app.dom.secondaryStats.innerHTML = secondary.join('');
+  }
+
   function upgradeSummary(state) {
     if (!state.upgrades) return 'No upgrades';
     const active = Object.keys(state.upgrades)
@@ -131,6 +198,13 @@
     return active.length ? active.slice(0, 3).join(' | ') : 'No upgrades';
   }
 
-  Object.assign(em, { renderMessages, meter, pips, updateHud, upgradeSummary });
+  function beginnerGoalText(state) {
+    const target = state.tutorialTarget;
+    if (!target) return '<strong>Beginner:</strong> Follow the next training signal.';
+    const label = target.kind === 'anchor' ? 'Training Echo Anchor' : em.ITEM_DATA[target.itemType].label;
+    return '<strong>Beginner:</strong> Find ' + label + ' to learn the next HUD stat.';
+  }
+
+  Object.assign(em, { renderMessages, meter, pips, updateHud, updateBeginnerHud, upgradeSummary, beginnerGoalText });
   window.EchoMaze = em;
 })();

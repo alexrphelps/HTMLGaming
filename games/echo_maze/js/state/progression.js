@@ -4,7 +4,7 @@
   const em = window.EchoMaze || {};
 
   function startRun(state) {
-    if (state.mode === 'start') {
+    if (state.mode === 'mainMenu' || state.mode === 'start') {
       state.mode = 'playing';
       em.addMessage(state, 'The maze wakes slowly. Find the first Anchor.');
     }
@@ -22,6 +22,12 @@
     }
   }
 
+  function returnToMainMenu(state) {
+    if (!state) return;
+    state.mode = 'mainMenu';
+    state.previousMode = 'playing';
+  }
+
   function endRun(state, mode, reason) {
     state.mode = mode;
     state.finalStats = em.buildFinalStats(state, reason);
@@ -32,6 +38,11 @@
     const obj = state.objective;
 
     if (obj && pc.x === obj.x && pc.y === obj.y) {
+      if (state.gameMode === 'beginner' && obj.tutorialFinal && em.completeBeginnerAnchor) {
+        em.completeBeginnerAnchor(state, obj);
+        return;
+      }
+
       stabilizeAnchor(state, obj);
       return;
     }
@@ -106,6 +117,6 @@
     state.pendingAnchorAdvance = null;
   }
 
-  Object.assign(em, { startRun, pauseRun, endRun, checkObjective, stabilizeAnchor, completeAnchorAdvance });
+  Object.assign(em, { startRun, pauseRun, returnToMainMenu, endRun, checkObjective, stabilizeAnchor, completeAnchorAdvance });
   window.EchoMaze = em;
 })();

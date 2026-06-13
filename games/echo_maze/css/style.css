@@ -314,6 +314,56 @@ kbd {
   text-align: left;
 }
 
+.menu-grid {
+  grid-template-columns: 1fr;
+  text-align: left;
+}
+
+.tutorial-info {
+  grid-template-columns: 1fr;
+  text-align: left;
+}
+
+.menu-choice {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  text-align: left;
+}
+
+.menu-choice strong,
+.menu-choice span {
+  display: block;
+}
+
+.menu-choice strong {
+  color: #fff;
+  font-size: 18px;
+}
+
+.menu-choice span {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.menu-choice.active {
+  border-color: rgba(255, 226, 122, 0.5);
+  background: rgba(255, 226, 122, 0.08);
+}
+
+.tutorial-card {
+  border-color: var(--tutorial-color);
+}
+
+.tutorial-card span {
+  display: block;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
 .upgrade-choice {
   display: block;
   min-width: 0;

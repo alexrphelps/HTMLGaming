@@ -24,6 +24,7 @@ const expectedScripts = [
   'js/state/messages.js',
   'js/systems/upgrades.js',
   'js/state/progression.js',
+  'js/state/tutorial.js',
   'js/entities/items.js',
   'js/entities/objectives.js',
   'js/entities/warden.js',
@@ -93,6 +94,7 @@ function loadEchoMazeBootstrapContext() {
   loadBrowserScript(context, 'games/echo_maze/js/state/messages.js', []);
   loadBrowserScript(context, 'games/echo_maze/js/systems/upgrades.js', []);
   loadBrowserScript(context, 'games/echo_maze/js/state/progression.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/state/tutorial.js', []);
   loadBrowserScript(context, 'games/echo_maze/js/entities/items.js', []);
   loadBrowserScript(context, 'games/echo_maze/js/entities/objectives.js', []);
   loadBrowserScript(context, 'games/echo_maze/js/entities/warden.js', []);
@@ -150,6 +152,13 @@ function findOpenEdge(em, state, dir) {
   throw new Error(`No open ${dir} edge found`);
 }
 
+function collectCurrentTutorialItem(em, state) {
+  const target = state.tutorialTarget;
+  const item = em.itemForCell(state, target.x, target.y);
+  em.collectItem(state, target.x, target.y, item);
+  return item;
+}
+
 describe('Echo Maze modular runtime', () => {
   test('provides a clean iframe entry point with ordered external assets', () => {
     expect(fs.existsSync(gamePath)).toBe(true);
@@ -167,6 +176,7 @@ describe('Echo Maze modular runtime', () => {
     expect(html).toContain('id="controlsDock"');
     expect(html).toContain('id="tertiaryBtn"');
     expect(html).toContain('<span>Menu</span><kbd>Esc</kbd>');
+    expect(html).not.toContain('New Seed');
     expect(html).not.toContain('<span>Pause</span><kbd>P</kbd>');
     expect(html).not.toContain('<span>Restart</span><kbd>R</kbd>');
     expect(html).not.toContain('<span>New</span><kbd>N</kbd>');
@@ -199,6 +209,8 @@ describe('Echo Maze modular runtime', () => {
     const b = em.createRun(12345);
 
     expect(em.CONFIG.cell).toBe(63);
+    expect(a.mode).toBe('mainMenu');
+    expect(a.gameMode).toBe('classic');
 
     expect(a.objective).toEqual(expect.objectContaining({
       x: b.objective.x,
@@ -220,6 +232,209 @@ describe('Echo Maze modular runtime', () => {
     expect(second).toBe(first);
     expect(context.window.requestAnimationFrame).toHaveBeenCalledTimes(1);
     expect(context.window.EchoMazeApp).toBe(first);
+  });
+
+  test('boots into a formal main menu before starting the classic run', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const app = context.window.EchoMaze.bootstrap(context.document, context.window);
+
+    expect(app.state.mode).toBe('mainMenu');
+
+    context.window.EchoMaze.renderOverlay(app);
+    expect(app.dom.overlay.classList.contains('visible')).toBe(true);
+    expect(app.dom.overlayTitle.textContent).toBe('Echo Maze');
+    expect(app.dom.overlayStats.innerHTML).toContain('data-menu-mode="beginner"');
+    expect(app.dom.overlayStats.innerHTML).toContain('data-menu-mode="classic"');
+    expect(app.dom.overlayStats.textContent).toContain('Beginner Run');
+    expect(app.dom.overlayStats.textContent).toContain('Classic Run');
+    expect(app.dom.primaryBtn.textContent).toBe('Classic Run');
+    expect(app.dom.primaryBtn.style.display).toBe('none');
+    expect(app.dom.secondaryBtn.style.display).toBe('none');
+    expect(app.dom.tertiaryBtn.style.display).toBe('none');
+
+    context.window.EchoMaze.handlePrimaryAction(app);
+    expect(app.state.mode).toBe('playing');
+    expect(app.state.gameMode).toBe('classic');
+  });
+
+  test('menu cards submit their own run modes', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const app = context.window.EchoMaze.bootstrap(context.document, context.window);
+
+    context.window.EchoMaze.renderOverlay(app);
+    const beginnerCard = app.dom.overlayStats.querySelector('[data-menu-mode="beginner"]');
+    beginnerCard.dispatchEvent(new context.window.Event('pointerdown', { bubbles: true, cancelable: true }));
+    expect(app.state.mode).toBe('playing');
+    expect(app.state.gameMode).toBe('beginner');
+    expect(app.state.tutorialTarget).toEqual(expect.objectContaining({
+      kind: 'item',
+      itemType: 'lantern'
+    }));
+
+    context.window.EchoMaze.openMainMenu(app);
+    context.window.EchoMaze.renderOverlay(app);
+    const classicCard = app.dom.overlayStats.querySelector('[data-menu-mode="classic"]');
+    classicCard.dispatchEvent(new context.window.Event('pointerdown', { bubbles: true, cancelable: true }));
+    expect(app.state.mode).toBe('playing');
+    expect(app.state.gameMode).toBe('classic');
+    expect(app.state.objective).toEqual(expect.objectContaining({ type: 'anchor', tier: 1 }));
+  });
+
+  test('beginner mode uses default biome and multiple scripted copies of one lesson item', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(9191, { gameMode: 'beginner', mode: 'playing' });
+    const target = state.tutorialTarget;
+
+    expect(state.gameMode).toBe('beginner');
+    expect(state.mode).toBe('playing');
+    expect(em.biomeForChunk(state, 4, -3).id).toBe('stone');
+    expect(target).toEqual(expect.objectContaining({
+      kind: 'item',
+      itemType: 'lantern'
+    }));
+    expect(state.tutorialTargets.length).toBeGreaterThan(1);
+    expect(state.tutorialTargets.every(entry => entry.itemType === 'lantern')).toBe(true);
+    expect(em.itemForCell(state, target.x, target.y).type).toBe('lantern');
+    const alternate = state.tutorialTargets[1];
+    expect(em.itemForCell(state, alternate.x, alternate.y).type).toBe('lantern');
+    expect(em.itemForCell(state, target.x + 20, target.y + 20)).toBe(null);
+  });
+
+  test('beginner HUD hides undiscovered classic stats until lessons reveal them', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const em = context.window.EchoMaze;
+    const app = em.bootstrap(context.document, context.window);
+
+    em.startMode(app, 'beginner');
+    em.updateHud(app);
+    expect(app.dom.runStats.textContent).toContain('Beginner');
+    expect(app.dom.runStats.textContent).toContain('Lessons');
+    expect(app.dom.runStats.textContent).not.toContain('Anchors');
+    expect(app.dom.runStats.textContent).not.toContain('Warden');
+    expect(app.dom.itemMeters.textContent).not.toContain('Fuel');
+    expect(app.dom.itemMeters.textContent).not.toContain('Phase');
+    expect(app.dom.itemMeters.textContent).not.toContain('Compass');
+    expect(app.dom.itemMeters.textContent).not.toContain('Danger');
+    expect(app.state.danger).toBe(0);
+
+    collectCurrentTutorialItem(em, app.state);
+    em.updateHud(app);
+    expect(app.dom.itemMeters.textContent).toContain('Fuel');
+    expect(app.dom.itemMeters.textContent).toContain('Vision');
+    expect(app.dom.itemMeters.textContent).not.toContain('Phase');
+    expect(app.dom.itemMeters.textContent).not.toContain('Danger');
+  });
+
+  test('beginner item lessons pause with info and advance through each pickup', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(8181, { gameMode: 'beginner', mode: 'playing' });
+    const expected = ['lantern', 'boots', 'phase', 'compass', 'map', 'shield', 'battery', 'relic'];
+
+    for (const type of expected) {
+      expect(state.tutorialTarget).toEqual(expect.objectContaining({ kind: 'item', itemType: type }));
+
+      const before = {
+        vision: state.player.vision,
+        speed: state.player.speed,
+        phaseCharges: state.player.phaseCharges,
+        compass: state.player.compass,
+        revealed: state.revealed.size,
+        shields: state.player.shields,
+        battery: state.player.battery,
+        score: state.score
+      };
+
+      const item = collectCurrentTutorialItem(em, state);
+      expect(item.type).toBe(type);
+      expect(state.mode).toBe('tutorialInfo');
+      expect(state.tutorialInfo).toEqual(expect.objectContaining({ type }));
+
+      if (type === 'lantern') expect(state.player.vision).toBeGreaterThan(before.vision);
+      if (type === 'boots') expect(state.player.speed).toBeGreaterThan(before.speed);
+      if (type === 'phase') expect(state.player.phaseCharges).toBeGreaterThan(before.phaseCharges);
+      if (type === 'compass') expect(state.player.compass).toBeGreaterThan(before.compass);
+      if (type === 'map') expect(state.revealed.size).toBeGreaterThan(before.revealed);
+      if (type === 'shield') expect(state.player.shields).toBeGreaterThan(before.shields);
+      if (type === 'battery') expect(state.player.battery).toBeGreaterThan(before.battery);
+      if (type === 'relic') expect(state.score).toBeGreaterThan(before.score);
+
+      expect(em.continueTutorial(state)).toBe(true);
+      expect(state.mode).toBe('playing');
+    }
+
+    expect(state.tutorialTarget).toEqual(expect.objectContaining({ kind: 'anchor' }));
+    expect(state.objective).toEqual(expect.objectContaining({ tutorialFinal: true }));
+  });
+
+  test('final beginner anchor graduates the same run into classic mode', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(7171, { gameMode: 'beginner', mode: 'playing' });
+
+    while (state.tutorialTarget.kind === 'item') {
+      collectCurrentTutorialItem(em, state);
+      em.continueTutorial(state);
+    }
+
+    const anchor = state.objective;
+    state.player.x = anchor.x * em.CONFIG.cell + em.CONFIG.cell / 2;
+    state.player.y = anchor.y * em.CONFIG.cell + em.CONFIG.cell / 2;
+    em.checkObjective(state, { x: anchor.x, y: anchor.y });
+
+    expect(state.mode).toBe('tutorialInfo');
+    expect(state.tutorialInfo).toEqual(expect.objectContaining({ type: 'anchor' }));
+
+    em.continueTutorial(state);
+    expect(state.mode).toBe('playing');
+    expect(state.gameMode).toBe('classic');
+    expect(state.anchors).toBe(1);
+    expect(state.tier).toBe(2);
+    expect(state.objective).toEqual(expect.objectContaining({ type: 'anchor', tier: 2 }));
+
+    const start = em.cellOfWorld(state.player.x, state.player.y);
+    const pathToObjective = em.findPath(state, start, state.objective, em.CONFIG.pathLimit);
+    expect(pathToObjective).toBeTruthy();
+    expect(pathUsesOpenEdges(em, state, pathToObjective)).toBe(true);
+  });
+
+  test('pause and result overlays hide seed-management actions', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const app = context.window.EchoMaze.bootstrap(context.document, context.window);
+
+    context.window.EchoMaze.handlePrimaryAction(app);
+    context.window.EchoMaze.pauseRun(app.state);
+    context.window.EchoMaze.renderOverlay(app);
+
+    expect(app.state.mode).toBe('paused');
+    expect(app.dom.primaryBtn.textContent).toBe('Resume');
+    expect(app.dom.secondaryBtn.textContent).toBe('Main Menu');
+    expect(app.dom.tertiaryBtn.style.display).toBe('none');
+    expect(app.dom.overlayText.textContent).not.toMatch(/seed/i);
+
+    context.window.EchoMaze.handleSecondaryAction(app);
+    expect(app.state.mode).toBe('mainMenu');
+
+    context.window.EchoMaze.handlePrimaryAction(app);
+    context.window.EchoMaze.endRun(app.state, 'gameover', 'The Warden shattered your echo.');
+    context.window.EchoMaze.renderOverlay(app);
+
+    expect(app.dom.primaryBtn.textContent).toBe('Main Menu');
+    expect(app.dom.secondaryBtn.style.display).toBe('none');
+    expect(app.dom.tertiaryBtn.style.display).toBe('none');
+  });
+
+  test('upgrade overlay uses the clickable cards without footer buttons', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const app = context.window.EchoMaze.bootstrap(context.document, context.window);
+    const em = context.window.EchoMaze;
+
+    app.state.mode = 'upgrade';
+    app.state.pendingUpgrades = ['compassObjective', 'phaseDuration', 'lanternFocus'];
+    em.renderOverlay(app);
+
+    expect(app.dom.overlayStats.innerHTML).toContain('data-upgrade-id="compassObjective"');
+    expect(app.dom.primaryBtn.style.display).toBe('none');
+    expect(app.dom.secondaryBtn.style.display).toBe('none');
+    expect(app.dom.tertiaryBtn.style.display).toBe('none');
   });
 
   test('destroy cancels the active animation frame and removes listeners', () => {
