@@ -4,14 +4,31 @@
   const em = window.EchoMaze || {};
 
   function renderMessages(app) {
-    app.dom.messageLog.innerHTML = '';
+    const log = app.dom.messageLog;
+    const messages = app.state.messages;
 
-    for (const msg of app.state.messages) {
-      const div = app.document.createElement('div');
-      div.className = 'msg';
-      div.textContent = msg.text;
-      div.style.opacity = String(Math.max(0.14, Math.min(1, msg.ttl / 1.2)));
-      app.dom.messageLog.appendChild(div);
+    while (log.children.length > messages.length) {
+      log.removeChild(log.lastChild);
+    }
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      let div = log.children[i];
+
+      if (!div) {
+        div = app.document.createElement('div');
+        div.className = 'msg';
+        log.appendChild(div);
+      }
+
+      if (div.textContent !== msg.text) {
+        div.textContent = msg.text;
+      }
+
+      const opacity = String(Math.max(0.14, Math.min(1, msg.ttl / 1.2)));
+      if (div.style.opacity !== opacity) {
+        div.style.opacity = opacity;
+      }
     }
   }
 
