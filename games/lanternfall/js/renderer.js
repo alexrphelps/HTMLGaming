@@ -45,6 +45,7 @@
       this.drawParticles(state, camX, camY);
       this.drawPlayer(state);
       this.drawCompass(state, pos);
+      this.drawFuelPressure(state);
     }
 
     getVisibleTileRange(pos) {
@@ -83,6 +84,10 @@
         ctx.fillRect(sx, sy, tileSize, 3);
       }
 
+      if (tile.type === TILE_TYPES.CAMP || tile.type === TILE_TYPES.RELIC) {
+        this.drawLandmark(tile.type, sx, sy, brightness);
+      }
+
       if (brightness > 0.5) {
         ctx.fillStyle = `rgba(255,180,84,${(brightness - 0.5) * 0.5})`;
         ctx.fillRect(sx, sy, tileSize, tileSize);
@@ -107,7 +112,27 @@
     tileColor(type) {
       if (type === TILE_TYPES.WALL) return CONFIG.colors.wall;
       if (type === TILE_TYPES.TREASURE) return CONFIG.colors.treasure;
+      if (type === TILE_TYPES.CAMP) return [84, 78, 64];
+      if (type === TILE_TYPES.RELIC) return [142, 55, 61];
       return CONFIG.colors.floor;
+    }
+
+    drawLandmark(type, sx, sy, brightness) {
+      const ctx = this.ctx;
+      const tileSize = CONFIG.tileSize;
+      const isCamp = type === TILE_TYPES.CAMP;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.35, brightness);
+      ctx.fillStyle = isCamp ? "#b9e6d1" : "#ff6d58";
+      ctx.beginPath();
+      ctx.arc(sx + tileSize / 2, sy + tileSize / 2, tileSize * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = isCamp ? "rgba(185,230,209,0.55)" : "rgba(255,109,88,0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx + tileSize / 2, sy + tileSize / 2, tileSize * 0.34, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     drawParticles(state, camX, camY) {
@@ -129,9 +154,10 @@
       const tileSize = CONFIG.tileSize;
       const x = this.width / 2;
       const y = this.height / 2;
-      const glowRadius = state.visionRadius * tileSize * 0.9;
+      const fuelRatio = state.maxFuel ? state.fuel / state.maxFuel : 1;
+      const glowRadius = state.visionRadius * tileSize * (0.72 + fuelRatio * 0.2);
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
-      gradient.addColorStop(0, "rgba(255,200,130,0.18)");
+      gradient.addColorStop(0, `rgba(255,200,130,${0.11 + fuelRatio * 0.1})`);
       gradient.addColorStop(1, "rgba(255,200,130,0)");
       ctx.fillStyle = gradient;
       ctx.fillRect(x - glowRadius, y - glowRadius, glowRadius * 2, glowRadius * 2);
@@ -150,6 +176,14 @@
       ctx.beginPath();
       ctx.arc(x + direction[0] * tileSize * 0.12, y + direction[1] * tileSize * 0.12, tileSize * 0.06, 0, Math.PI * 2);
       ctx.fill();
+
+      if (fuelRatio < 0.28) {
+        ctx.strokeStyle = `rgba(255,96,72,${0.35 + (0.28 - fuelRatio)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, tileSize * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     drawCompass(state, pos) {
@@ -176,6 +210,22 @@
       ctx.closePath();
       ctx.fill();
       ctx.restore();
+    }
+
+    drawFuelPressure(state) {
+      if (!state.maxFuel) return;
+
+      const ratio = state.fuel / state.maxFuel;
+      if (ratio > 0.42) return;
+
+      const ctx = this.ctx;
+      const strength = clamp((0.42 - ratio) / 0.42, 0, 1);
+      const radius = Math.max(this.width, this.height) * (0.42 + ratio * 0.5);
+      const gradient = ctx.createRadialGradient(this.width / 2, this.height / 2, radius * 0.25, this.width / 2, this.height / 2, radius);
+      gradient.addColorStop(0, "rgba(0,0,0,0)");
+      gradient.addColorStop(1, `rgba(36,5,8,${0.2 + strength * 0.38})`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, this.width, this.height);
     }
   }
 

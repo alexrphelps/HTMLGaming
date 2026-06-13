@@ -6,7 +6,9 @@
   const TILE_TYPES = {
     WALL: 0,
     FLOOR: 1,
-    TREASURE: 2
+    TREASURE: 2,
+    CAMP: 3,
+    RELIC: 4
   };
 
   Lanternfall.TILE_TYPES = TILE_TYPES;
@@ -19,6 +21,20 @@
       max: 9.5,
       step: 0.6,
       revealPadding: 1
+    },
+    run: {
+      objectiveRadius: 34,
+      objectiveVariance: 7,
+      relicScore: 50,
+      extractionScore: 150
+    },
+    fuel: {
+      max: 100,
+      stepCost: 1.15,
+      idleCost: 0.55,
+      lowThreshold: 26,
+      oilRestore: 24,
+      lanternRestore: 12
     },
     treasure: {
       cell: 18,
@@ -33,7 +49,8 @@
         gem: "\uD83D\uDC8E",
         speed: "\uD83D\uDC62",
         lantern: "\uD83C\uDFEE",
-        compass: "\uD83E\uDDED"
+        compass: "\uD83E\uDDED",
+        oil: "\u26FD"
       }
     },
     effects: {
@@ -64,8 +81,12 @@
         gem: "Found a glimmering gem (+10)",
         speed: "Light boots - your steps quicken",
         lantern: "Lantern oil - the dark recedes",
+        oil: "Oil flask - the flame steadies",
         compassFound: "The needle settles on a direction...",
-        compassLost: "The compass spins, finding nothing nearby"
+        compassLost: "The compass spins, finding nothing nearby",
+        relic: "The ember is yours. Return to camp.",
+        extracted: "The chart is sealed. Expedition complete.",
+        lost: "The lantern guttered out in the dark."
       }
     }
   };

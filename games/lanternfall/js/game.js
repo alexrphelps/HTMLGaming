@@ -19,6 +19,8 @@
       return false;
     }
 
+    Lanternfall.effects.spendFuel(state, CONFIG.fuel.stepCost);
+
     state.particles.push({
       x: player.gx,
       y: player.gy,
@@ -121,7 +123,7 @@
     }
 
     handleBegin(seedText) {
-      if (this.state.started) {
+      if (this.state.started && this.state.status === "active") {
         this.resume();
         return;
       }
@@ -129,6 +131,7 @@
       const seed = seedText === "" ? Math.floor(Math.random() * 1000000) : Lanternfall.math.hashString(seedText) % 1000000;
       this.world.reset(seed);
       Lanternfall.resetRunState(this.state, seed);
+      this.state.objective = this.world.getObjective();
       this.ui.hideOverlay();
       this.input.clear();
       this.audio.ensure();
@@ -154,12 +157,16 @@
     }
 
     pause() {
-      if (this.state.started) {
+      if (this.state.started && this.state.status === "active") {
         this.state.paused = true;
       }
     }
 
     resume() {
+      if (this.state.status !== "active") {
+        this.handleBegin("");
+        return;
+      }
       this.state.paused = false;
       this.ui.hideOverlay();
       this.input.clear();
@@ -175,12 +182,22 @@
       revealVisibleTiles(this.state);
       updateParticles(this.state, dt);
       Lanternfall.effects.updateTimedEffects(this.state, dt);
+
+      if (this.state.status === "active" && this.state.fuel <= 0) {
+        this.state.status = "lost";
+        this.state.paused = true;
+        if (this.ui.toast) this.ui.toast(CONFIG.ui.messages.lost);
+        if (this.audio.sfx) this.audio.sfx("lost");
+      }
     }
 
     render() {
       this.renderer.render(this.state, this.world);
       this.minimap.render(this.state, this.world);
       this.ui.updateHud(this.state);
+      if (this.state.paused && this.state.status !== "active") {
+        this.ui.showEndPage(this.state);
+      }
     }
 
     loop(now) {

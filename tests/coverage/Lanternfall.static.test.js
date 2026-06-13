@@ -97,6 +97,12 @@ function createDomElement(id) {
       remove(name) {
         this.values.delete(name);
       },
+      toggle(name, force) {
+        const shouldAdd = force === undefined ? !this.values.has(name) : force;
+        if (shouldAdd) this.values.add(name);
+        else this.values.delete(name);
+        return shouldAdd;
+      },
       contains(name) {
         return this.values.has(name);
       }
@@ -157,11 +163,18 @@ describe('Lanternfall modular integration', () => {
     const first = new lf.World(2468);
     const second = new lf.World(2468);
 
+    expect(first.getTile(0, 0).type).toBe(lf.TILE_TYPES.CAMP);
+
     for (let y = -2; y <= 2; y++) {
       for (let x = -2; x <= 2; x++) {
+        if (x === 0 && y === 0) continue;
         expect(first.getTile(x, y).type).toBe(lf.TILE_TYPES.FLOOR);
       }
     }
+
+    expect(first.getObjective()).toEqual(second.getObjective());
+    const objective = first.getObjective();
+    expect(first.getTile(objective.x, objective.y).type).toBe(lf.TILE_TYPES.RELIC);
 
     const samples = [
       [12, -7],
@@ -193,6 +206,29 @@ describe('Lanternfall modular integration', () => {
     lf.effects.applyItemEffect(state, world, 'lantern');
     expect(state.visionRadius).toBe(lf.CONFIG.vision.max);
     expect(state.lanternLevel).toBe(2);
+
+    state.fuel = 50;
+    lf.effects.applyItemEffect(state, world, 'oil');
+    expect(state.fuel).toBe(50 + lf.CONFIG.fuel.oilRestore);
+  });
+
+  test('relic pickup turns the player back toward camp and extraction completes the run', () => {
+    const lf = loadLanternfallRuntime();
+    const world = new lf.World(44);
+    const state = lf.createInitialState(44);
+    lf.resetRunState(state, 44);
+    state.objective = world.getObjective();
+
+    const relic = world.getObjective();
+    const relicResult = lf.effects.resolveArrival(state, world, relic.x, relic.y);
+    expect(relicResult.kind).toBe('relic');
+    expect(state.hasEmber).toBe(true);
+    expect(state.compassPing).toMatchObject({ x: 0, y: 0 });
+
+    const extracted = lf.effects.resolveArrival(state, world, 0, 0);
+    expect(extracted.kind).toBe('extracted');
+    expect(state.status).toBe('won');
+    expect(state.paused).toBe(true);
   });
 
   test('uses game-time remaining durations instead of wall-clock effect deadlines', () => {

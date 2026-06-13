@@ -52,6 +52,11 @@
             ctx.fillStyle = "#ffe9a8";
             ctx.fillRect(sx + px * 0.25, sy + px * 0.25, px * 0.5, px * 0.5);
           }
+
+          if (tile.type === TILE_TYPES.CAMP || tile.type === TILE_TYPES.RELIC) {
+            ctx.fillStyle = tile.type === TILE_TYPES.CAMP ? "#b9e6d1" : "#ff6d58";
+            ctx.fillRect(sx, sy, px + 0.8, px + 0.8);
+          }
         }
       }
 
@@ -65,6 +70,8 @@
     tileColor(type) {
       if (type === TILE_TYPES.WALL) return "#1c1a24";
       if (type === TILE_TYPES.TREASURE) return "#e0b94f";
+      if (type === TILE_TYPES.CAMP) return "#7bc7a6";
+      if (type === TILE_TYPES.RELIC) return "#d14b4d";
       return "#9c8264";
     }
   }

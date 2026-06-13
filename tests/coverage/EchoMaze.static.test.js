@@ -52,6 +52,64 @@ function loadEchoMazeRuntime() {
   return context.window.EchoMaze;
 }
 
+function loadEchoMazeBootstrapContext() {
+  const context = createBrowserContext();
+  const doc = context.document;
+  doc.body.innerHTML = `
+    <canvas id="game"></canvas>
+    <section id="hud">
+      <p id="goalText"></p>
+      <div id="runStats"></div>
+      <div id="itemMeters"></div>
+      <div id="secondaryStats"></div>
+    </section>
+    <div id="messageLog"></div>
+    <div id="overlay">
+      <h2 id="overlayTitle"></h2>
+      <p id="overlayText"></p>
+      <div id="overlayStats"></div>
+      <button id="primaryBtn"></button>
+      <button id="secondaryBtn"></button>
+      <button id="tertiaryBtn"></button>
+    </div>
+  `;
+  context.window.requestAnimationFrame = jest.fn(() => 1);
+  context.window.cancelAnimationFrame = jest.fn();
+  context.window.addEventListener = jest.fn();
+  context.window.performance = { now: () => 0 };
+  context.window.document = doc;
+  loadBrowserScript(context, 'games/echo_maze/js/core/namespace.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/config/constants.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/config/items.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/core/coords.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/core/rng.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/core/collections.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/world/biomes.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/world/chunks.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/world/mazeGeneration.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/world/collision.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/world/pathfinding.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/state/createRun.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/state/messages.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/systems/upgrades.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/state/progression.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/entities/items.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/entities/objectives.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/entities/warden.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/entities/enemies.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/entities/playerMovement.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/render/canvas.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/render/worldRenderer.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/render/entityRenderer.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/render/effectsRenderer.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/render/uiRenderer.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/ui/hud.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/ui/overlay.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/input.js', []);
+  loadBrowserScript(context, 'games/echo_maze/js/main.js', []);
+  return context;
+}
+
 function pathUsesOpenEdges(em, state, pathCells) {
   for (let i = 1; i < pathCells.length; i++) {
     const a = pathCells[i - 1];
@@ -152,6 +210,27 @@ describe('Echo Maze modular runtime', () => {
     const pathToObjective = em.findPath(a, start, a.objective, em.CONFIG.pathLimit);
     expect(pathToObjective).toBeTruthy();
     expect(pathUsesOpenEdges(em, a, pathToObjective)).toBe(true);
+  });
+
+  test('bootstrap is idempotent so the game loop cannot be started twice', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const first = context.window.EchoMaze.bootstrap(context.document, context.window);
+    const second = context.window.EchoMaze.bootstrap(context.document, context.window);
+
+    expect(second).toBe(first);
+    expect(context.window.requestAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(context.window.EchoMazeApp).toBe(first);
+  });
+
+  test('destroy cancels the active animation frame and removes listeners', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const app = context.window.EchoMaze.bootstrap(context.document, context.window);
+
+    expect(app.rafId).toBe(1);
+    app.destroy();
+
+    expect(context.window.cancelAnimationFrame).toHaveBeenCalledWith(1);
+    expect(app.isDestroyed).toBe(true);
   });
 
   test('new runs start with fuel-powered light clamped to max vision', () => {

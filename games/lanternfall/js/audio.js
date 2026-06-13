@@ -69,6 +69,24 @@
           this.beep(523, 0.1, "sine", 0.12);
           this.beep(784, 0.14, "sine", 0.1, 0.1);
           break;
+        case "oil":
+          this.beep(260, 0.12, "sine", 0.11);
+          this.beep(390, 0.16, "sine", 0.09, 0.08);
+          break;
+        case "relic":
+          this.beep(220, 0.18, "triangle", 0.12);
+          this.beep(440, 0.18, "triangle", 0.1, 0.12);
+          this.beep(880, 0.2, "triangle", 0.08, 0.24);
+          break;
+        case "win":
+          this.beep(330, 0.12, "sine", 0.12);
+          this.beep(495, 0.14, "sine", 0.1, 0.1);
+          this.beep(660, 0.18, "sine", 0.1, 0.22);
+          break;
+        case "lost":
+          this.beep(160, 0.16, "sawtooth", 0.08);
+          this.beep(92, 0.24, "sawtooth", 0.06, 0.12);
+          break;
       }
     }
   }

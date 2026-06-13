@@ -68,7 +68,28 @@ body {
 }
 
 #hud .row.active span:last-child {
-  color: #a3661c;
+  color: #16664d;
+}
+
+#hud .row.warn span:last-child {
+  color: #b7312d;
+  animation: fuelPulse 0.9s ease-in-out infinite alternate;
+}
+
+#rowObjective span:last-child {
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes fuelPulse {
+  from {
+    opacity: 0.68;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 #minimapWrap {
