@@ -178,6 +178,86 @@
     ctx.restore();
   }
 
+  function drawEnemies(ctx, state, camX, camY) {
+    if (!state.enemies) return;
+
+    for (const enemy of state.enemies) {
+      const ec = em.cellOfWorld(enemy.x, enemy.y);
+      const revealed = state.revealed.has(em.keyOf(ec.x, ec.y));
+      const near = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y) < em.CONFIG.cell * (4 + state.player.compassDanger);
+      if (!revealed && !near) continue;
+
+      if (enemy.type === 'mimic' && !enemy.awake) {
+        drawDormantMimic(ctx, state, enemy, camX, camY);
+      } else {
+        drawEnemyShape(ctx, state, enemy, camX, camY);
+      }
+    }
+  }
+
+  function drawDormantMimic(ctx, state, enemy, camX, camY) {
+    const sx = enemy.x - camX;
+    const sy = enemy.y - camY + Math.sin(enemy.patrolSeed + state.time * 4) * 1.5;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.shadowColor = '#ffb86c';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffb86c';
+    drawStar(ctx, 0, 0, 5, 11, 5);
+    ctx.restore();
+  }
+
+  function drawEnemyShape(ctx, state, enemy, camX, camY) {
+    const sx = enemy.x - camX;
+    const sy = enemy.y - camY;
+    const pulse = 1 + Math.sin(state.time * 5 + enemy.patrolSeed) * 0.08;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = enemy.color;
+    ctx.shadowBlur = enemy.alert > 0 ? 24 : 14;
+    ctx.strokeStyle = '#f7fbff';
+    ctx.fillStyle = em.alphaColor(enemy.color, enemy.type === 'sentry' ? 0.76 : 0.82);
+    ctx.lineWidth = 2;
+
+    if (enemy.type === 'shadow') {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 13, 18, Math.sin(state.time * 2) * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (enemy.type === 'crawler') {
+      ctx.beginPath();
+      ctx.moveTo(-14, -5);
+      ctx.lineTo(0, -12);
+      ctx.lineTo(14, -5);
+      ctx.lineTo(10, 9);
+      ctx.lineTo(-10, 9);
+      ctx.closePath();
+      ctx.fill();
+    } else if (enemy.type === 'sentry') {
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#12040b';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      drawStar(ctx, 0, 0, 7, 14, 6);
+    }
+
+    if (enemy.alert > 0) {
+      ctx.strokeStyle = enemy.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.radius + 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   function drawPlayer(ctx, state, sx, sy) {
     const p = state.player;
     const phased = p.phaseTimer > 0;
@@ -250,6 +330,9 @@
     drawObjective,
     drawExitPortal,
     drawWarden,
+    drawEnemies,
+    drawDormantMimic,
+    drawEnemyShape,
     drawPlayer,
     drawMinimapSignal,
     drawMinimapDot,

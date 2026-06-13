@@ -10,6 +10,7 @@
     if (Math.abs(x) + Math.abs(y) < 5) return null;
     if (state.objective && x === state.objective.x && y === state.objective.y) return null;
     if (state.exitPortal && x === state.exitPortal.x && y === state.exitPortal.y) return null;
+    if (em.enemyAtCell && em.enemyAtCell(state, x, y, 'mimic')) return null;
 
     const rate = em.CONFIG.baseItemRate + Math.min(0.018, state.anchors * 0.002);
     if (em.rand01(state, x, y, 5050) > rate) return null;
@@ -83,8 +84,10 @@
     state.items++;
 
     if (item.type === 'lantern') {
-      p.vision = Math.min(11.75, p.vision + 0.62);
+      p.visionBonus = Math.min(3.4, p.visionBonus + 0.62);
+      em.restoreFuel(state, 36, false);
       revealRadius = p.vision + 1;
+      em.addFloatingText(state, 'Vision Up', cx, cy - 28, item.data.color);
     } else if (item.type === 'boots') {
       p.speed = Math.min(255, p.speed + 10);
     } else if (item.type === 'phase') {
@@ -99,6 +102,8 @@
       p.shields = Math.min(4, p.shields + 1);
     } else if (item.type === 'battery') {
       p.battery = Math.min(5, p.battery + 1);
+      em.restoreFuel(state, 22, false);
+      state.danger = Math.max(0, state.danger - 0.08);
     } else if (item.type === 'relic') {
       p.phaseCharges = Math.min(9, p.phaseCharges + 1);
       revealRadius = 12;

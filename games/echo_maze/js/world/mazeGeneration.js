@@ -6,6 +6,7 @@
   function generateChunk(state, cx, cy) {
     const cells = [];
     const visited = new Array(em.CONFIG.chunk * em.CONFIG.chunk).fill(false);
+    const biome = em.biomeForChunk ? em.biomeForChunk(state, cx, cy) : null;
 
     for (let i = 0; i < em.CONFIG.chunk * em.CONFIG.chunk; i++) {
       cells.push({ N: true, E: true, S: true, W: true });
@@ -48,20 +49,20 @@
       stack.push({ x: next.x, y: next.y });
     }
 
-    addExtraLoops(state, cells, cx, cy);
-    carveRooms(state, cells, cx, cy);
+    addExtraLoops(state, cells, cx, cy, biome);
+    carveRooms(state, cells, cx, cy, biome);
     openChunkPortals(state, cells, cx, cy);
     carveSpawnCells(cells, cx, cy);
 
-    return { cells };
+    return { cells, biomeId: biome ? biome.id : 'stone' };
   }
 
-  function addExtraLoops(state, cells, cx, cy) {
+  function addExtraLoops(state, cells, cx, cy, biome) {
     for (let ly = 0; ly < em.CONFIG.chunk; ly++) {
       for (let lx = 0; lx < em.CONFIG.chunk; lx++) {
         const gx = cx * em.CONFIG.chunk + lx;
         const gy = cy * em.CONFIG.chunk + ly;
-        const loopRate = 0.043 + (em.rand01(state, cx, cy, 3100) * 0.018);
+        const loopRate = Math.max(0.018, 0.043 + (em.rand01(state, cx, cy, 3100) * 0.018) + (biome ? biome.loopBonus : 0));
 
         if (lx < em.CONFIG.chunk - 1 && em.rand01(state, gx, gy, 3101) < loopRate) {
           em.openLocal(cells, lx, ly, 'E');
@@ -76,8 +77,8 @@
     }
   }
 
-  function carveRooms(state, cells, cx, cy) {
-    if (em.rand01(state, cx, cy, 3300) > 0.34) return;
+  function carveRooms(state, cells, cx, cy, biome) {
+    if (em.rand01(state, cx, cy, 3300) > (biome ? biome.roomChance : 0.34)) return;
 
     const w = 2 + (em.hash32(state, cx, cy, 3301) % 3);
     const h = 2 + (em.hash32(state, cx, cy, 3302) % 3);

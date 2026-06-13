@@ -43,6 +43,7 @@
     em.drawPulses(ctx, state, camX, camY);
     em.drawParticles(ctx, state, camX, camY);
     em.drawWarden(ctx, state, camX, camY);
+    em.drawEnemies(ctx, state, camX, camY);
     em.drawPlayer(ctx, state, state.player.x - camX, state.player.y - camY);
     em.drawFloatingText(ctx, state, camX, camY);
     em.drawFogVignette(ctx, w, h);

@@ -33,6 +33,44 @@
     }
   }
 
+  function addDangerSmoke(state, x, y, count = 8) {
+    for (let i = 0; i < count; i++) {
+      const a = -Math.PI / 2 + (em.rand01(state, i, Math.floor(x), 9500) - 0.5) * Math.PI;
+      const spd = 14 + em.rand01(state, Math.floor(y), i, 9501) * 36;
+      state.particles.push({
+        kind: 'smoke',
+        x: x + (em.rand01(state, i, Math.floor(y), 9502) - 0.5) * 24,
+        y: y + (em.rand01(state, i, Math.floor(x), 9503) - 0.5) * 18,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd,
+        size: 8 + em.rand01(state, i, Math.floor(x), 9504) * 10,
+        ttl: 1.1 + em.rand01(state, i, Math.floor(y), 9505) * 0.75,
+        maxTtl: 1.85,
+        color: '#ff6f9d'
+      });
+    }
+  }
+
+  function addAmbientMote(state) {
+    const pc = em.cellOfWorld(state.player.x, state.player.y);
+    const biome = em.biomeForCell ? em.biomeForCell(state, pc.x, pc.y) : { accent: '#7df9ff', moteRate: 0.1 };
+    if (em.rand01(state, pc.x, pc.y, 9600 + Math.floor(state.time * 10)) > biome.moteRate) return;
+
+    const a = em.rand01(state, pc.x, pc.y, 9601 + Math.floor(state.time * 7)) * Math.PI * 2;
+    const d = em.CONFIG.cell * (2 + em.rand01(state, pc.y, pc.x, 9602 + Math.floor(state.time * 5)) * 5);
+    state.particles.push({
+      kind: 'mote',
+      x: state.player.x + Math.cos(a) * d,
+      y: state.player.y + Math.sin(a) * d,
+      vx: Math.cos(a + Math.PI) * 8,
+      vy: Math.sin(a + Math.PI) * 8,
+      size: 1.4,
+      ttl: 1.4,
+      maxTtl: 1.4,
+      color: biome.accent
+    });
+  }
+
   function revealAround(state, cx, cy, radius) {
     const r = Math.ceil(radius);
 
@@ -95,6 +133,8 @@
     addFloatingText,
     addPulse,
     addParticles,
+    addDangerSmoke,
+    addAmbientMote,
     revealAround,
     revealPathBurst,
     tickMessages,

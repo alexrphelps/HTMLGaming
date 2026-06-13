@@ -15,16 +15,19 @@ const expectedScripts = [
   'js/core/coords.js',
   'js/core/rng.js',
   'js/core/collections.js',
+  'js/world/biomes.js',
   'js/world/chunks.js',
   'js/world/mazeGeneration.js',
   'js/world/collision.js',
   'js/world/pathfinding.js',
   'js/state/createRun.js',
   'js/state/messages.js',
+  'js/systems/upgrades.js',
   'js/state/progression.js',
   'js/entities/items.js',
   'js/entities/objectives.js',
   'js/entities/warden.js',
+  'js/entities/enemies.js',
   'js/entities/playerMovement.js',
   'js/render/canvas.js',
   'js/render/worldRenderer.js',
@@ -151,19 +154,19 @@ describe('Echo Maze modular runtime', () => {
     expect(pathUsesOpenEdges(em, a, pathToObjective)).toBe(true);
   });
 
-  test('new runs start with no more than three cells of player light', () => {
+  test('new runs start with fuel-powered light clamped to max vision', () => {
     const em = loadEchoMazeRuntime();
     const state = em.createRun(112233);
 
-    expect(state.player.vision).toBe(3);
+    expect(state.player.fuel).toBe(100);
+    expect(state.player.maxFuel).toBe(100);
+    expect(state.player.vision).toBeGreaterThan(em.CONFIG.baseVision);
+    expect(state.player.vision).toBeLessThanOrEqual(em.CONFIG.maxVision);
 
     for (const key of state.revealed) {
       const cell = em.parseKey(key);
       expect(Math.hypot(cell.x, cell.y)).toBeLessThanOrEqual(3);
-      expect(em.isLitCell(state, cell.x, cell.y)).toBe(true);
     }
-
-    expect(em.isLitCell(state, 3, 1)).toBe(false);
   });
 
   test('chunk portals and blocked-edge checks are symmetric across boundaries', () => {
@@ -232,11 +235,14 @@ describe('Echo Maze modular runtime', () => {
     const em = loadEchoMazeRuntime();
     const state = em.createRun(3333);
     const item = { type: 'lantern', data: em.ITEM_DATA.lantern };
+    state.player.fuel = 40;
+    em.updateLanternVision(state);
     const beforeVision = state.player.vision;
 
     em.collectItem(state, 6, 0, item);
     expect(state.collected.has('6,0')).toBe(true);
     expect(state.player.vision).toBeGreaterThan(beforeVision);
+    expect(state.player.fuel).toBeGreaterThan(40);
     expect(em.itemForCell(state, 6, 0)).toBe(null);
   });
 
@@ -261,6 +267,9 @@ describe('Echo Maze modular runtime', () => {
       state.player.x = obj.x * em.CONFIG.cell + em.CONFIG.cell / 2;
       state.player.y = obj.y * em.CONFIG.cell + em.CONFIG.cell / 2;
       em.checkObjective(state, { x: obj.x, y: obj.y });
+      expect(state.mode).toBe('upgrade');
+      expect(state.pendingUpgrades).toHaveLength(3);
+      expect(em.chooseUpgrade(state, state.pendingUpgrades[0])).toBe(true);
     }
 
     expect(state.objective).toBe(null);
@@ -289,5 +298,108 @@ describe('Echo Maze modular runtime', () => {
 
     const fallback = em.fallbackWardenStep(state, { x: state.warden.cellX, y: state.warden.cellY }, playerCell);
     expect(pathUsesOpenEdges(em, state, fallback)).toBe(true);
+  });
+
+  test('seeded upgrade choices are deterministic and apply once before resuming', () => {
+    const em = loadEchoMazeRuntime();
+    const a = em.createRun(7777);
+    const b = em.createRun(7777);
+
+    a.anchors = 1;
+    b.anchors = 1;
+
+    const choicesA = em.generateUpgradeChoices(a);
+    const choicesB = em.generateUpgradeChoices(b);
+    expect(choicesA).toEqual(choicesB);
+    expect(choicesA).toHaveLength(3);
+
+    a.pendingAnchorAdvance = { complete: false, objName: 'Echo Anchor 1', reward: 500 };
+    em.beginUpgradeSelection(a);
+    const choice = a.pendingUpgrades[0];
+    expect(em.chooseUpgrade(a, choice)).toBe(true);
+    expect(a.upgrades[choice]).toBe(1);
+    expect(a.mode).toBe('playing');
+    expect(a.objective).toBeTruthy();
+  });
+
+  test('fuel drains, danger rises at low fuel, and anchors restore fuel', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(8888);
+    state.mode = 'playing';
+    const beforeFuel = state.player.fuel;
+
+    em.updateLanternFuel(state, 3);
+    expect(state.player.fuel).toBeLessThan(beforeFuel);
+    expect(state.player.vision).toBeLessThanOrEqual(em.CONFIG.maxVision);
+
+    state.player.fuel = 1;
+    em.updateLanternFuel(state, 3);
+    expect(state.danger).toBeGreaterThan(0);
+
+    em.restoreFuel(state, 40);
+    expect(state.player.fuel).toBeGreaterThan(1);
+  });
+
+  test('phase duration and cooldown upgrades affect activation', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(9999);
+    state.mode = 'playing';
+
+    em.applyUpgrade(state, 'phaseDuration');
+    em.applyUpgrade(state, 'phaseCooldown');
+    em.usePhase(state);
+
+    expect(state.player.phaseTimer).toBeGreaterThan(em.CONFIG.phaseDuration);
+    expect(state.player.phaseCooldownTimer).toBe(state.player.phaseCooldown);
+    expect(state.player.phaseCooldown).toBeLessThan(em.CONFIG.phaseCooldown);
+  });
+
+  test('biomes are deterministic per chunk and preserve portal symmetry', () => {
+    const em = loadEchoMazeRuntime();
+    const a = em.createRun(24680);
+    const b = em.createRun(24680);
+
+    expect(em.biomeForChunk(a, 2, -3).id).toBe(em.biomeForChunk(b, 2, -3).id);
+
+    const chunk = em.getChunk(a, 2, -3);
+    expect(chunk.biomeId).toBe(em.biomeForChunk(a, 2, -3).id);
+
+    for (const ly of em.portalPositionsForEdge(a, 2, -3, 'E')) {
+      const left = { x: 2 * em.CONFIG.chunk + em.CONFIG.chunk - 1, y: -3 * em.CONFIG.chunk + ly };
+      const right = { x: left.x + 1, y: left.y };
+      expect(em.isBlockedBetween(a, left.x, left.y, right.x, right.y)).toBe(false);
+    }
+  });
+
+  test('ambient enemies spawn with valid paths and do not cross blocked edges', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(54321);
+    state.anchors = 2;
+    em.spawnAmbientEnemies(state);
+
+    expect(state.enemies.length).toBeGreaterThan(0);
+    const playerCell = em.cellOfWorld(state.player.x, state.player.y);
+    em.updateEnemies(state, 0.8, playerCell);
+
+    for (const enemy of state.enemies) {
+      if (enemy.path && enemy.path.length > 1) {
+        expect(pathUsesOpenEdges(em, state, enemy.path)).toBe(true);
+      }
+    }
+  });
+
+  test('memory trail persists long enough to navigate back', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(1212);
+    state.mode = 'playing';
+    const input = { x: 1, y: 0 };
+
+    em.addCrumb(state, 0.2, input);
+    expect(state.crumbs).toHaveLength(1);
+    expect(state.crumbs[0].ttl).toBeCloseTo(em.CONFIG.memoryTrailTtl - 0.2);
+
+    em.addCrumb(state, 5, { x: 0, y: 0 });
+    expect(state.crumbs).toHaveLength(1);
+    expect(state.crumbs[0].ttl).toBeGreaterThan(10);
   });
 });

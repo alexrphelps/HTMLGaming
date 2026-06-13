@@ -9,18 +9,24 @@
     const p = state.player;
     if (p.phaseTimer > 0) return;
 
+    if (p.phaseCooldownTimer > 0) {
+      em.addMessage(state, 'Phase recharging: ' + p.phaseCooldownTimer.toFixed(1) + 's.');
+      return;
+    }
+
     if (p.phaseCharges <= 0) {
       em.addMessage(state, 'No Phase Crystal charged. Find one or stabilize an Anchor.');
       return;
     }
 
     p.phaseCharges--;
-    p.phaseTimer = em.CONFIG.phaseDuration;
+    p.phaseTimer = p.phaseDuration;
+    p.phaseCooldownTimer = p.phaseCooldown;
     state.phaseUsesSinceAnchor++;
     state.screenPulse = Math.max(state.screenPulse, 0.42);
     em.addPulse(state, p.x, p.y, em.CONFIG.cell * 2.8, 0.45, '#bd8cff');
     em.addParticles(state, p.x, p.y, '#bd8cff', 18);
-    em.addMessage(state, 'Phase active. Walls release you for ' + em.CONFIG.phaseDuration.toFixed(1) + ' seconds.');
+    em.addMessage(state, 'Phase active. Walls release you for ' + p.phaseDuration.toFixed(1) + ' seconds.');
   }
 
   function movePlayer(state, dx, dy) {
@@ -123,9 +129,15 @@
     state.crumbClock -= dt;
 
     if (state.crumbClock <= 0 && (input.x !== 0 || input.y !== 0)) {
-      state.crumbClock = 0.12;
-      state.crumbs.push({ x: state.player.x, y: state.player.y, ttl: 3.2 });
-      if (state.crumbs.length > 150) state.crumbs.shift();
+      state.crumbClock = 0.18;
+      state.crumbs.push({
+        x: state.player.x,
+        y: state.player.y,
+        angle: state.player.angle,
+        ttl: em.CONFIG.memoryTrailTtl,
+        maxTtl: em.CONFIG.memoryTrailTtl
+      });
+      if (state.crumbs.length > 260) state.crumbs.shift();
     }
 
     for (const c of state.crumbs) c.ttl -= dt;
@@ -151,7 +163,7 @@
     if (!obj) return false;
     const pc = em.cellOfWorld(state.player.x, state.player.y);
     const dist = Math.hypot(obj.x - pc.x, obj.y - pc.y);
-    return state.revealed.has(em.keyOf(obj.x, obj.y)) || dist <= 7 + state.player.compass * 5;
+    return state.revealed.has(em.keyOf(obj.x, obj.y)) || dist <= 7 + state.player.compass * 5 + state.player.compassObjective * 8;
   }
 
   function update(state, dt, input = { x: 0, y: 0 }) {
@@ -164,11 +176,18 @@
     state.time += dt;
     state.anchorClock += dt;
     em.tickMessages(state, dt);
+    em.tickDangerWarning(state, dt);
+    em.updateLanternFuel(state, dt);
 
     em.movePlayer(state, input.x * state.player.speed * dt, input.y * state.player.speed * dt);
 
     if (state.player.phaseTimer > 0) {
       state.player.phaseTimer = Math.max(0, state.player.phaseTimer - dt);
+      state.phaseTrailClock -= dt;
+      if (state.phaseTrailClock <= 0) {
+        state.phaseTrailClock = 0.08;
+        em.addParticles(state, state.player.x, state.player.y, '#bd8cff', 2 + (state.upgrades.phaseDuration || 0));
+      }
     }
 
     const pc = em.cellOfWorld(state.player.x, state.player.y);
@@ -176,9 +195,15 @@
     em.collectNearbyItems(state);
     em.checkObjective(state, pc);
     em.updateWarden(state, dt, pc);
+    em.updateEnemies(state, dt, pc);
 
     state.maxDepth = Math.max(state.maxDepth, Math.abs(pc.x) + Math.abs(pc.y));
     em.addCrumb(state, dt, input);
+    state.ambientClock -= dt;
+    if (state.ambientClock <= 0) {
+      state.ambientClock = 0.24;
+      em.addAmbientMote(state);
+    }
     em.updateCamera(state, dt);
     em.tickVisuals(state, dt);
 

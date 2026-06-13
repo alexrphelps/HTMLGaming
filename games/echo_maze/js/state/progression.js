@@ -14,6 +14,9 @@
     if (state.mode === 'playing') {
       state.previousMode = 'playing';
       state.mode = 'paused';
+    } else if (state.mode === 'upgrade') {
+      state.previousMode = 'upgrade';
+      state.mode = 'paused';
     } else if (state.mode === 'paused') {
       state.mode = state.previousMode || 'playing';
     }
@@ -53,32 +56,56 @@
     state.tier = state.anchors + 1;
     state.phaseUsesSinceAnchor = 0;
     state.anchorClock = 0;
-    state.player.vision = Math.min(11.75, state.player.vision + 0.22);
+    state.player.visionBonus = Math.min(3.4, state.player.visionBonus + 0.22);
     state.player.phaseCharges = Math.min(9, state.player.phaseCharges + 1);
     state.player.health = Math.min(3, state.player.health + (state.anchors % 2 === 0 ? 1 : 0));
-    em.revealAround(state, obj.x, obj.y, 9 + Math.min(7, state.anchors));
+    em.restoreFuel(state, 34 + state.anchors * 4);
+    em.revealAround(state, obj.x, obj.y, 9 + Math.min(7, state.anchors) + state.player.minimapBonus);
 
     const wx = obj.x * em.CONFIG.cell + em.CONFIG.cell / 2;
     const wy = obj.y * em.CONFIG.cell + em.CONFIG.cell / 2;
     em.addPulse(state, wx, wy, em.CONFIG.cell * (10 + state.anchors), 1.25, '#ffe27a');
     em.addParticles(state, wx, wy, '#ffe27a', 34);
-    em.addFloatingText(state, 'Anchor +' + reward, wx, wy - 12, '#ffe27a');
+    em.addPulse(state, wx, wy, em.CONFIG.cell * (5 + state.anchors * 1.5), 0.75, em.biomeAccentForWorld ? em.biomeAccentForWorld(state, wx, wy) : '#7df9ff');
+    em.addFloatingText(state, 'Anchor Stabilized', wx, wy - 28, '#ffe27a');
+    em.addFloatingText(state, '+' + reward, wx, wy - 8, '#ffe27a');
     state.screenPulse = 0.7;
     state.screenShake = Math.max(state.screenShake, 5);
+    state.danger = Math.max(0, state.danger - 0.28);
 
     if (state.anchors === 1) em.spawnWarden(state);
+    if (em.spawnAmbientEnemies) em.spawnAmbientEnemies(state);
 
-    if (state.anchors >= em.CONFIG.runAnchors) {
-      state.objective = null;
+    state.pendingAnchorAdvance = {
+      complete: state.anchors >= em.CONFIG.runAnchors,
+      objName: obj.name,
+      reward
+    };
+    state.objective = null;
+
+    if (em.beginUpgradeSelection && em.availableUpgradeIds(state).length > 0) {
+      em.beginUpgradeSelection(state);
+    } else {
+      completeAnchorAdvance(state);
+    }
+  }
+
+  function completeAnchorAdvance(state) {
+    const pending = state.pendingAnchorAdvance;
+    if (!pending) return;
+
+    if (pending.complete) {
       state.exitPortal = em.makeExitPortal(state);
       em.revealAround(state, state.exitPortal.x, state.exitPortal.y, 4.5 + state.player.compass);
       em.addMessage(state, 'Anchor chain stabilized. The Exit Portal has opened.');
     } else {
       state.objective = em.makeObjective(state, state.tier);
-      em.addMessage(state, obj.name + ' stabilized. +' + reward + '. Next signal is farther out.');
+      em.addMessage(state, pending.objName + ' stabilized. +' + pending.reward + '. Next signal is farther out.');
     }
+
+    state.pendingAnchorAdvance = null;
   }
 
-  Object.assign(em, { startRun, pauseRun, endRun, checkObjective, stabilizeAnchor });
+  Object.assign(em, { startRun, pauseRun, endRun, checkObjective, stabilizeAnchor, completeAnchorAdvance });
   window.EchoMaze = em;
 })();

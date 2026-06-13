@@ -36,6 +36,7 @@
 
       if (k === 'enter') em.handlePrimaryAction(app);
       else if (k === 'escape') em.pauseRun(app.state);
+      else if (app.state.mode === 'upgrade' && ['1', '2', '3'].includes(k)) em.chooseUpgrade(app.state, app.state.pendingUpgrades[Number(k) - 1]);
       else if (k === 'm') app.state.showMini = !app.state.showMini;
       else if (k === ' ') em.usePhase(app.state);
 

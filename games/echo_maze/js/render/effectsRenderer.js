@@ -5,11 +5,20 @@
 
   function drawCrumbs(ctx, state, camX, camY) {
     for (const c of state.crumbs) {
-      const alpha = Math.max(0, c.ttl / 3.2) * 0.28;
+      const alpha = Math.max(0, c.ttl / c.maxTtl) * 0.34;
+      const sx = c.x - camX;
+      const sy = c.y - camY;
       ctx.fillStyle = `rgba(125, 249, 255, ${alpha})`;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(c.angle || 0);
+      ctx.shadowColor = '#7df9ff';
+      ctx.shadowBlur = 7;
       ctx.beginPath();
-      ctx.arc(c.x - camX, c.y - camY, 2.2, 0, Math.PI * 2);
+      ctx.ellipse(-2.5, 0, 2.2, 5.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(3.5, 0, 2.2, 5.2, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
   }
 
@@ -32,9 +41,9 @@
   function drawParticles(ctx, state, camX, camY) {
     for (const p of state.particles) {
       const alpha = Math.max(0, p.ttl / p.maxTtl);
-      ctx.fillStyle = em.alphaColor(p.color, alpha);
+      ctx.fillStyle = em.alphaColor(p.color, p.kind === 'smoke' ? alpha * 0.28 : alpha);
       ctx.beginPath();
-      ctx.arc(p.x - camX, p.y - camY, p.size * alpha, 0, Math.PI * 2);
+      ctx.arc(p.x - camX, p.y - camY, p.kind === 'smoke' ? p.size * (1.2 - alpha * 0.4) : p.size * alpha, 0, Math.PI * 2);
       ctx.fill();
     }
   }

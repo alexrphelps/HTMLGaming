@@ -29,18 +29,21 @@
   }
 
   function handlePrimaryAction(app) {
-    if (app.state.mode === 'start') em.startRun(app.state);
+    if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[0]);
+    else if (app.state.mode === 'start') em.startRun(app.state);
     else if (app.state.mode === 'paused') em.pauseRun(app.state);
     else if (app.state.mode === 'victory' || app.state.mode === 'gameover') resetRun(app, app.state.seed);
   }
 
   function handleSecondaryAction(app) {
-    if (app.state.mode === 'paused') resetRun(app, app.state.seed);
+    if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[1]);
+    else if (app.state.mode === 'paused') resetRun(app, app.state.seed);
     else resetRun(app);
   }
 
   function handleTertiaryAction(app) {
-    if (app.state.mode === 'paused') resetRun(app);
+    if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[2]);
+    else if (app.state.mode === 'paused') resetRun(app);
   }
 
   function bootstrap(doc = document, win = window) {
@@ -58,6 +61,10 @@
     app.dom.primaryBtn.addEventListener('click', () => em.handlePrimaryAction(app));
     app.dom.secondaryBtn.addEventListener('click', () => em.handleSecondaryAction(app));
     app.dom.tertiaryBtn.addEventListener('click', () => em.handleTertiaryAction(app));
+    app.dom.overlayStats.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-upgrade-id]');
+      if (btn) em.chooseUpgrade(app.state, btn.getAttribute('data-upgrade-id'));
+    });
 
     function gameLoop(now) {
       const dt = Math.min(0.05, (now - app.lastTime) / 1000);
