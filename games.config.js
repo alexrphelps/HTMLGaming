@@ -125,6 +125,22 @@ window.GAMEHUB_GAMES = [
         saveSupport: 'None'
     },
     {
+        folder: 'lanternfall',
+        name: 'Lanternfall',
+        description: 'Chart an endless lantern-lit cave, gather glimmering finds, and push deeper through procedural darkness.',
+        category: 'Exploration',
+        difficulty: 'Easy',
+        icon: 'LF',
+        tags: ['2d', 'exploration', 'procedural', 'cave', 'canvas'],
+        author: 'GameHub',
+        estimatedPlayTime: 12,
+        aiEffortRating: 3,
+        defaultRating: 3,
+        input: 'Keyboard + Touch',
+        rendering: 'Canvas',
+        saveSupport: 'None'
+    },
+    {
         folder: 'blockdodge',
         name: 'Block Dodge',
         description: 'Control a square and dodge falling blocks as the difficulty increases.',

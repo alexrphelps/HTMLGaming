@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Lanternfall - an infinite cave, charted one step at a time</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="vignette"></div>
+<div id="toast"></div>
+
+<div id="hud">
+  <h1>Explorer's Log</h1>
+  <div class="row"><span>Chart&nbsp;#</span><span id="statSeed">&mdash;</span></div>
+  <div class="row"><span>Gems</span><span id="statScore">0</span></div>
+  <div class="row"><span>Lantern</span><span id="statLantern">Lvl 1</span></div>
+  <div class="row" id="rowSpeed"><span>Boots</span><span id="statSpeed">&mdash;</span></div>
+  <div class="row"><span>Charted</span><span id="statTiles">0</span></div>
+  <div class="row"><span>From camp</span><span id="statDist">0</span></div>
+</div>
+
+<div id="minimapWrap"><canvas id="minimap"></canvas></div>
+
+<div id="iconBtns">
+  <button class="iconBtn" id="helpBtn" title="Journal">?</button>
+  <button class="iconBtn" id="muteBtn" title="Sound">&#9834;</button>
+</div>
+
+<div id="touchControls">
+  <div></div><div class="tbtn" id="btnUp">&#9650;</div><div></div>
+  <div class="tbtn" id="btnLeft">&#9664;</div><div></div><div class="tbtn" id="btnRight">&#9654;</div>
+  <div></div><div class="tbtn" id="btnDown">&#9660;</div><div></div>
+</div>
+
+<div id="overlay">
+  <div id="page">
+    <h1>Lanternfall</h1>
+    <div class="sub">an infinite cave, charted one step at a time</div>
+    <p>Somewhere beneath the world lies a cave with no known edges. Carry your lantern, chart the dark, and gather what glimmers in the dust around you.</p>
+    <p>Move with <b>WASD</b> or <b>arrow keys</b> &mdash; or the dial in the corner, if you're charting by touch.</p>
+    <div class="legend">
+      <span><span class="ic">&#128142;</span> Gems &mdash; add to your tally</span>
+      <span><span class="ic">&#128094;</span> Boots &mdash; quicken your step, briefly</span>
+      <span><span class="ic">&#127982;</span> Lantern oil &mdash; widens what you can see</span>
+      <span><span class="ic">&#129517;</span> Compass &mdash; points toward the nearest find</span>
+    </div>
+    <div class="seedRow">
+      <input type="text" id="seedInput" placeholder="Chart number (leave blank for random)">
+      <button class="btn-secondary" id="randomSeedBtn">Random</button>
+    </div>
+    <button class="btn-primary" id="beginBtn">Begin Expedition</button>
+    <div class="tip">Tip: ground you've already charted stays dimly visible &mdash; even items you've spotted but not yet claimed.</div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/math.js"></script>
+<script src="js/world.js"></script>
+<script src="js/state.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/minimap.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
