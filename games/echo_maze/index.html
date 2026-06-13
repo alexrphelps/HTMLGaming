@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Echo Maze</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game" aria-label="Echo Maze game canvas"></canvas>
+
+  <section id="hud" aria-label="Game HUD">
+    <h1>Echo Maze</h1>
+    <p id="goalText"></p>
+    <div id="runStats"></div>
+    <div id="itemMeters" aria-label="Item upgrades"></div>
+    <div id="secondaryStats"></div>
+  </section>
+
+  <aside id="controlsDock" aria-label="Controls">
+    <div><span>Move</span><kbd>WASD</kbd><kbd>Arrows</kbd></div>
+    <div><span>Phase</span><kbd>Space</kbd><span>Map</span><kbd>M</kbd></div>
+    <div><span>Menu</span><kbd>Esc</kbd></div>
+  </aside>
+
+  <div id="messageLog"></div>
+
+  <div id="overlay" aria-live="polite">
+    <div class="overlay-panel">
+      <h2 id="overlayTitle">Echo Maze</h2>
+      <p id="overlayText"></p>
+      <div id="overlayStats" class="result"></div>
+      <div class="button-row">
+        <button id="primaryBtn" type="button">Begin Run</button>
+        <button id="secondaryBtn" type="button">New Seed</button>
+        <button id="tertiaryBtn" type="button">New Seed</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/core/namespace.js"></script>
+  <script src="js/config/constants.js"></script>
+  <script src="js/config/items.js"></script>
+  <script src="js/core/coords.js"></script>
+  <script src="js/core/rng.js"></script>
+  <script src="js/core/collections.js"></script>
+  <script src="js/world/chunks.js"></script>
+  <script src="js/world/mazeGeneration.js"></script>
+  <script src="js/world/collision.js"></script>
+  <script src="js/world/pathfinding.js"></script>
+  <script src="js/state/createRun.js"></script>
+  <script src="js/state/messages.js"></script>
+  <script src="js/state/progression.js"></script>
+  <script src="js/entities/items.js"></script>
+  <script src="js/entities/objectives.js"></script>
+  <script src="js/entities/warden.js"></script>
+  <script src="js/entities/playerMovement.js"></script>
+  <script src="js/render/canvas.js"></script>
+  <script src="js/render/worldRenderer.js"></script>
+  <script src="js/render/entityRenderer.js"></script>
+  <script src="js/render/effectsRenderer.js"></script>
+  <script src="js/render/uiRenderer.js"></script>
+  <script src="js/ui/hud.js"></script>
+  <script src="js/ui/overlay.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

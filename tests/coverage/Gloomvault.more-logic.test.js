@@ -1,6 +1,17 @@
 const { createBrowserContext, loadBrowserScript } = require('../helpers/browserScriptHarness');
 
 function load(context, relativePath, exports) {
+  if (relativePath === 'entities/Enemy.js') {
+    if (!context.EnemyFactory) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/EnemyFactory.js', ['EnemyFactory']);
+    }
+    if (!context.BossBehaviorService) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/BossBehaviorService.js', ['BossBehaviorService']);
+    }
+    if (!context.EnemyRenderService) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/EnemyRenderService.js', ['EnemyRenderService']);
+    }
+  }
   return loadBrowserScript(context, `games/gloomvault-extraction/js/${relativePath}`, exports);
 }
 

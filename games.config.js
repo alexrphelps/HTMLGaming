@@ -109,6 +109,22 @@ window.GAMEHUB_GAMES = [
         saveSupport: 'None'
     },
     {
+        folder: 'echo_maze',
+        name: 'Echo Maze',
+        description: 'Infinite fog-of-war maze run where you stabilize Echo Anchors and escape before the maze wakes fully.',
+        category: 'Exploration',
+        difficulty: 'Medium',
+        icon: 'EM',
+        tags: ['2d', 'exploration', 'maze', 'fog-of-war', 'procedural', 'canvas'],
+        author: 'GameHub',
+        estimatedPlayTime: 20,
+        aiEffortRating: 5,
+        defaultRating: 4,
+        input: 'Keyboard',
+        rendering: 'Canvas',
+        saveSupport: 'None'
+    },
+    {
         folder: 'blockdodge',
         name: 'Block Dodge',
         description: 'Control a square and dodge falling blocks as the difficulty increases.',
@@ -227,6 +243,22 @@ window.GAMEHUB_GAMES = [
         defaultRating: 3,
         input: 'Keyboard + Touch',
         rendering: 'Canvas',
+        saveSupport: 'None'
+    },
+    {
+        folder: 'skySquirrel',
+        name: 'Sky Squirrel',
+        description: 'Launch from a mountain summit and carve a wingsuit line across a procedural island in native WebGL.',
+        category: 'Simulation',
+        difficulty: 'Medium',
+        icon: 'SS',
+        tags: ['3d', 'wingsuit', 'flight', 'island', 'webgl', 'procedural'],
+        author: 'GameHub',
+        estimatedPlayTime: 12,
+        aiEffortRating: 5,
+        defaultRating: 4,
+        input: 'Keyboard + Mouse',
+        rendering: 'Native WebGL',
         saveSupport: 'None'
     }
 ];

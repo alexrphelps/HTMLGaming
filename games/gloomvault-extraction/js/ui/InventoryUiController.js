@@ -390,23 +390,18 @@ function loadStashData() {
 
     function refreshUpgradeUI() {
         document.getElementById('scrap-counter').textContent = `Scraps: ${scraps}`;
-        
-        if (itemInUpgradeSlot) {
-            upgradeDropzone.innerHTML = '';
-            upgradeDropzone.appendChild(createDraggableItem(itemInUpgradeSlot.item, { source: 'upgrade', type: 'upgrade', id: 'upgrade' }));
-            
-            const cost = UpgradeSystem.getUpgradeCost(itemInUpgradeSlot.item);
-            if (cost !== null) {
-                btnUpgrade.textContent = `Upgrade (Cost: ${cost})`;
-                btnUpgrade.disabled = scraps < cost;
-            } else {
-                btnUpgrade.textContent = 'Max Level';
-                btnUpgrade.disabled = true;
-            }
-        } else {
-            upgradeDropzone.innerHTML = 'Drop Item';
-            btnUpgrade.textContent = 'Upgrade (Cost: --)';
-            btnUpgrade.disabled = true;
+
+        if (typeof InventoryCraftingUi !== 'undefined') {
+            InventoryCraftingUi.refreshSlot({
+                slot: itemInUpgradeSlot ? { ...itemInUpgradeSlot, scraps } : null,
+                dropzone: upgradeDropzone,
+                button: btnUpgrade,
+                emptyText: 'Drop Item',
+                actionLabel: 'Upgrade',
+                unavailableText: 'Max Level',
+                getCost: item => UpgradeSystem.getUpgradeCost(item),
+                createItem: item => createDraggableItem(item, { source: 'upgrade', type: 'upgrade', id: 'upgrade' })
+            });
         }
 
         refreshRepairUI();
@@ -415,22 +410,17 @@ function loadStashData() {
     function refreshRepairUI() {
         if (!repairDropzone || !btnRepair) return;
 
-        if (itemInRepairSlot) {
-            repairDropzone.innerHTML = '';
-            repairDropzone.appendChild(createDraggableItem(itemInRepairSlot.item, { source: 'repair', type: 'repair', id: 'repair' }));
-
-            const cost = UpgradeSystem.getRepairCost(itemInRepairSlot.item);
-            if (cost !== null) {
-                btnRepair.textContent = `Repair (Cost: ${cost})`;
-                btnRepair.disabled = scraps < cost;
-            } else {
-                btnRepair.textContent = 'Full Durability';
-                btnRepair.disabled = true;
-            }
-        } else {
-            repairDropzone.innerHTML = 'Drop Item';
-            btnRepair.textContent = 'Repair (Cost: --)';
-            btnRepair.disabled = true;
+        if (typeof InventoryCraftingUi !== 'undefined') {
+            InventoryCraftingUi.refreshSlot({
+                slot: itemInRepairSlot ? { ...itemInRepairSlot, scraps } : null,
+                dropzone: repairDropzone,
+                button: btnRepair,
+                emptyText: 'Drop Item',
+                actionLabel: 'Repair',
+                unavailableText: 'Full Durability',
+                getCost: item => UpgradeSystem.getRepairCost(item),
+                createItem: item => createDraggableItem(item, { source: 'repair', type: 'repair', id: 'repair' })
+            });
         }
     }
 
@@ -1171,28 +1161,27 @@ function loadStashData() {
     function refreshServiceCraftingUI() {
         document.getElementById('service-scrap-counter').textContent = `Scraps: ${scraps}`;
 
-        if (serviceUpgradeSlot) {
-            serviceUpgradeDropzone.innerHTML = '';
-            serviceUpgradeDropzone.appendChild(createDraggableItem(serviceUpgradeSlot.item, { source: 'service-upgrade', type: 'upgrade', id: 'service-upgrade' }));
-            const cost = UpgradeSystem.getUpgradeCost(serviceUpgradeSlot.item);
-            btnServiceUpgrade.textContent = cost !== null ? `Upgrade (Cost: ${cost})` : 'Max Level';
-            btnServiceUpgrade.disabled = cost === null || scraps < cost;
-        } else {
-            serviceUpgradeDropzone.innerHTML = 'Drop Item';
-            btnServiceUpgrade.textContent = 'Upgrade (Cost: --)';
-            btnServiceUpgrade.disabled = true;
-        }
-
-        if (serviceRepairSlot) {
-            serviceRepairDropzone.innerHTML = '';
-            serviceRepairDropzone.appendChild(createDraggableItem(serviceRepairSlot.item, { source: 'service-repair', type: 'repair', id: 'service-repair' }));
-            const cost = UpgradeSystem.getRepairCost(serviceRepairSlot.item);
-            btnServiceRepair.textContent = cost !== null ? `Repair (Cost: ${cost})` : 'Full Durability';
-            btnServiceRepair.disabled = cost === null || scraps < cost;
-        } else {
-            serviceRepairDropzone.innerHTML = 'Drop Item';
-            btnServiceRepair.textContent = 'Repair (Cost: --)';
-            btnServiceRepair.disabled = true;
+        if (typeof InventoryCraftingUi !== 'undefined') {
+            InventoryCraftingUi.refreshSlot({
+                slot: serviceUpgradeSlot ? { ...serviceUpgradeSlot, scraps } : null,
+                dropzone: serviceUpgradeDropzone,
+                button: btnServiceUpgrade,
+                emptyText: 'Drop Item',
+                actionLabel: 'Upgrade',
+                unavailableText: 'Max Level',
+                getCost: item => UpgradeSystem.getUpgradeCost(item),
+                createItem: item => createDraggableItem(item, { source: 'service-upgrade', type: 'upgrade', id: 'service-upgrade' })
+            });
+            InventoryCraftingUi.refreshSlot({
+                slot: serviceRepairSlot ? { ...serviceRepairSlot, scraps } : null,
+                dropzone: serviceRepairDropzone,
+                button: btnServiceRepair,
+                emptyText: 'Drop Item',
+                actionLabel: 'Repair',
+                unavailableText: 'Full Durability',
+                getCost: item => UpgradeSystem.getRepairCost(item),
+                createItem: item => createDraggableItem(item, { source: 'service-repair', type: 'repair', id: 'service-repair' })
+            });
         }
     }
 
@@ -1336,34 +1325,11 @@ function loadStashData() {
         const div = document.createElement('div');
         div.className = 'item-dragger';
         div.draggable = true;
-        div.style.backgroundColor = item.color;
-        
-        let displayName = item.name;
-        if (item.maxDurability !== undefined) {
-            if (item.durability <= 0) {
-                div.classList.add('item-broken');
-                displayName += ' (Broken)';
-            } else {
-                const pct = item.durability / item.maxDurability;
-                if (pct <= 0.10) div.classList.add('item-critical-durability');
-                else if (pct <= 0.25) div.classList.add('item-low-durability');
-            }
-        }
-        const lootIcon = window.gloomvaultAssets && window.gloomvaultAssets.getLootIcon(item);
-        if (lootIcon) {
-            div.classList.add('item-dragger-with-icon');
-            const icon = document.createElement('img');
-            icon.className = 'item-loot-icon';
-            icon.src = lootIcon.src;
-            icon.alt = '';
-            icon.draggable = false;
-            const label = document.createElement('span');
-            label.className = 'item-label';
-            label.textContent = displayName;
-            div.appendChild(icon);
-            div.appendChild(label);
+        if (typeof InventoryItemRenderer !== 'undefined') {
+            InventoryItemRenderer.decorateItemElement(div, item);
         } else {
-            div.textContent = displayName;
+            div.style.backgroundColor = item.color;
+            div.textContent = item.name;
         }
         
         div.addEventListener('dragstart', (e) => {

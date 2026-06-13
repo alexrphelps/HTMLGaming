@@ -4,8 +4,53 @@ const zlib = require('zlib');
 const { createBrowserContext, loadBrowserScript } = require('../helpers/browserScriptHarness');
 
 function loadGloomvault(relativePath, exportNames, context = createBrowserContext()) {
+  if (relativePath === 'systems/MapGen.js') {
+    if (!context.MapLayoutRegistry) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/MapLayoutRegistry.js', ['MapLayoutRegistry']);
+    }
+    if (!context.MapTopologyService) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/MapTopologyService.js', ['MapTopologyService']);
+    }
+    if (!context.BossRoomPlanner) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/BossRoomPlanner.js', ['BossRoomPlanner']);
+    }
+    if (!context.MapPositionService) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/MapPositionService.js', ['MapPositionService']);
+    }
+  }
   if (relativePath === 'core/GameEngine.js' && !context.FloorOrchestrator) {
+    if (!context.CombatSystem) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/CombatSystem.js', ['CombatSystem']);
+    }
+    if (!context.AbilitySystem) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/AbilitySystem.js', ['AbilitySystem']);
+    }
+    if (!context.GameRenderer) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/GameRenderer.js', ['GameRenderer']);
+    }
+    if (!context.InteractionSystem) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/InteractionSystem.js', ['InteractionSystem']);
+    }
     loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/FloorOrchestrator.js', ['FloorOrchestrator']);
+  }
+  if (relativePath === 'entities/Enemy.js') {
+    if (!context.EnemyFactory) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/EnemyFactory.js', ['EnemyFactory']);
+    }
+    if (!context.BossBehaviorService) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/BossBehaviorService.js', ['BossBehaviorService']);
+    }
+    if (!context.EnemyRenderService) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/systems/EnemyRenderService.js', ['EnemyRenderService']);
+    }
+  }
+  if (relativePath === 'ui/InventoryUiController.js') {
+    if (!context.InventoryItemRenderer) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/ui/InventoryItemRenderer.js', ['InventoryItemRenderer']);
+    }
+    if (!context.InventoryCraftingUi) {
+      loadBrowserScript(context, 'games/gloomvault-extraction/js/ui/InventoryCraftingUi.js', ['InventoryCraftingUi']);
+    }
   }
   return loadBrowserScript(context, `games/gloomvault-extraction/js/${relativePath}`, exportNames);
 }
@@ -4499,6 +4544,176 @@ describe('Gloomvault AbilitySystem ownership', () => {
       enemy.isAggroed,
       engine.decoys.length
     ]).toEqual([0, true, true, 0]);
+  });
+});
+
+// Behaviour under test: GameEngine remains a stable facade while services own the implementation.
+describe('Gloomvault service ownership facades', () => {
+  test('GameEngine delegates combat, ability, and render facade methods', () => {
+    const context = createBrowserContext();
+    const { GameEngine } = loadGloomvault('core/GameEngine.js', ['GameEngine'], context);
+    const combatResult = { type: 'fire' };
+    const nearestEnemy = { hp: 1 };
+    const engine = Object.assign(Object.create(GameEngine.prototype), {
+      combatSystem: {
+        applyStatusEffect: jest.fn(() => combatResult),
+        getElementFallbackColor: jest.fn(() => '#abc')
+      },
+      abilitySystem: {
+        findNearestEnemy: jest.fn(() => nearestEnemy),
+        renderTrinketEffects: jest.fn()
+      },
+      gameRenderer: { render: jest.fn(() => 'rendered') }
+    });
+
+    expect([
+      engine.applyStatusEffect({}, 'fire'),
+      engine.getElementFallbackColor('fire'),
+      engine.findNearestEnemy(1, 2),
+      engine.render(0)
+    ]).toEqual([combatResult, '#abc', nearestEnemy, 'rendered']);
+    expect(engine.abilitySystem.renderTrinketEffects).not.toHaveBeenCalled();
+  });
+
+  test('InteractionSystem handles pickup priority through callbacks and consumes F', () => {
+    const context = createBrowserContext();
+    const { InteractionSystem } = loadGloomvault('systems/InteractionSystem.js', ['InteractionSystem'], context);
+    const item = {
+      x: 10,
+      y: 10,
+      pickupRadius: 20,
+      itemData: { type: 'weapon', color: '#fff' },
+      update: jest.fn()
+    };
+    const engine = {
+      player: { x: 10, y: 10, addToInventory: jest.fn(() => true) },
+      enemies: [],
+      droppedItems: [item],
+      floorTransitions: [],
+      lootChests: [],
+      dungeonServices: [],
+      bossRoomButtons: [],
+      input: { keys: { KeyF: true }, isKeyDown: key => key === 'KeyF' },
+      combatFeedback: { addText: jest.fn() },
+      showInteractionHint: jest.fn(),
+      hideInteractionHint: jest.fn(),
+      getNearbyBossRoomEntrance: () => null,
+      notifyInventoryChanged: jest.fn()
+    };
+
+    new InteractionSystem().update(engine, 0.1);
+
+    expect([
+      engine.showInteractionHint.mock.calls[0][0],
+      engine.input.keys.KeyF,
+      engine.droppedItems.length,
+      engine.notifyInventoryChanged.mock.calls.length
+    ]).toEqual(['Press [F] to Pick Up', false, 0, 1]);
+  });
+
+  test('BossRoomPlanner owns candidate building and placement checks', () => {
+    const context = createBrowserContext();
+    const { BossRoomPlanner } = loadGloomvault('systems/BossRoomPlanner.js', ['BossRoomPlanner'], context);
+    const mapGen = {
+      cols: 30,
+      rows: 30,
+      config: { maxRoomSize: 9 },
+      grid: new Array(900).fill(0),
+      getEdgePaddingTiles: () => 2,
+      getTile(x, y) {
+        if (x < 0 || y < 0 || x >= this.cols || y >= this.rows) return 0;
+        return this.grid[y * this.cols + x];
+      },
+      clamp: (value, min, max) => Math.max(min, Math.min(max, value))
+    };
+    const planner = new BossRoomPlanner(mapGen);
+    const candidate = planner.buildCandidate({ x: 8, y: 8, width: 5, height: 5, center: { x: 10, y: 10 } }, { x: 1, y: 0 }, 7, 4);
+
+    expect([candidate.room.isBossRoom, candidate.corridorTiles.length, planner.canPlace(candidate.room)]).toEqual([true, 4, true]);
+  });
+
+  test('MapGen generation delegates layout and topology ownership', () => {
+    const context = createBrowserContext();
+    const { MapGen } = loadGloomvault('systems/MapGen.js', ['MapGen'], context);
+    const map = new MapGen({
+      cols: 20,
+      rows: 20,
+      layoutType: 'structured',
+      numRooms: 2,
+      minRoomSize: 3,
+      maxRoomSize: 4,
+      perfectSquareChance: 1,
+      blobMinRects: 1,
+      blobMaxRects: 1,
+      smoothingPasses: 0
+    }, 10);
+    const layoutSpy = jest.spyOn(map.layoutRegistry, 'generate').mockImplementation(() => {});
+    const repairSpy = jest.spyOn(map.topologyService, 'ensureMainRoomConnectivity').mockImplementation(() => {});
+    const pruneSpy = jest.spyOn(map.topologyService, 'pruneUnreachableIslands').mockImplementation(() => {});
+    map.tryGenerateBossRoom = jest.fn();
+
+    map.runGenerationPass();
+
+    expect([
+      layoutSpy.mock.calls[0][0],
+      repairSpy.mock.calls.length,
+      pruneSpy.mock.calls.length,
+      map.tryGenerateBossRoom.mock.calls.length
+    ]).toEqual(['structured', 1, 1, 1]);
+  });
+
+  test('Enemy services own boss runtime and sprite rendering lookups', () => {
+    const context = createBrowserContext();
+    loadGloomvault('entities/Entity.js', ['Entity'], context);
+    loadGloomvault('systems/Weapon.js', ['Weapon'], context);
+    const { Enemy } = loadGloomvault('entities/Enemy.js', ['Enemy'], context);
+    const bossProfile = {
+      tier: 'mainBoss',
+      baseType: 'boss',
+      spriteKey: 'sprites.enemy.boss.test',
+      modifier: { apply: enemy => { enemy.bossRuntime.bloodiedSpeedMultiplier = 2; } },
+      borrowedPower: { cooldown: 1, apply: jest.fn() },
+      hooks: { onUpdate: jest.fn() },
+      thresholds: []
+    };
+    const boss = new Enemy(10, 20, 'boss', 1, 1, { bossProfile });
+
+    boss.updateBossRuntime(0.1, {}, {}, {}, { engine: {} });
+
+    expect([
+      Enemy.fallbackFactory,
+      boss.bossRuntime.bloodiedSpeedMultiplier,
+      boss.getSpriteKey(),
+      bossProfile.hooks.onUpdate.mock.calls.length
+    ]).toEqual([undefined, 2, 'sprites.enemy.boss.test', 1]);
+  });
+
+  test('inventory UI helpers render item visuals and crafting slot state', () => {
+    const context = createBrowserContext();
+    const { InventoryItemRenderer } = loadGloomvault('ui/InventoryItemRenderer.js', ['InventoryItemRenderer'], context);
+    const { InventoryCraftingUi } = loadGloomvault('ui/InventoryCraftingUi.js', ['InventoryCraftingUi'], context);
+    const itemEl = context.document.createElement('div');
+    const dropzone = context.document.createElement('div');
+    const button = context.document.createElement('button');
+
+    InventoryItemRenderer.decorateItemElement(itemEl, { name: 'Cracked Helm', color: '#123', maxDurability: 10, durability: 0 });
+    InventoryCraftingUi.refreshSlot({
+      slot: { item: { name: 'Helm' }, scraps: 5 },
+      dropzone,
+      button,
+      emptyText: 'Drop Item',
+      actionLabel: 'Repair',
+      unavailableText: 'Full Durability',
+      getCost: () => 3,
+      createItem: () => context.document.createElement('span')
+    });
+
+    expect([
+      itemEl.classList.contains('item-broken'),
+      dropzone.children.length,
+      button.textContent,
+      button.disabled
+    ]).toEqual([true, 1, 'Repair (Cost: 3)', false]);
   });
 });
 

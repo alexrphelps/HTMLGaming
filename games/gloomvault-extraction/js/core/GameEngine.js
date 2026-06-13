@@ -25,7 +25,9 @@ class GameEngine {
         this.abilitySystem = options.abilitySystem || (typeof AbilitySystem !== 'undefined' ? new AbilitySystem() : null);
         this.minimapService = options.minimapService || (typeof MinimapService !== 'undefined' ? new MinimapService() : null);
         this.gameRenderer = options.gameRenderer || (typeof GameRenderer !== 'undefined' ? new GameRenderer() : null);
+        this.interactionSystem = options.interactionSystem || (typeof InteractionSystem !== 'undefined' ? new InteractionSystem() : null);
         this.flowController = options.flowController || {};
+        this.uiCallbacks = options.uiCallbacks || {};
 
         // Map Gen parameters
         this.tileSize = 64;
@@ -324,6 +326,18 @@ class GameEngine {
             scratch.push(projectile);
         }
         return scratch;
+    }
+
+    notifyInventoryChanged() {
+        if (this.uiCallbacks && this.uiCallbacks.onInventoryChanged) {
+            this.uiCallbacks.onInventoryChanged(this);
+        }
+    }
+
+    notifyDurabilityChanged() {
+        if (this.uiCallbacks && this.uiCallbacks.onDurabilityChanged) {
+            this.uiCallbacks.onDurabilityChanged(this.player, this);
+        }
     }
 
     start() {
@@ -739,418 +753,110 @@ class GameEngine {
         this._animationFrameId = requestAnimationFrame((time) => this.loop(time));
     }
 
+    ensureCombatSystem() {
+        if (!this.combatSystem && typeof CombatSystem !== 'undefined') {
+            this.combatSystem = new CombatSystem();
+        }
+        return this.combatSystem;
+    }
+
     getElementConfig(element) {
-        if (this.combatSystem && this.combatSystem.getElementConfig) return this.combatSystem.getElementConfig(element);
-        if (!element || typeof CombatConfig === 'undefined' || !CombatConfig.elemental) return null;
-        return CombatConfig.elemental[element] || null;
+        const combatSystem = this.ensureCombatSystem();
+        return combatSystem && combatSystem.getElementConfig ? combatSystem.getElementConfig(element) : null;
     }
 
     getStatusEffect(target, type) {
-        if (this.combatSystem && this.combatSystem.getStatusEffect) return this.combatSystem.getStatusEffect(target, type);
-        if (!target.statusEffects) target.statusEffects = [];
-        return target.statusEffects.find(effect => effect.type === type);
+        const combatSystem = this.ensureCombatSystem();
+        return combatSystem && combatSystem.getStatusEffect ? combatSystem.getStatusEffect(target, type) : null;
     }
 
     applyStatusEffect(target, type, values = {}) {
-        if (this.combatSystem && this.combatSystem.applyStatusEffect) {
-            return this.combatSystem.applyStatusEffect(target, type, values);
-        }
-        if (!target || !type) return null;
-        if (!target.statusEffects) target.statusEffects = [];
-
-        const existing = this.getStatusEffect(target, type);
-        if (existing && !values.stackable) {
-            Object.assign(existing, values, {
-                type: type,
-                durationLeft: Math.max(existing.durationLeft || 0, values.duration || values.durationLeft || 0)
-            });
-            return existing;
-        }
-
-        if (existing && values.stackable) {
-            existing.stacks = Math.min(values.maxStacks || 99, (existing.stacks || 1) + 1);
-            existing.durationLeft = values.duration || existing.durationLeft;
-            existing.damagePerSecond = values.damagePerSecond || existing.damagePerSecond;
-            return existing;
-        }
-
-        const effect = {
-            type: type,
-            durationLeft: values.duration || values.durationLeft || 0,
-            damagePerSecond: values.damagePerSecond || 0,
-            color: values.color || '#ffffff',
-            slowMultiplier: values.slowMultiplier || 1,
-            damageTakenMultiplier: values.damageTakenMultiplier || 1,
-            stacks: values.stacks || 1,
-            stackable: Boolean(values.stackable)
-        };
-        target.statusEffects.push(effect);
-        return effect;
+        const combatSystem = this.ensureCombatSystem();
+        return combatSystem && combatSystem.applyStatusEffect ? combatSystem.applyStatusEffect(target, type, values) : null;
     }
 
     applyElementalHit(target, projectile) {
-        if (this.combatSystem && this.combatSystem.applyElementalHit) {
-            return this.combatSystem.applyElementalHit(target, projectile);
-        }
-        if (!target || !projectile || !projectile.element) return;
-
-        const config = this.getElementConfig(projectile.element);
-        if (!config) return;
-
-        switch (projectile.element) {
-            case 'frost':
-                this.applyStatusEffect(target, 'frost', {
-                    duration: config.duration,
-                    slowMultiplier: config.slowMultiplier,
-                    color: config.color
-                });
-                break;
-            case 'fire':
-                this.applyStatusEffect(target, 'fire', {
-                    duration: config.duration,
-                    damagePerSecond: config.damagePerSecond,
-                    color: config.color
-                });
-                break;
-            case 'felfire':
-                this.applyStatusEffect(target, 'felfire', {
-                    duration: config.duration,
-                    damagePerSecond: config.damagePerSecond,
-                    maxStacks: config.maxStacks,
-                    stackable: true,
-                    color: config.color
-                });
-                break;
-            case 'holy':
-                this.applyStatusEffect(target, 'radiance', {
-                    duration: config.duration,
-                    color: config.color
-                });
-                break;
-            case 'shadow':
-                this.applyStatusEffect(target, 'amplify', {
-                    duration: config.duration,
-                    damageTakenMultiplier: config.damageTakenMultiplier,
-                    color: config.color
-                });
-                break;
-            case 'poison':
-                this.applyStatusEffect(target, 'sickness', {
-                    duration: config.duration,
-                    damagePerSecond: config.damagePerSecond,
-                    color: config.color
-                });
-                break;
-        }
+        const combatSystem = this.ensureCombatSystem();
+        if (combatSystem && combatSystem.applyElementalHit) return combatSystem.applyElementalHit(target, projectile);
     }
 
     getDamageTakenMultiplier(target) {
-        if (this.combatSystem && this.combatSystem.getDamageTakenMultiplier) {
-            return this.combatSystem.getDamageTakenMultiplier(target);
-        }
-        const amplify = this.getStatusEffect(target, 'amplify');
-        return amplify ? amplify.damageTakenMultiplier || 1 : 1;
+        const combatSystem = this.ensureCombatSystem();
+        return combatSystem && combatSystem.getDamageTakenMultiplier ? combatSystem.getDamageTakenMultiplier(target) : 1;
     }
 
     dealStatusDamage(target, amount) {
-        if (this.combatSystem && this.combatSystem.dealStatusDamage) {
-            return this.combatSystem.dealStatusDamage(this, target, amount);
-        }
-        if (!target || amount <= 0) return 0;
-        if (target === this.player && typeof DevConfig !== 'undefined' && DevConfig.godMode) return 0;
-
-        const previousHp = target.hp;
-        target.hp = Math.max(0, target.hp - amount);
-        return Math.max(0, previousHp - target.hp);
+        const combatSystem = this.ensureCombatSystem();
+        return combatSystem && combatSystem.dealStatusDamage ? combatSystem.dealStatusDamage(this, target, amount) : 0;
     }
 
     showStatusDamageText(target, amount, color) {
-        if (this.combatSystem && this.combatSystem.showStatusDamageText) {
-            return this.combatSystem.showStatusDamageText(this, target, amount, color);
-        }
-        if (!target || amount <= 0 || !this.combatFeedback || !this.combatFeedback.addText) return;
-
-        this.combatFeedback.addText(`-${Math.round(amount)}`, target.x, target.y - 14, color || '#ff0000', 12, 0.75);
+        const combatSystem = this.ensureCombatSystem();
+        if (combatSystem && combatSystem.showStatusDamageText) return combatSystem.showStatusDamageText(this, target, amount, color);
     }
 
     processStatusEffects(target, dt) {
-        if (this.combatSystem && this.combatSystem.processStatusEffects) {
-            return this.combatSystem.processStatusEffects(this, target, dt);
-        }
-        if (!target || !target.statusEffects) return;
-
-        let speedMultiplier = 1;
-        for (let i = target.statusEffects.length - 1; i >= 0; i--) {
-            const effect = target.statusEffects[i];
-            effect.durationLeft -= dt;
-
-            if (effect.type === 'frost') {
-                speedMultiplier = Math.min(speedMultiplier, effect.slowMultiplier || 1);
-            }
-
-            if (effect.damagePerSecond > 0) {
-                const actualDamage = this.dealStatusDamage(target, effect.damagePerSecond * (effect.stacks || 1) * dt);
-                if (actualDamage > 0) {
-                    effect.damageTextAccumulator = (effect.damageTextAccumulator || 0) + actualDamage;
-                    effect.damageTextTimer = (effect.damageTextTimer || 0) + dt;
-
-                    const shouldShowDamageText = effect.damageTextTimer >= 0.5 || target.hp <= 0 || effect.durationLeft <= 0;
-                    if (shouldShowDamageText && effect.damageTextAccumulator >= 0.5) {
-                        this.showStatusDamageText(target, effect.damageTextAccumulator, effect.color);
-                        effect.damageTextAccumulator = 0;
-                        effect.damageTextTimer = 0;
-                    }
-                }
-            }
-
-            if (effect.durationLeft <= 0) {
-                target.statusEffects.splice(i, 1);
-            }
-        }
-
-        target.statusSpeedMultiplier = speedMultiplier;
+        const combatSystem = this.ensureCombatSystem();
+        if (combatSystem && combatSystem.processStatusEffects) return combatSystem.processStatusEffects(this, target, dt);
     }
 
     hasStatusEffect(target, type) {
-        if (this.combatSystem && this.combatSystem.hasStatusEffect) {
-            return this.combatSystem.hasStatusEffect(target, type);
-        }
-        return Boolean(target && target.statusEffects && target.statusEffects.some(effect => effect.type === type));
+        const combatSystem = this.ensureCombatSystem();
+        return combatSystem && combatSystem.hasStatusEffect ? combatSystem.hasStatusEffect(target, type) : false;
     }
 
     handleElementalDeathBurst(deadEnemy) {
-        const hasRadiance = this.hasStatusEffect(deadEnemy, 'radiance');
-        const hasSickness = this.hasStatusEffect(deadEnemy, 'sickness');
-        if (!hasRadiance && !hasSickness) return;
-
-        if (hasRadiance) {
-            this.spawnRadianceDeathProjectiles(deadEnemy);
-        }
-
-        if (hasSickness) {
-            this.spawnPoisonDeathProjectiles(deadEnemy);
-        }
+        const combatSystem = this.ensureCombatSystem();
+        if (combatSystem && combatSystem.handleElementalDeathBurst) return combatSystem.handleElementalDeathBurst(this, deadEnemy);
     }
 
     spawnRadianceDeathProjectiles(deadEnemy) {
-        const config = this.getElementConfig('holy');
-        if (!config || typeof Projectile === 'undefined') return;
-
-        const projectileCount = 8;
-        const speed = 420;
-        const lifetime = (config.burstRadius || 340) / speed;
-        if (!this.projectiles) this.projectiles = [];
-
-        for (let i = 0; i < projectileCount; i++) {
-            const angle = (Math.PI * 2 / projectileCount) * i;
-            const spawnX = deadEnemy.x + Math.cos(angle) * 15;
-            const spawnY = deadEnemy.y + Math.sin(angle) * 15;
-            const projectile = new Projectile(spawnX, spawnY, angle, speed, config.burstDamage || 18, lifetime, true, 'pistol', {
-                element: 'holy',
-                color: config.color,
-                attackName: 'Radiance Burst'
-            });
-            projectile.width = 16;
-            projectile.height = 16;
-            this.projectiles.push(projectile);
-        }
-
-        if (this.particleSystem) {
-            this.particleSystem.emitImpact(deadEnemy.x, deadEnemy.y, config.color || '#fff2a6', 35);
-        }
+        const combatSystem = this.ensureCombatSystem();
+        if (combatSystem && combatSystem.spawnRadianceDeathProjectiles) return combatSystem.spawnRadianceDeathProjectiles(this, deadEnemy);
     }
 
     spawnPoisonDeathProjectiles(deadEnemy) {
-        const config = this.getElementConfig('poison');
-        if (!config || typeof Projectile === 'undefined') return;
+        const combatSystem = this.ensureCombatSystem();
+        if (combatSystem && combatSystem.spawnPoisonDeathProjectiles) return combatSystem.spawnPoisonDeathProjectiles(this, deadEnemy);
+    }
 
-        const projectileCount = 8;
-        const speed = 360;
-        const lifetime = (config.burstRadius || 145) / speed;
-        if (!this.projectiles) this.projectiles = [];
-
-        for (let i = 0; i < projectileCount; i++) {
-            const angle = (Math.PI * 2 / projectileCount) * i;
-            const spawnX = deadEnemy.x + Math.cos(angle) * 15;
-            const spawnY = deadEnemy.y + Math.sin(angle) * 15;
-            const projectile = new Projectile(spawnX, spawnY, angle, speed, config.burstDamage || 10, lifetime, true, 'pistol', {
-                element: 'poison',
-                color: config.color,
-                attackName: 'Sickness Burst'
-            });
-            projectile.width = 14;
-            projectile.height = 14;
-            this.projectiles.push(projectile);
+    ensureAbilitySystem() {
+        if (!this.abilitySystem && typeof AbilitySystem !== 'undefined') {
+            this.abilitySystem = new AbilitySystem();
         }
-
-        if (this.particleSystem) {
-            this.particleSystem.emitImpact(deadEnemy.x, deadEnemy.y, config.color || '#1f8f38', 25);
-        }
+        return this.abilitySystem;
     }
 
     consumePlayerTrinketAbilities() {
-        if (this.abilitySystem && this.abilitySystem.consumePlayerTrinketAbilities) {
-            return this.abilitySystem.consumePlayerTrinketAbilities(this);
-        }
-        if (!this.player || !this.player.pendingTrinketAbilities || this.player.pendingTrinketAbilities.length === 0) return;
-
-        const abilities = this.player.pendingTrinketAbilities.splice(0);
-        for (const request of abilities) {
-            this.resolveTrinketAbility(request);
-        }
+        const abilitySystem = this.ensureAbilitySystem();
+        if (abilitySystem && abilitySystem.consumePlayerTrinketAbilities) return abilitySystem.consumePlayerTrinketAbilities(this);
     }
 
     resolveTrinketAbility(request) {
-        if (this.abilitySystem && this.abilitySystem.resolveTrinketAbility) {
-            return this.abilitySystem.resolveTrinketAbility(this, request);
-        }
-        if (!request || !request.ability || !this.player) return false;
-
-        const ability = request.ability;
-        switch (ability.type) {
-            case 'scout':
-                return this.revealMinimapArea(ability);
-            case 'phase_tether':
-                return this.phaseTether(ability, request.angle);
-            case 'element_bomb':
-                return this.throwElementBomb(ability, request.angle);
-            case 'lightning_strike':
-                return this.castLightningStrike(ability);
-            case 'target_dummy':
-                return this.spawnTargetDummy(ability, request.angle);
-            case 'soul_siphon':
-                return this.applySoulSiphon(ability);
-        }
-        return false;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.resolveTrinketAbility ? abilitySystem.resolveTrinketAbility(this, request) : false;
     }
 
     revealMinimapArea(ability) {
-        if (!this.player || !this.mapGen || !this.mapGen.visitedGrid) return false;
-
-        const radius = Math.max(1, ability.revealRadius || 22);
-        const pX = Math.floor(this.player.x / this.mapGen.tileSize);
-        const pY = Math.floor(this.player.y / this.mapGen.tileSize);
-
-        for (let y = pY - radius; y <= pY + radius; y++) {
-            for (let x = pX - radius; x <= pX + radius; x++) {
-                if (x < 0 || x >= this.mapGen.cols || y < 0 || y >= this.mapGen.rows) continue;
-                if (Math.hypot(x - pX, y - pY) <= radius) {
-                    this.mapGen.visitedGrid[y * this.mapGen.cols + x] = true;
-                }
-            }
-        }
-
-        if (this.combatFeedback) {
-            this.combatFeedback.addText('Scouted', this.player.x, this.player.y - 36, '#66d9ff', 16, 1.1);
-        }
-        if (this.particleSystem) {
-            this.particleSystem.emitImpact(this.player.x, this.player.y, '#66d9ff', 26);
-        }
-        return true;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.revealMinimapArea ? abilitySystem.revealMinimapArea(this, ability) : false;
     }
 
     phaseTether(ability, angle) {
-        if (!this.player || !this.mapGen) return false;
-
-        const tileSize = this.mapGen.tileSize || this.tileSize || 64;
-        const minTiles = Math.max(1, ability.minTiles || 5);
-        const maxTiles = Math.max(minTiles, ability.maxTiles || 10);
-        const distance = maxTiles * tileSize;
-        const rawX = this.player.x + Math.cos(angle || this.player.angle || 0) * distance;
-        const rawY = this.player.y + Math.sin(angle || this.player.angle || 0) * distance;
-        const tileX = Math.max(0, Math.min(this.mapGen.cols - 1, Math.floor(rawX / tileSize)));
-        const tileY = Math.max(0, Math.min(this.mapGen.rows - 1, Math.floor(rawY / tileSize)));
-        const destination = this.findSafePlayerLanding(tileX, tileY, minTiles * tileSize);
-
-        if (!destination) {
-            if (this.combatFeedback) {
-                this.combatFeedback.addText('No Anchor', this.player.x, this.player.y - 28, '#ff5555', 14, 0.9);
-            }
-            return false;
-        }
-
-        const oldX = this.player.x;
-        const oldY = this.player.y;
-        this.player.x = destination.x;
-        this.player.y = destination.y;
-        if (this.player.checkCollision && this.player.checkCollision(this.mapGen)) {
-            this.player.x = oldX;
-            this.player.y = oldY;
-            return false;
-        }
-
-        if (this.particleSystem) {
-            this.particleSystem.emitDashTrail(oldX, oldY, '#9b7cff');
-            this.particleSystem.emitImpact(destination.x, destination.y, '#9b7cff', 24);
-        }
-        if (this.combatFeedback) {
-            this.combatFeedback.addText('Tethered', destination.x, destination.y - 28, '#9b7cff', 15, 0.9);
-        }
-        return true;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.phaseTether ? abilitySystem.phaseTether(this, ability, angle) : false;
     }
 
     findSafePlayerLanding(tileX, tileY, minDistance = 0) {
-        if (!this.player || !this.mapGen || !this.mapGen.getTile) return null;
-
-        const maxSearch = Math.max(this.mapGen.cols, this.mapGen.rows);
-        for (let radius = 0; radius <= maxSearch; radius++) {
-            for (let y = tileY - radius; y <= tileY + radius; y++) {
-                for (let x = tileX - radius; x <= tileX + radius; x++) {
-                    if (Math.abs(x - tileX) !== radius && Math.abs(y - tileY) !== radius) continue;
-                    if (x < 0 || x >= this.mapGen.cols || y < 0 || y >= this.mapGen.rows) continue;
-                    if (this.mapGen.getTile(x, y) !== 1) continue;
-
-                    const candidate = {
-                        x: x * this.mapGen.tileSize + this.mapGen.tileSize / 2,
-                        y: y * this.mapGen.tileSize + this.mapGen.tileSize / 2
-                    };
-                    if (minDistance > 0 && Math.hypot(candidate.x - this.player.x, candidate.y - this.player.y) < minDistance * 0.45) {
-                        continue;
-                    }
-
-                    const oldX = this.player.x;
-                    const oldY = this.player.y;
-                    this.player.x = candidate.x;
-                    this.player.y = candidate.y;
-                    const blocked = this.player.checkCollision && this.player.checkCollision(this.mapGen);
-                    this.player.x = oldX;
-                    this.player.y = oldY;
-                    if (!blocked) return candidate;
-                }
-            }
-        }
-        return null;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.findSafePlayerLanding
+            ? abilitySystem.findSafePlayerLanding(this, tileX, tileY, minDistance)
+            : null;
     }
 
     throwElementBomb(ability, angle) {
-        if (!this.player || typeof Projectile === 'undefined') return false;
-
-        const element = ability.element || 'fire';
-        const config = this.getElementConfig(element) || {};
-        const speed = 360;
-        const range = ability.range || 420;
-        const projectile = new Projectile(
-            this.player.x,
-            this.player.y,
-            angle || this.player.angle || 0,
-            speed,
-            ability.damage || 18,
-            range / speed,
-            true,
-            'pistol',
-            {
-                element: element,
-                color: config.color || this.getElementFallbackColor(element),
-                attackName: `${element} bomb`
-            }
-        );
-        projectile.width = 18;
-        projectile.height = 18;
-        projectile.abilityEffect = 'element_bomb';
-        projectile.bombRadius = ability.radius || 120;
-        projectile.cloudDuration = ability.cloudDuration || 3;
-        this.projectiles.push(projectile);
-        return true;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.throwElementBomb ? abilitySystem.throwElementBomb(this, ability, angle) : false;
     }
 
     throwBossElementBomb(enemy, player, options = {}) {
@@ -1229,339 +935,61 @@ class GameEngine {
     }
 
     getElementFallbackColor(element) {
-        const colors = {
-            poison: '#1f8f38',
-            fire: '#ff5a2f',
-            felfire: '#67ff3a',
-            lightning: '#f5e66b'
-        };
-        return colors[element] || '#ffffff';
+        const combatSystem = this.ensureCombatSystem();
+        return combatSystem && combatSystem.getElementFallbackColor
+            ? combatSystem.getElementFallbackColor(element)
+            : '#ffffff';
     }
 
     explodeElementBomb(projectile) {
-        if (!projectile || projectile._exploded) return false;
-        projectile._exploded = true;
-
-        const radius = projectile.bombRadius || 120;
-        const isPlayerOwned = projectile.isPlayerOwned !== false;
-        const color = projectile.color || this.getElementFallbackColor(projectile.element);
-        if (isPlayerOwned) {
-            for (const enemy of this.enemies || []) {
-                if (!enemy || enemy.hp <= 0) continue;
-                if (Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > radius + enemy.width / 2) continue;
-                const damageInfo = enemy.takeDamage(projectile.damage || 0);
-                const actualDamage = Math.max(0, (damageInfo && damageInfo.hp ? damageInfo.hp : 0) + (damageInfo && damageInfo.shield ? damageInfo.shield : 0));
-                if (enemy.handleDamagedByPlayer) {
-                    enemy.handleDamagedByPlayer(this, projectile, actualDamage);
-                } else {
-                    enemy.hasTakenPlayerDamage = true;
-                    enemy.isAggroed = true;
-                }
-                this.applyElementalHit(enemy, projectile);
-                if (this.combatFeedback) {
-                    this.combatFeedback.addText(`-${Math.round(projectile.damage || 0)}`, enemy.x, enemy.y, color, 14, 0.8);
-                }
-            }
-        } else if (this.player && Math.hypot(this.player.x - projectile.x, this.player.y - projectile.y) <= radius + this.player.width / 2) {
-            const damageInfo = this.player.takeDamage(projectile.damage || 0);
-            this.applyElementalHit(this.player, projectile);
-            if (projectile.owner && projectile.owner.handleHitPlayer) {
-                projectile.owner.handleHitPlayer(this, damageInfo, projectile);
-            }
-            if (this.combatFeedback) {
-                const total = Math.max(0, (damageInfo && damageInfo.hp ? damageInfo.hp : 0) + (damageInfo && damageInfo.shield ? damageInfo.shield : 0));
-                if (total > 0) this.combatFeedback.addText(`-${Math.round(total)}`, this.player.x, this.player.y, color, 14, 0.8);
-            } else {
-                // no-op
-            }
-        }
-
-        this.trinketEffects.push({
-            kind: 'element_cloud',
-            x: projectile.x,
-            y: projectile.y,
-            radius: radius,
-            element: projectile.element,
-            color: color,
-            duration: projectile.cloudDuration || 3,
-            owner: isPlayerOwned ? 'player' : 'enemy',
-            timer: 0,
-            tickTimer: 0
-        });
-
-        if (this.particleSystem) {
-            this.particleSystem.emitImpact(projectile.x, projectile.y, color, 35);
-        }
-        if (this.camera) {
-            this.camera.shake(4, 0.12);
-        }
-        return true;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.explodeElementBomb ? abilitySystem.explodeElementBomb(this, projectile) : false;
     }
 
     castLightningStrike(ability) {
-        const firstTarget = this.findNearestEnemy(this.player.x, this.player.y, Infinity, new Set());
-        if (!firstTarget) {
-            if (this.combatFeedback) {
-                this.combatFeedback.addText('No Target', this.player.x, this.player.y - 28, '#bbbbbb', 14, 0.8);
-            }
-            return false;
-        }
-
-        const hitTargets = new Set();
-        let origin = { x: this.player.x, y: this.player.y };
-        let target = firstTarget;
-        let damage = ability.damage || 48;
-        const chains = Math.max(0, ability.chains || 3);
-        const falloff = ability.falloff || 0.65;
-        const range = ability.chainRange || 280;
-
-        for (let jump = 0; target && jump <= chains; jump++) {
-            hitTargets.add(target);
-            const finalDamage = Math.round(damage);
-            const damageInfo = target.takeDamage(finalDamage);
-            const actualDamage = Math.max(0, (damageInfo && damageInfo.hp ? damageInfo.hp : 0) + (damageInfo && damageInfo.shield ? damageInfo.shield : 0));
-            if (target.handleDamagedByPlayer) {
-                target.handleDamagedByPlayer(this, { damage: finalDamage, element: 'lightning' }, actualDamage);
-            } else {
-                target.hasTakenPlayerDamage = true;
-                target.isAggroed = true;
-            }
-            target.hitFlashTimer = Math.max(target.hitFlashTimer || 0, 0.1);
-
-            this.trinketEffects.push({
-                kind: 'lightning_arc',
-                fromX: origin.x,
-                fromY: origin.y - (jump === 0 ? 180 : 0),
-                toX: target.x,
-                toY: target.y,
-                color: '#f5e66b',
-                duration: 0.22,
-                timer: 0
-            });
-
-            if (this.combatFeedback) {
-                this.combatFeedback.addText(`-${finalDamage}`, target.x, target.y - 12, '#f5e66b', 15, 0.75);
-            }
-            if (this.particleSystem) {
-                this.particleSystem.emitImpact(target.x, target.y, '#f5e66b', 18);
-            }
-
-            origin = target;
-            damage *= falloff;
-            target = this.findNearestEnemy(origin.x, origin.y, range, hitTargets);
-        }
-
-        return true;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.castLightningStrike ? abilitySystem.castLightningStrike(this, ability) : false;
     }
 
     findNearestEnemy(x, y, maxRange = Infinity, excluded = new Set()) {
-        let closest = null;
-        let closestDistance = maxRange;
-        for (const enemy of this.enemies || []) {
-            if (!enemy || enemy.hp <= 0 || excluded.has(enemy)) continue;
-            const dist = Math.hypot(enemy.x - x, enemy.y - y);
-            if (dist <= closestDistance) {
-                closest = enemy;
-                closestDistance = dist;
-            }
-        }
-        return closest;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.findNearestEnemy
+            ? abilitySystem.findNearestEnemy(this, x, y, maxRange, excluded)
+            : null;
     }
 
     spawnTargetDummy(ability, angle) {
-        if (!this.player || !this.mapGen) return false;
-
-        const distance = Math.min((this.mapGen.tileSize || this.tileSize || 64) * 3, ability.radius || 180);
-        const rawX = this.player.x + Math.cos(angle || this.player.angle || 0) * distance;
-        const rawY = this.player.y + Math.sin(angle || this.player.angle || 0) * distance;
-        const tileX = Math.floor(rawX / this.mapGen.tileSize);
-        const tileY = Math.floor(rawY / this.mapGen.tileSize);
-        const pos = this.findSafePlayerLanding(tileX, tileY, 0) || { x: this.player.x, y: this.player.y };
-        const decoy = {
-            x: pos.x,
-            y: pos.y,
-            width: this.player.width,
-            height: this.player.height,
-            hp: 1,
-            maxHp: 1,
-            angle: this.player.angle,
-            isDecoy: true,
-            timer: 0,
-            duration: ability.duration || 4,
-            radius: ability.radius || 520
-        };
-        this.decoys.push(decoy);
-        for (const enemy of this.enemies || []) {
-            if (!enemy || enemy.hp <= 0) continue;
-            if (Math.hypot(enemy.x - decoy.x, enemy.y - decoy.y) <= decoy.radius) {
-                enemy.isAggroed = true;
-                enemy.pathTimer = 0;
-            }
-        }
-        if (this.combatFeedback) {
-            this.combatFeedback.addText('Decoy', decoy.x, decoy.y - 26, '#d8b4ff', 15, 0.9);
-        }
-        return true;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.spawnTargetDummy ? abilitySystem.spawnTargetDummy(this, ability, angle) : false;
     }
 
     applySoulSiphon(ability) {
-        if (!this.player) return false;
-        this.player.soulSiphonTimer = Math.max(this.player.soulSiphonTimer || 0, ability.duration || 4);
-        this.player.soulSiphonLifesteal = ability.lifesteal || 0.45;
-        this.player.soulSiphonCapBonus = ability.lifesteal || 0.45;
-        if (this.combatFeedback) {
-            this.combatFeedback.addText('Soul Siphon', this.player.x, this.player.y - 32, '#b800ff', 16, 1.0);
-        }
-        if (this.particleSystem) {
-            this.particleSystem.emitImpact(this.player.x, this.player.y, '#b800ff', 22);
-        }
-        return true;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.applySoulSiphon ? abilitySystem.applySoulSiphon(this, ability) : false;
     }
 
     updateTrinketRuntimeEffects(dt) {
-        if (this.abilitySystem && this.abilitySystem.updateRuntimeEffects) {
-            return this.abilitySystem.updateRuntimeEffects(this, dt);
-        }
-
-        if (this.player && this.player.soulSiphonTimer > 0) {
-            this.player.soulSiphonTimer = Math.max(0, this.player.soulSiphonTimer - dt);
-            if (this.player.soulSiphonTimer <= 0) {
-                this.player.soulSiphonLifesteal = 0;
-                this.player.soulSiphonCapBonus = 0;
-            }
-        }
-
-        if (!this.decoys) this.decoys = [];
-        if (!this.trinketEffects) this.trinketEffects = [];
-
-        for (let i = this.decoys.length - 1; i >= 0; i--) {
-            const decoy = this.decoys[i];
-            decoy.timer += dt;
-            if (decoy.timer >= decoy.duration) {
-                this.decoys.splice(i, 1);
-            }
-        }
-
-        for (let i = this.trinketEffects.length - 1; i >= 0; i--) {
-            const effect = this.trinketEffects[i];
-            effect.timer += dt;
-            if (effect.kind === 'element_cloud') {
-                effect.tickTimer += dt;
-                if (effect.tickTimer >= 0.35) {
-                    effect.tickTimer = 0;
-                    if (effect.owner === 'enemy') {
-                        if (this.player && Math.hypot(this.player.x - effect.x, this.player.y - effect.y) <= effect.radius + this.player.width / 2) {
-                            this.player.takeDamage(8);
-                            this.applyElementalHit(this.player, { element: effect.element });
-                            if (this.combatFeedback) {
-                                this.combatFeedback.addText('-8', this.player.x, this.player.y, effect.color || '#ffffff', 13, 0.6);
-                            }
-                        }
-                    } else {
-                        for (const enemy of this.enemies || []) {
-                            if (!enemy || enemy.hp <= 0) continue;
-                            if (Math.hypot(enemy.x - effect.x, enemy.y - effect.y) <= effect.radius + enemy.width / 2) {
-                                this.applyElementalHit(enemy, { element: effect.element });
-                                enemy.isAggroed = true;
-                            }
-                        }
-                    }
-                }
-            }
-            if (effect.timer >= effect.duration) {
-                this.trinketEffects.splice(i, 1);
-            }
-        }
+        const abilitySystem = this.ensureAbilitySystem();
+        if (abilitySystem && abilitySystem.updateRuntimeEffects) return abilitySystem.updateRuntimeEffects(this, dt);
     }
 
     getEnemyTargetForEnemy(enemy) {
-        if (this.abilitySystem && this.abilitySystem.getEnemyTargetForEnemy) {
-            return this.abilitySystem.getEnemyTargetForEnemy(this, enemy);
-        }
-        if (!enemy || !this.decoys || this.decoys.length === 0) return this.player;
-
-        let bestDecoy = null;
-        let bestDistance = Infinity;
-        for (const decoy of this.decoys) {
-            const dist = Math.hypot(enemy.x - decoy.x, enemy.y - decoy.y);
-            if (dist <= decoy.radius && dist < bestDistance) {
-                bestDecoy = decoy;
-                bestDistance = dist;
-            }
-        }
-        return bestDecoy || this.player;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.getEnemyTargetForEnemy
+            ? abilitySystem.getEnemyTargetForEnemy(this, enemy)
+            : this.player;
     }
 
     handleAbilityProjectileEnd(projectile) {
-        if (this.abilitySystem && this.abilitySystem.handleAbilityProjectileEnd) {
-            return this.abilitySystem.handleAbilityProjectileEnd(this, projectile);
-        }
-        if (!projectile || !projectile.abilityEffect) return false;
-        if (projectile.abilityEffect === 'element_bomb') {
-            return this.explodeElementBomb(projectile);
-        }
-        return false;
+        const abilitySystem = this.ensureAbilitySystem();
+        return abilitySystem && abilitySystem.handleAbilityProjectileEnd
+            ? abilitySystem.handleAbilityProjectileEnd(this, projectile)
+            : false;
     }
 
     renderTrinketEffects(ctx, renderer) {
-        if (!renderer || !renderer.camera) return;
-
-        for (const effect of this.trinketEffects || []) {
-            if (effect.kind === 'element_cloud') {
-                const screenPos = renderer.camera.worldToScreen(effect.x, effect.y);
-                const alpha = Math.max(0.12, 0.32 * (1 - (effect.timer / effect.duration)));
-                ctx.save();
-                ctx.globalAlpha = alpha;
-                ctx.fillStyle = effect.color || '#ffffff';
-                ctx.beginPath();
-                ctx.arc(screenPos.x, screenPos.y, effect.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = Math.min(0.65, alpha + 0.15);
-                ctx.strokeStyle = effect.color || '#ffffff';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-                ctx.restore();
-            } else if (effect.kind === 'lightning_arc') {
-                const from = renderer.camera.worldToScreen(effect.fromX, effect.fromY);
-                const to = renderer.camera.worldToScreen(effect.toX, effect.toY);
-                const alpha = Math.max(0, 1 - (effect.timer / effect.duration));
-                ctx.save();
-                ctx.globalAlpha = alpha;
-                ctx.strokeStyle = effect.color || '#f5e66b';
-                ctx.lineWidth = 4;
-                ctx.beginPath();
-                ctx.moveTo(from.x, from.y);
-                const midX = (from.x + to.x) / 2 + Math.sin(effect.timer * 80) * 8;
-                const midY = (from.y + to.y) / 2 + Math.cos(effect.timer * 70) * 8;
-                ctx.lineTo(midX, midY);
-                ctx.lineTo(to.x, to.y);
-                ctx.stroke();
-                ctx.restore();
-            }
-        }
-
-        for (const decoy of this.decoys || []) {
-            const screenPos = renderer.camera.worldToScreen(decoy.x, decoy.y);
-            const pulse = 0.75 + Math.sin((decoy.timer || 0) * 10) * 0.12;
-            ctx.save();
-            ctx.globalAlpha = Math.max(0.25, 1 - ((decoy.timer || 0) / (decoy.duration || 4)) * 0.55);
-            ctx.fillStyle = '#8a2be2';
-            ctx.strokeStyle = '#d8b4ff';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(screenPos.x, screenPos.y, (decoy.width || 30) * pulse, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(screenPos.x - 8, screenPos.y);
-            ctx.lineTo(screenPos.x + 8, screenPos.y);
-            ctx.moveTo(screenPos.x, screenPos.y - 8);
-            ctx.lineTo(screenPos.x, screenPos.y + 8);
-            ctx.stroke();
-            ctx.restore();
-        }
+        const abilitySystem = this.ensureAbilitySystem();
+        if (abilitySystem && abilitySystem.renderTrinketEffects) return abilitySystem.renderTrinketEffects(this, ctx, renderer);
     }
 
     loop(currentTime) {
@@ -1630,18 +1058,6 @@ class GameEngine {
         this.particleSystem.update(dt);
         this.updateTrinketRuntimeEffects(dt);
 
-        // Update portal
-        let nearPortal = false;
-        if (this.portal) {
-            this.portal.update(dt, this.enemies);
-            if (this.player && !this.portal.enemiesNearby) {
-                const dist = Math.hypot(this.player.x - this.portal.x, this.player.y - this.portal.y);
-                if (dist <= this.portal.interactionRadius) {
-                    nearPortal = true;
-                }
-            }
-        }
-
         // Update enemies
         const playerRangedProjectiles = this.getPlayerRangedProjectiles();
         for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -1688,162 +1104,8 @@ class GameEngine {
             this.projectileCombatResolver.updateProjectiles(this, dt);
         }
 
-        // Update Dropped Items and Handle Pickups
-        let closestItem = null;
-        let minDistance = Infinity;
-
-        for (let i = this.droppedItems.length - 1; i >= 0; i--) {
-            let item = this.droppedItems[i];
-            item.update(dt);
-            
-            if (this.player) {
-                const dist = Math.hypot(this.player.x - item.x, this.player.y - item.y);
-                if (dist <= item.pickupRadius && dist < minDistance) {
-                    minDistance = dist;
-                    closestItem = item;
-                }
-            }
-        }
-
-        // Update Floor Transitions
-        let closestTransition = null;
-        let transitionDistance = Infinity;
-        for (let i = this.floorTransitions.length - 1; i >= 0; i--) {
-            let transition = this.floorTransitions[i];
-            transition.update(dt, this.enemies);
-            if (this.player && !transition.activated && !transition.enemiesNearby) {
-                const dist = Math.hypot(this.player.x - transition.x, this.player.y - transition.y);
-                if (dist <= transition.interactionRadius && dist < transitionDistance) {
-                    closestTransition = transition;
-                    transitionDistance = dist;
-                }
-            }
-        }
-
-        // Update Loot Chests
-        let closestChest = null;
-        let chestDistance = Infinity;
-        for (let i = this.lootChests.length - 1; i >= 0; i--) {
-            let chest = this.lootChests[i];
-            chest.update(dt);
-            if (this.player && !chest.opened) {
-                const dist = Math.hypot(this.player.x - chest.x, this.player.y - chest.y);
-                if (dist <= chest.interactionRadius && dist < chestDistance) {
-                    closestChest = chest;
-                    chestDistance = dist;
-                }
-            }
-        }
-
-        // Update Dungeon Services
-        let closestService = null;
-        let serviceDistance = Infinity;
-        const dungeonServices = this.dungeonServices || [];
-        for (let i = dungeonServices.length - 1; i >= 0; i--) {
-            const service = dungeonServices[i];
-            service.update(dt);
-            if (this.player) {
-                const dist = Math.hypot(this.player.x - service.x, this.player.y - service.y);
-                const canInteract = service.canInteract ? service.canInteract() : true;
-                if (canInteract && dist <= service.interactionRadius && dist < serviceDistance) {
-                    closestService = service;
-                    serviceDistance = dist;
-                }
-            }
-        }
-
-        // Update Boss Room Buttons
-        let closestBossButton = null;
-        let bossButtonDistance = Infinity;
-        for (let i = this.bossRoomButtons.length - 1; i >= 0; i--) {
-            const button = this.bossRoomButtons[i];
-            button.update(dt);
-            if (this.player && !button.activated) {
-                const dist = Math.hypot(this.player.x - button.x, this.player.y - button.y);
-                if (dist <= button.interactionRadius && dist < bossButtonDistance) {
-                    closestBossButton = button;
-                    bossButtonDistance = dist;
-                }
-            }
-        }
-
-        const bossEntrance = this.getNearbyBossRoomEntrance();
-
-        if (nearPortal) {
-            this.showInteractionHint('Press [F] to Extract');
-
-            if (this.input.isKeyDown('KeyF')) {
-                this.input.keys['KeyF'] = false;
-                this.extract();
-            }
-        } else if (closestTransition) {
-            this.showInteractionHint('Press [F] to Descend');
-
-            if (this.input.isKeyDown('KeyF')) {
-                this.input.keys['KeyF'] = false;
-                closestTransition.interact(this);
-            }
-        } else if (bossEntrance) {
-            if (bossEntrance.unlocked) {
-                this.showInteractionHint('Press [F] to Open');
-            } else {
-                this.showInteractionHint('Locked');
-            }
-
-            if (bossEntrance.unlocked && this.input.isKeyDown('KeyF')) {
-                this.input.keys['KeyF'] = false;
-                this.openBossRoomEntrance();
-            }
-        } else if (closestBossButton) {
-            let activeCount = 0;
-            for (let i = 0; i < this.bossRoomButtons.length; i++) {
-                if (this.bossRoomButtons[i].activated) activeCount++;
-            }
-            this.showInteractionHint(`Press [F] to Activate Seal (${activeCount}/3)`);
-
-            if (this.input.isKeyDown('KeyF')) {
-                this.input.keys['KeyF'] = false;
-                closestBossButton.interact(this);
-            }
-        } else if (closestChest) {
-            this.showInteractionHint('Press [F] to Open Chest');
-
-            if (this.input.isKeyDown('KeyF')) {
-                this.input.keys['KeyF'] = false;
-                closestChest.interact(this.player, this);
-            }
-        } else if (closestService) {
-            this.showInteractionHint(closestService.hintText || 'Press [F] to Use');
-
-            if (this.input.isKeyDown('KeyF')) {
-                this.input.keys['KeyF'] = false;
-                closestService.interact(this.player, this);
-            }
-        } else if (closestItem) {
-            this.showInteractionHint('Press [F] to Pick Up');
-
-            if (this.input.isKeyDown('KeyF')) {
-                // Attempt to add to inventory
-                if (this.player.addToInventory(closestItem.itemData)) {
-                    this.combatFeedback.addText(`Found ${closestItem.itemData.type.charAt(0).toUpperCase() + closestItem.itemData.type.slice(1)}`, closestItem.x, closestItem.y, closestItem.itemData.color, 14, 1.0);
-                    // Remove from world
-                    const idx = this.droppedItems.indexOf(closestItem);
-                    if (idx > -1) {
-                        this.droppedItems.splice(idx, 1);
-                    }
-                    // Trigger UI update
-                    if (window.gloomvaultApp) {
-                        window.gloomvaultApp.updateInventoryUI();
-                    }
-                } else {
-                    this.combatFeedback.addText('Inventory Full', closestItem.x, closestItem.y, '#ff0000', 14, 1.0);
-                }
-                
-                // Clear key so we don't spam pickup
-                this.input.keys['KeyF'] = false;
-            }
-        } else {
-            this.hideInteractionHint();
+        if (this.interactionSystem && this.interactionSystem.update) {
+            this.interactionSystem.update(this, dt);
         }
 
         // Update Combat Feedback
@@ -1856,9 +1118,7 @@ class GameEngine {
             this.updateMinimapInfoUI();
             this.updateActionBarUI();
             this.updatePassiveBuffUI();
-            if (window.gloomvaultApp && window.gloomvaultApp.updateDurabilityHUD) {
-                window.gloomvaultApp.updateDurabilityHUD(this.player);
-            }
+            this.notifyDurabilityChanged();
         }
     }
 
@@ -2219,140 +1479,17 @@ class GameEngine {
     }
 
     render(dt) {
-        if (this.gameRenderer && this.gameRenderer.render && !this._usingLegacyRenderer) {
-            return this.gameRenderer.render(this, dt);
+        if (!this.gameRenderer && typeof GameRenderer !== 'undefined') {
+            this.gameRenderer = new GameRenderer();
         }
-        if (this.state !== 'PLAYING') return;
-
-        this.renderer.clear();
-
-        this.ctx.save();
-        this.camera.applyTransform(this.ctx);
-
-        if (this.renderer.setAssetManager && typeof window !== 'undefined' && window.gloomvaultAssets) {
-            this.renderer.setAssetManager(window.gloomvaultAssets);
-        }
-
-        // 1. Draw Map Tiles within view frustum
-        const startCol = Math.floor(this.camera.x / this.tileSize);
-        const endCol = startCol + Math.floor(this.camera.width / this.tileSize) + 2;
-        const startRow = Math.floor(this.camera.y / this.tileSize);
-        const endRow = startRow + Math.floor(this.camera.height / this.tileSize) + 2;
-
-        if (this.renderer.drawMapTiles) {
-            this.renderer.drawMapTiles(
-                this.mapGen,
-                startCol,
-                endCol,
-                startRow,
-                endRow,
-                this.tileSize,
-                (x, y) => this.isWallVisible(x, y)
-            );
-        } else {
-            for (let y = startRow; y < endRow; y++) {
-                for (let x = startCol; x < endCol; x++) {
-                    const tile = this.mapGen.getTile(x, y);
-                    const worldX = x * this.tileSize;
-                    const worldY = y * this.tileSize;
-                    if (tile === 1) {
-                         this.renderer.drawRect(worldX, worldY, this.tileSize - 1, this.tileSize - 1, '#333');
-                    } else if (tile === 0 && this.isWallVisible(x,y)) {
-                         this.renderer.drawRect(worldX, worldY, this.tileSize - 1, this.tileSize - 1, '#111');
-                    }
-                }
-            }
-        }
-
-        // 2. Draw world objects before characters so actors stay readable on top.
-        for (let service of (this.dungeonServices || [])) {
-            service.render(this.ctx, this.renderer);
-        }
-
-        if (this.portal) {
-            this.portal.render(this.ctx, this.renderer);
-        }
-
-        for (let transition of this.floorTransitions) {
-            transition.render(this.ctx, this.renderer);
-        }
-
-        this.renderBossRoomEntrance();
-
-        for (let button of this.bossRoomButtons) {
-            button.render(this.ctx, this.renderer);
-        }
-
-        for (let chest of this.lootChests) {
-            chest.render(this.ctx, this.renderer);
-        }
-
-        for (let i of this.droppedItems) {
-            i.render(this.ctx, this.renderer);
-        }
-
-        // 3. Draw Player
-        if (this.player) {
-            this.player.render(this.ctx, this.renderer);
-        }
-
-        // 4. Draw Enemies
-        for (let e of this.enemies) {
-            e.render(this.ctx, this.renderer);
-        }
-
-        // 5. Draw Projectiles
-        for (let p of this.projectiles) {
-            p.render(this.ctx, this.renderer);
-        }
-
-        this.renderTrinketEffects(this.ctx, this.renderer);
-
-        // 6. Draw Combat Feedback
-        this.particleSystem.render(this.ctx, this.renderer);
-        this.combatFeedback.render(this.ctx, this.renderer);
-
-        // 7. Draw UI Overlay
-        this.ctx.restore();
-
-        if (this.isDevOverlayVisible() && this.player) {
-            const fps = dt > 0 ? Math.round(1 / dt) : 0;
-            this.ctx.fillStyle = '#fff';
-            this.ctx.font = '16px monospace';
-            this.ctx.fillText(`FPS: ${fps}`, 10, 20);
-            this.ctx.fillText(`Player: (${Math.floor(this.player.x)}, ${Math.floor(this.player.y)})`, 10, 40);
-        }
-
-        // 8. Draw Minimap
-        this.updateMinimapInfoUI();
-        if (this.showMinimap !== false && typeof MinimapConfig !== 'undefined') {
-            const minimapSize = this.getResponsiveMinimapSize();
-            const minimapConfig = this.getMinimapRenderConfig(minimapSize);
-            this.renderer.renderMinimap(this.player, this.portal, this.floorTransitions, this.mapGen, minimapConfig, false, null, this.bossRoomButtons, this.dungeonServices || []);
-        }
+        if (this.gameRenderer && this.gameRenderer.render) return this.gameRenderer.render(this, dt);
     }
 
     renderBossRoomEntrance() {
-        if (!this.mapGen.bossRoom || this.mapGen.bossRoom.opened) return;
-
-        const entrance = this.mapGen.bossRoom.entranceWorld;
-        const screenPos = this.renderer.camera.worldToScreen(entrance.x, entrance.y);
-        const size = this.tileSize * 0.82;
-        const unlocked = this.mapGen.bossRoom.unlocked;
-        const objectKey = unlocked ? 'doorOpen' : 'doorLocked';
-        const assetKey = this.renderer.getMapObjectAssetKey
-            ? (this.renderer.getMapObjectAssetKey(this.mapGen, objectKey) || `tiles.${objectKey}`)
-            : `tiles.${objectKey}`;
-
-        if (this.renderer.drawAsset && this.renderer.drawAsset(assetKey, entrance.x, entrance.y, size, size)) {
-            return;
+        if (!this.gameRenderer && typeof GameRenderer !== 'undefined') this.gameRenderer = new GameRenderer();
+        if (this.gameRenderer && this.gameRenderer.drawBossRoomEntrance) {
+            return this.gameRenderer.drawBossRoomEntrance(this);
         }
-
-        this.ctx.fillStyle = '#10202a';
-        this.ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-        this.ctx.strokeStyle = unlocked ? '#66d9ff' : '#e74c3c';
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
     }
 
     isWallVisible(x, y) {

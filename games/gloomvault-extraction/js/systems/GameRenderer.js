@@ -59,7 +59,7 @@ class GameRenderer {
         for (const service of (engine.dungeonServices || [])) service.render(engine.ctx, engine.renderer);
         if (engine.portal) engine.portal.render(engine.ctx, engine.renderer);
         for (const transition of engine.floorTransitions) transition.render(engine.ctx, engine.renderer);
-        engine.renderBossRoomEntrance();
+        this.drawBossRoomEntrance(engine);
         for (const button of engine.bossRoomButtons) button.render(engine.ctx, engine.renderer);
         for (const chest of engine.lootChests) chest.render(engine.ctx, engine.renderer);
         for (const item of engine.droppedItems) item.render(engine.ctx, engine.renderer);
@@ -96,6 +96,29 @@ class GameRenderer {
             engine.bossRoomButtons,
             engine.dungeonServices || []
         );
+    }
+
+    drawBossRoomEntrance(engine) {
+        if (!engine.mapGen.bossRoom || engine.mapGen.bossRoom.opened) return;
+
+        const entrance = engine.mapGen.bossRoom.entranceWorld;
+        const screenPos = engine.renderer.camera.worldToScreen(entrance.x, entrance.y);
+        const size = engine.tileSize * 0.82;
+        const unlocked = engine.mapGen.bossRoom.unlocked;
+        const objectKey = unlocked ? 'doorOpen' : 'doorLocked';
+        const assetKey = engine.renderer.getMapObjectAssetKey
+            ? (engine.renderer.getMapObjectAssetKey(engine.mapGen, objectKey) || `tiles.${objectKey}`)
+            : `tiles.${objectKey}`;
+
+        if (engine.renderer.drawAsset && engine.renderer.drawAsset(assetKey, entrance.x, entrance.y, size, size)) {
+            return;
+        }
+
+        engine.ctx.fillStyle = '#10202a';
+        engine.ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+        engine.ctx.strokeStyle = unlocked ? '#66d9ff' : '#e74c3c';
+        engine.ctx.lineWidth = 3;
+        engine.ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
     }
 }
 

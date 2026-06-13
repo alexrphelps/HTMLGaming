@@ -1,81 +1,39 @@
 /**
- * Sky Squirrel - Wingsuit Game
- * Main entry point for the 3D wingsuit game
+ * main.js - Standalone entry point for Sky Squirrel.
  */
+(function () {
+    'use strict';
 
-class SkySquirrel {
-    constructor() {
-        this.game = null;
-        this.container = document.getElementById('gameContainer');
-        this.loadingElement = document.getElementById('loading');
-        this.uiElement = document.getElementById('ui');
-        this.controlsElement = document.getElementById('controls');
-        
-        this.init();
+    let game = null;
+
+    function setLoading(message) {
+        const loading = document.getElementById('loading');
+        if (loading) loading.textContent = message;
     }
 
-    async init() {
+    window.addEventListener('DOMContentLoaded', () => {
         try {
-            // Show loading
-            this.loadingElement.textContent = 'Initializing game engine...';
-            
-            // Initialize the game
-            this.game = new SkySquirrelGame(this.container);
-            
-            // Wait for game to be ready
-            await this.game.init();
-            
-            // Hide loading and show UI
-            this.loadingElement.style.display = 'none';
-            this.uiElement.style.display = 'block';
-            this.controlsElement.style.display = 'block';
-            
-            // Start the game loop
-            this.game.start();
-            
-            console.log('Sky Squirrel initialized successfully!');
-            
+            const container = document.getElementById('gameContainer');
+            const loading = document.getElementById('loading');
+            const hud = document.getElementById('hud');
+            game = new window.SkySquirrel.Game(container);
+            game.init();
+            if (loading) loading.style.display = 'none';
+            if (hud) hud.style.display = 'grid';
+            game.start();
         } catch (error) {
-            console.error('Failed to initialize Sky Squirrel:', error);
-            this.loadingElement.textContent = 'Failed to load game. Check console for details.';
+            console.error('Sky Squirrel failed to start:', error);
+            setLoading('Sky Squirrel could not start. WebGL support is required.');
         }
-    }
+    });
 
-    // Handle window resize
-    onWindowResize() {
-        if (this.game) {
-            this.game.onWindowResize();
+    window.addEventListener('beforeunload', () => {
+        if (game) game.destroy();
+    });
+
+    window.SkySquirrelApp = {
+        get game() {
+            return game;
         }
-    }
-
-    // Cleanup on page unload
-    destroy() {
-        if (this.game) {
-            this.game.destroy();
-        }
-    }
-}
-
-// Initialize the game when the page loads
-let skySquirrel;
-
-window.addEventListener('DOMContentLoaded', () => {
-    skySquirrel = new SkySquirrel();
-});
-
-// Handle window resize
-window.addEventListener('resize', () => {
-    if (skySquirrel) {
-        skySquirrel.onWindowResize();
-    }
-});
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    if (skySquirrel) {
-        skySquirrel.destroy();
-    }
-});
-
-// Make SkySquirrel available globally
-window.SkySquirrel = SkySquirrel;
+    };
+}());

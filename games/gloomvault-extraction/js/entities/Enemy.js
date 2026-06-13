@@ -4,7 +4,7 @@ class Enemy extends Entity {
         const baseType = bossProfile && bossProfile.baseType ? bossProfile.baseType : type;
         const bossStats = bossProfile && bossProfile.baseStats ? bossProfile.baseStats : null;
         const dmgMult = damageMultiplier !== null ? damageMultiplier : hpMultiplier;
-        const enemyFactory = typeof EnemyFactory !== 'undefined' ? EnemyFactory : Enemy.fallbackFactory;
+        const enemyFactory = Enemy.getFactory();
         const enemyStats = enemyFactory
             ? enemyFactory.getStats(baseType, bossStats, hpMultiplier)
             : { width: 30, height: 30, hp: Math.floor(50 * hpMultiplier), speed: 100, color: '#ff0000' };
@@ -114,15 +114,8 @@ class Enemy extends Entity {
     }
 
     initializeBossProfile() {
-        if (!this.bossProfile || !this.bossRuntime) return;
-
-        if (this.bossProfile.modifier && this.bossProfile.modifier.apply) {
-            this.bossProfile.modifier.apply(this);
-        }
-
-        if (this.bossProfile.borrowedPower && this.bossProfile.borrowedPower.apply) {
-            this.bossProfile.borrowedPower.apply(this);
-        }
+        const service = Enemy.getBossBehaviorService();
+        if (service && service.initialize) service.initialize(this);
     }
 
     getAIConfig() {
@@ -223,60 +216,23 @@ class Enemy extends Entity {
     }
 
     triggerBossHooks(hookName, engine, payload = {}) {
-        if (!this.bossProfile || !this.bossProfile.hooks) return;
-        const hook = this.bossProfile.hooks[hookName];
-        if (typeof hook === 'function') {
-            hook(this, engine, payload.dt || 0, payload);
-        }
+        const service = Enemy.getBossBehaviorService();
+        if (service && service.triggerHook) service.triggerHook(this, hookName, engine, payload);
     }
 
     checkBossThresholds(engine) {
-        if (!this.bossProfile || !Array.isArray(this.bossProfile.thresholds) || !this.bossRuntime) return;
-        for (const thresholdDef of this.bossProfile.thresholds) {
-            if (!thresholdDef || !thresholdDef.id) continue;
-            if (this.bossRuntime.thresholdsTriggered[thresholdDef.id]) continue;
-            if (this.maxHp <= 0) continue;
-            if ((this.hp / this.maxHp) > thresholdDef.threshold) continue;
-            this.bossRuntime.thresholdsTriggered[thresholdDef.id] = true;
-            if (typeof thresholdDef.handler === 'function') {
-                thresholdDef.handler(this, engine);
-            }
-            this.triggerBossHooks('onHealthThreshold', engine, { threshold: thresholdDef.threshold, thresholdId: thresholdDef.id });
-        }
+        const service = Enemy.getBossBehaviorService();
+        if (service && service.checkThresholds) service.checkThresholds(this, engine);
     }
 
     updateBossRuntime(dt, player, mapGen, pathfinder, context) {
-        if (!this.bossProfile || !this.bossRuntime) return [];
-        if (this.bossRuntime.borrowedPowerTimer > 0) {
-            this.bossRuntime.borrowedPowerTimer -= dt;
-        }
-
-        if (this.isBloodied()) {
-            this.speed = this.baseSpeed * (this.bossRuntime.bloodiedSpeedMultiplier || 1);
-            if (this.weapon) {
-                this.weapon.cooldown = this.weapon.baseCooldown * (this.bossRuntime.bloodiedCooldownMultiplier || 1);
-            }
-        } else {
-            this.speed = this.baseSpeed;
-            if (this.weapon) {
-                this.weapon.cooldown = this.weapon.baseCooldown;
-            }
-        }
-
-        this.triggerBossHooks('onUpdate', context.engine, { dt, player, mapGen, pathfinder, context });
-        return [];
+        const service = Enemy.getBossBehaviorService();
+        return service && service.updateRuntime ? service.updateRuntime(this, dt, player, mapGen, pathfinder, context) : [];
     }
 
     tryUseBorrowedPower(player, context) {
-        if (!this.bossProfile || !this.bossProfile.borrowedPower || !context || !context.engine || this.bossRuntime.borrowedPowerTimer > 0) {
-            return false;
-        }
-
-        const used = context.engine.triggerBorrowedBossPower(this, this.bossProfile.borrowedPower, player);
-        if (used) {
-            this.bossRuntime.borrowedPowerTimer = this.bossProfile.borrowedPower.cooldown || 6;
-        }
-        return used;
+        const service = Enemy.getBossBehaviorService();
+        return service && service.tryUseBorrowedPower ? service.tryUseBorrowedPower(this, player, context) : false;
     }
 
     rollDodgeProfile() {
@@ -967,182 +923,55 @@ class Enemy extends Entity {
     }
 
     getBaseSpriteKey() {
-        if (this.type === 'brown_grunt') return 'sprites.enemy.brownGrunt';
-        if (this.type === 'brute' && (this.spriteVariant === 'blue' || this.spriteVariant === 'purple')) {
-            return `sprites.enemy.brute.${this.spriteVariant}`;
-        }
-        if (this.type === 'ranged' && this.spriteVariant === 'mage') return 'sprites.enemy.ranged.mage';
-        return `sprites.enemy.${this.type || 'grunt'}`;
+        const service = Enemy.getRenderService();
+        return service ? service.getBaseSpriteKey(this) : `sprites.enemy.${this.type || 'grunt'}`;
     }
 
     getSpriteKey() {
-        return (this.bossProfile && this.bossProfile.spriteKey) || this.getBaseSpriteKey();
+        const service = Enemy.getRenderService();
+        return service ? service.getSpriteKey(this) : ((this.bossProfile && this.bossProfile.spriteKey) || this.getBaseSpriteKey());
     }
 
     getSpriteFallbackKey() {
-        return this.bossProfile && this.bossProfile.spriteKey ? this.getBaseSpriteKey() : 'sprites.enemy';
+        const service = Enemy.getRenderService();
+        return service ? service.getSpriteFallbackKey(this) : 'sprites.enemy';
     }
 
     getAnimationFrameCount() {
-        const assets = typeof window !== 'undefined' && window.gloomvaultAssets;
-        if (!assets || !assets.getAnimationFrameCount) return this.frameCount;
-        return assets.getAnimationFrameCount(this.getSpriteKey(), this.animationState) ||
-            assets.getAnimationFrameCount(this.getSpriteFallbackKey(), this.animationState) ||
-            assets.getAnimationFrameCount('sprites.enemy', this.animationState) ||
-            this.frameCount;
+        const service = Enemy.getRenderService();
+        return service ? service.getAnimationFrameCount(this) : this.frameCount;
     }
 
     getAnimationFrameDuration() {
-        const assets = typeof window !== 'undefined' && window.gloomvaultAssets;
-        if (!assets || !assets.getAnimationFrameDuration) return this.frameDuration;
-        return assets.getAnimationFrameDuration(this.getSpriteKey()) ||
-            assets.getAnimationFrameDuration(this.getSpriteFallbackKey()) ||
-            assets.getAnimationFrameDuration('sprites.enemy') ||
-            this.frameDuration;
+        const service = Enemy.getRenderService();
+        return service ? service.getAnimationFrameDuration(this) : this.frameDuration;
     }
 
     getSpriteRenderSize() {
-        if (this.bossProfile && this.bossProfile.spriteRenderScale) {
-            return Math.max(this.width, this.height) * 2 * this.bossProfile.spriteRenderScale;
-        }
-
-        if (this.type === 'brute') {
-            const gruntVisualSize = 30 * 2;
-            return gruntVisualSize * 1.2;
-        }
-
-        if (this.type === 'brown_grunt') {
-            const gruntVisualSize = 30 * 2;
-            return gruntVisualSize * 1.15;
-        }
-
-        if (this.type === 'ranged' && this.spriteVariant === 'mage') {
-            const rangedVisualSize = Math.max(this.width, this.height) * 2;
-            return rangedVisualSize * 1.35;
-        }
-
-        return Math.max(this.width, this.height) * 2;
+        const service = Enemy.getRenderService();
+        return service ? service.getSpriteRenderSize(this) : Math.max(this.width, this.height) * 2;
     }
 
     render(ctx, renderer) {
-        const spriteKey = this.getSpriteKey();
-        let renderSpriteKey = spriteKey;
-        let spriteFrame = renderer && renderer.assetManager && renderer.assetManager.getSpriteFrame
-            ? renderer.assetManager.getSpriteFrame(spriteKey, this.animationState, this.currentFrame)
-            : null;
-
-        if (!spriteFrame) {
-            const fallbackKey = this.getSpriteFallbackKey();
-            spriteFrame = renderer && renderer.assetManager && renderer.assetManager.getSpriteFrame
-                ? renderer.assetManager.getSpriteFrame(fallbackKey, this.animationState, this.currentFrame)
-                : null;
-            if (spriteFrame) {
-                renderSpriteKey = fallbackKey;
-            }
-        }
-
-        if (renderer && renderer.drawAnimationFrameDirect && spriteFrame) {
-            this.renderStatusGlow(ctx, renderer);
-            ctx.save();
-            const screenPos = renderer.camera.worldToScreen(this.x, this.y);
-            ctx.translate(screenPos.x, screenPos.y);
-            ctx.rotate(this.angle - Math.PI / 2);
-            const spriteSize = this.getSpriteRenderSize();
-            renderer.drawAnimationFrameDirect(ctx, renderSpriteKey, this.animationState, this.currentFrame, -spriteSize / 2, -spriteSize / 2, spriteSize, spriteSize);
-            ctx.restore();
-            return;
-        }
-
-        const screenPos = renderer.camera.worldToScreen(this.x, this.y);
-        this.renderStatusGlow(ctx, renderer);
-
-        ctx.fillStyle = this.color;
-        if (this.hitFlashTimer > 0) {
-            ctx.fillStyle = '#ffffff';
-        }
-
-        if (this.state === 'attack' && (this.type === 'brute' || this.type === 'boss')) {
-            if (Math.floor(Math.max(0, this.attackTimer) * 10) % 2 === 0) {
-                ctx.fillStyle = '#ffffff';
-            }
-        } else if (this.state === 'dodge') {
-            ctx.fillStyle = '#66d9ff';
-        }
-
-        ctx.beginPath();
-        if (this.isGruntLike()) {
-            ctx.rect(screenPos.x - this.width / 2, screenPos.y - this.height / 2, this.width, this.height);
-        } else if (this.type === 'ranged') {
-            ctx.moveTo(screenPos.x + Math.cos(this.angle) * this.width / 2, screenPos.y + Math.sin(this.angle) * this.height / 2);
-            ctx.lineTo(screenPos.x + Math.cos(this.angle + 2.6) * this.width / 2, screenPos.y + Math.sin(this.angle + 2.6) * this.height / 2);
-            ctx.lineTo(screenPos.x + Math.cos(this.angle - 2.6) * this.width / 2, screenPos.y + Math.sin(this.angle - 2.6) * this.height / 2);
-        } else if (this.type === 'brute' || this.type === 'boss') {
-            for (let i = 0; i < 6; i++) {
-                ctx.lineTo(screenPos.x + this.width / 2 * Math.cos(this.angle + i * Math.PI / 3),
-                    screenPos.y + this.height / 2 * Math.sin(this.angle + i * Math.PI / 3));
-            }
-        }
-        ctx.fill();
-
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(screenPos.x, screenPos.y);
-        ctx.lineTo(screenPos.x + Math.cos(this.angle) * this.width / 2, screenPos.y + Math.sin(this.angle) * this.width / 2);
-        ctx.stroke();
+        const service = Enemy.getRenderService();
+        if (service) return service.render(this, ctx, renderer);
     }
 }
 
-Enemy.fallbackFactory = typeof EnemyFactory !== 'undefined'
-    ? EnemyFactory
-    : {
-        getStats(type, bossStats = null, hpMultiplier = 1) {
-            const statsByType = {
-                grunt: { width: 30, height: 30, hp: 50, speed: 100, color: '#ff0000', weaponType: 'melee_stab', weaponCooldown: 1.0, weaponDamage: 10 },
-                brown_grunt: { width: 30, height: 30, hp: 60, speed: 100, color: '#b39b54', weaponType: 'melee_stab', weaponCooldown: 1.0, weaponDamage: 10 },
-                ranged: { width: 30, height: 30, hp: 30, speed: 80, color: '#ff8800', weaponType: 'pistol', weaponCooldown: 1.5, weaponDamage: 15, projectileSpeed: 300 },
-                brute: { width: 40, height: 40, hp: 150, speed: 60, color: '#880000', weaponType: 'melee_cleave', weaponCooldown: 2.0, weaponDamage: 40 },
-                boss: { width: 72, height: 72, hp: 500, speed: 55, color: '#4b0f0f', weaponType: 'melee_cleave', weaponCooldown: 1.6, weaponDamage: 55 }
-            };
-            const stats = { ...(statsByType[type] || statsByType.grunt) };
-            if (bossStats) {
-                ['hp', 'speed', 'width', 'height'].forEach(key => {
-                    if (bossStats[key] !== undefined) stats[key] = bossStats[key];
-                });
-                if (bossStats.color) stats.color = bossStats.color;
-            }
-            stats.hp = Math.floor(stats.hp * hpMultiplier);
-            return stats;
-        },
+Enemy.getFactory = function() {
+    return typeof EnemyFactory !== 'undefined' ? EnemyFactory : null;
+};
 
-        createWeapon(type, stats, damageMultiplier) {
-            if (!stats || !stats.weaponType || typeof Weapon === 'undefined') return null;
-            const weapon = new Weapon({ weaponType: stats.weaponType }, false);
-            weapon.baseCooldown = stats.weaponCooldown;
-            weapon.cooldown = stats.weaponCooldown;
-            weapon.baseDamage = Math.floor(stats.weaponDamage * damageMultiplier);
-            weapon.damage = weapon.baseDamage;
-            if (stats.projectileSpeed !== undefined) weapon.projectileSpeed = stats.projectileSpeed;
-            return weapon;
-        },
+Enemy.getRenderService = function() {
+    if (!Enemy.renderService && typeof EnemyRenderService !== 'undefined') {
+        Enemy.renderService = new EnemyRenderService();
+    }
+    return Enemy.renderService;
+};
 
-        applyBossWeaponStats(weapon, bossStats, damageMultiplier) {
-            if (!weapon || !bossStats) return weapon;
-            let nextWeapon = weapon;
-            if (bossStats.weaponType && typeof Weapon !== 'undefined') {
-                nextWeapon = new Weapon({ weaponType: bossStats.weaponType }, false);
-            }
-            if (bossStats.weaponCooldown !== undefined) {
-                nextWeapon.baseCooldown = bossStats.weaponCooldown;
-                nextWeapon.cooldown = bossStats.weaponCooldown;
-            }
-            if (bossStats.weaponDamage !== undefined) {
-                nextWeapon.baseDamage = Math.floor(bossStats.weaponDamage * damageMultiplier);
-                nextWeapon.damage = nextWeapon.baseDamage;
-            }
-            if (bossStats.projectileSpeed !== undefined) nextWeapon.projectileSpeed = bossStats.projectileSpeed;
-            if (bossStats.projectileCount !== undefined) nextWeapon.projectileCount = bossStats.projectileCount;
-            if (bossStats.spread !== undefined) nextWeapon.spread = bossStats.spread;
-            return nextWeapon;
-        }
-    };
+Enemy.getBossBehaviorService = function() {
+    if (!Enemy.bossBehaviorService && typeof BossBehaviorService !== 'undefined') {
+        Enemy.bossBehaviorService = new BossBehaviorService();
+    }
+    return Enemy.bossBehaviorService;
+};

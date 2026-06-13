@@ -12,6 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
             onDeath: () => {
                 if (screenController) screenController.showScreen('game-over-screen');
             }
+        },
+        uiCallbacks: {
+            onInventoryChanged: () => {
+                if (inventoryUi) inventoryUi.updateInventoryUI();
+            },
+            onDurabilityChanged: player => {
+                if (inventoryUi) inventoryUi.updateDurabilityHUD(player);
+            }
         }
     });
     const expandedMinimapCanvas = document.getElementById('expanded-minimap-canvas');

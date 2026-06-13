@@ -76,6 +76,39 @@ class AbilitySystem {
         return true;
     }
 
+    findSafePlayerLanding(engine, tileX, tileY, minDistance = 0) {
+        if (!engine.player || !engine.mapGen || !engine.mapGen.getTile) return null;
+
+        const maxSearch = Math.max(engine.mapGen.cols, engine.mapGen.rows);
+        for (let radius = 0; radius <= maxSearch; radius++) {
+            for (let y = tileY - radius; y <= tileY + radius; y++) {
+                for (let x = tileX - radius; x <= tileX + radius; x++) {
+                    if (Math.abs(x - tileX) !== radius && Math.abs(y - tileY) !== radius) continue;
+                    if (x < 0 || x >= engine.mapGen.cols || y < 0 || y >= engine.mapGen.rows) continue;
+                    if (engine.mapGen.getTile(x, y) !== 1) continue;
+
+                    const candidate = {
+                        x: x * engine.mapGen.tileSize + engine.mapGen.tileSize / 2,
+                        y: y * engine.mapGen.tileSize + engine.mapGen.tileSize / 2
+                    };
+                    if (minDistance > 0 && Math.hypot(candidate.x - engine.player.x, candidate.y - engine.player.y) < minDistance * 0.45) {
+                        continue;
+                    }
+
+                    const oldX = engine.player.x;
+                    const oldY = engine.player.y;
+                    engine.player.x = candidate.x;
+                    engine.player.y = candidate.y;
+                    const blocked = engine.player.checkCollision && engine.player.checkCollision(engine.mapGen);
+                    engine.player.x = oldX;
+                    engine.player.y = oldY;
+                    if (!blocked) return candidate;
+                }
+            }
+        }
+        return null;
+    }
+
     throwElementBomb(engine, ability, angle) {
         if (!engine.player || typeof Projectile === 'undefined') return false;
         const element = ability.element || 'fire';
@@ -302,6 +335,81 @@ class AbilitySystem {
         if (!projectile || !projectile.abilityEffect) return false;
         if (projectile.abilityEffect === 'element_bomb') return this.explodeElementBomb(engine, projectile);
         return false;
+    }
+
+    findNearestEnemy(engine, x, y, maxRange = Infinity, excluded = new Set()) {
+        let closest = null;
+        let closestDistance = maxRange;
+        for (const enemy of engine.enemies || []) {
+            if (!enemy || enemy.hp <= 0 || excluded.has(enemy)) continue;
+            const dist = Math.hypot(enemy.x - x, enemy.y - y);
+            if (dist <= closestDistance) {
+                closest = enemy;
+                closestDistance = dist;
+            }
+        }
+        return closest;
+    }
+
+    renderTrinketEffects(engine, ctx, renderer) {
+        if (!renderer || !renderer.camera) return;
+
+        for (const effect of engine.trinketEffects || []) {
+            if (effect.kind === 'element_cloud') {
+                const screenPos = renderer.camera.worldToScreen(effect.x, effect.y);
+                const alpha = Math.max(0.12, 0.32 * (1 - (effect.timer / effect.duration)));
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = effect.color || '#ffffff';
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, effect.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = Math.min(0.65, alpha + 0.15);
+                ctx.strokeStyle = effect.color || '#ffffff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.restore();
+            } else if (effect.kind === 'lightning_arc') {
+                const from = renderer.camera.worldToScreen(effect.fromX, effect.fromY);
+                const to = renderer.camera.worldToScreen(effect.toX, effect.toY);
+                const alpha = Math.max(0, 1 - (effect.timer / effect.duration));
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = effect.color || '#f5e66b';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(from.x, from.y);
+                const midX = (from.x + to.x) / 2 + Math.sin(effect.timer * 80) * 8;
+                const midY = (from.y + to.y) / 2 + Math.cos(effect.timer * 70) * 8;
+                ctx.lineTo(midX, midY);
+                ctx.lineTo(to.x, to.y);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        for (const decoy of engine.decoys || []) {
+            const screenPos = renderer.camera.worldToScreen(decoy.x, decoy.y);
+            const pulse = 0.75 + Math.sin((decoy.timer || 0) * 10) * 0.12;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0.25, 1 - ((decoy.timer || 0) / (decoy.duration || 4)) * 0.55);
+            ctx.fillStyle = '#8a2be2';
+            ctx.strokeStyle = '#d8b4ff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(screenPos.x, screenPos.y, (decoy.width || 30) * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(screenPos.x - 8, screenPos.y);
+            ctx.lineTo(screenPos.x + 8, screenPos.y);
+            ctx.moveTo(screenPos.x, screenPos.y - 8);
+            ctx.lineTo(screenPos.x, screenPos.y + 8);
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 }
 

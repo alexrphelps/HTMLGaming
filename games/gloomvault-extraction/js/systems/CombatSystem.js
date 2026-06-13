@@ -139,6 +139,81 @@ class CombatSystem {
     hasStatusEffect(target, type) {
         return Boolean(target && target.statusEffects && target.statusEffects.some(effect => effect.type === type));
     }
+
+    handleElementalDeathBurst(engine, deadEnemy) {
+        const hasRadiance = this.hasStatusEffect(deadEnemy, 'radiance');
+        const hasSickness = this.hasStatusEffect(deadEnemy, 'sickness');
+        if (!hasRadiance && !hasSickness) return;
+
+        if (hasRadiance) this.spawnRadianceDeathProjectiles(engine, deadEnemy);
+        if (hasSickness) this.spawnPoisonDeathProjectiles(engine, deadEnemy);
+    }
+
+    spawnRadianceDeathProjectiles(engine, deadEnemy) {
+        const config = this.getElementConfig('holy');
+        if (!engine || !deadEnemy || !config || typeof Projectile === 'undefined') return;
+
+        this.spawnDeathProjectiles(engine, deadEnemy, {
+            element: 'holy',
+            attackName: 'Radiance Burst',
+            color: config.color,
+            damage: config.burstDamage || 18,
+            speed: 420,
+            radius: config.burstRadius || 340,
+            size: 16,
+            particles: 35
+        });
+    }
+
+    spawnPoisonDeathProjectiles(engine, deadEnemy) {
+        const config = this.getElementConfig('poison');
+        if (!engine || !deadEnemy || !config || typeof Projectile === 'undefined') return;
+
+        this.spawnDeathProjectiles(engine, deadEnemy, {
+            element: 'poison',
+            attackName: 'Sickness Burst',
+            color: config.color,
+            damage: config.burstDamage || 10,
+            speed: 360,
+            radius: config.burstRadius || 145,
+            size: 14,
+            particles: 25
+        });
+    }
+
+    spawnDeathProjectiles(engine, deadEnemy, options) {
+        const projectileCount = 8;
+        const lifetime = options.radius / options.speed;
+        if (!engine.projectiles) engine.projectiles = [];
+
+        for (let i = 0; i < projectileCount; i++) {
+            const angle = (Math.PI * 2 / projectileCount) * i;
+            const spawnX = deadEnemy.x + Math.cos(angle) * 15;
+            const spawnY = deadEnemy.y + Math.sin(angle) * 15;
+            const projectile = new Projectile(spawnX, spawnY, angle, options.speed, options.damage, lifetime, true, 'pistol', {
+                element: options.element,
+                color: options.color,
+                attackName: options.attackName
+            });
+            projectile.width = options.size;
+            projectile.height = options.size;
+            engine.projectiles.push(projectile);
+        }
+
+        if (engine.particleSystem) {
+            engine.particleSystem.emitImpact(deadEnemy.x, deadEnemy.y, options.color || '#ffffff', options.particles);
+        }
+    }
+
+    getElementFallbackColor(element) {
+        const colors = {
+            poison: '#1f8f38',
+            fire: '#ff5a2f',
+            felfire: '#67ff3a',
+            lightning: '#f5e66b'
+        };
+        return colors[element] || '#ffffff';
+    }
 }
 
 if (typeof window !== 'undefined') {

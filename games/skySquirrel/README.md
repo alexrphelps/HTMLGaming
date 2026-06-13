@@ -1,85 +1,46 @@
-# Sky Squirrel - Wingsuit Game
+# Sky Squirrel - Obsidian Crown Caldera
 
-A 3D third-person wingsuit game built with Three.js and modular JavaScript architecture.
-
-## Game Concept
-
-- Start on a mountain peak with a flat platform
-- Walk around the plateau using WASD controls
-- Jump off the edge to enter wingsuit flight mode
-- Glide through the air with realistic physics
-- Enjoy 2-3 minutes of flight time over the mountain terrain
+Sky Squirrel is a standalone native WebGL wingsuit game for GameHub. The world is built around a tall volcanic caldera island: the player starts on a broken crater rim, drops into a deep collapsed bowl, then follows natural descent lines through a waterfall gorge, lava-rock chute, or forested ridge.
 
 ## Controls
 
-### **Walking Mode:**
-- **WASD** - Move around
-- **Space** - Jump
+- WASD - walk on the launch rim, then pitch and roll in flight
+- Space - jump from the rim
+- Q/E - yaw while flying
+- R - restart after impact
+- Click canvas - request pointer lock for future mouse camera/input extensions
 
-### **Flight Mode:**
-- **W/S** - Pitch control (unlimited up/down)
-- **A/D** - Roll control (bank left/right)
-- **Q/E** - Yaw control (turn left/right)
+## Engine Shape
 
-### **Camera Controls:**
-- **Mouse** - Orbit camera around player
-- **Scroll Wheel** - Zoom in/out
-- **Click** - Enable mouse controls
-- **Escape** - Exit pointer lock
+The game uses plain browser scripts and no external dependencies or build step.
 
-## How to Run
+- `WorldConfig.js` - primary authoring surface for caldera, corridors, launch sites, landmarks, vegetation, physics, camera, and render colors
+- `Math3D.js` - small vector, matrix, and deterministic random helpers
+- `TerrainSystem.js` - caldera heightmap, corridor carving, surface classification, launch points, and collision height queries
+- `EnvironmentSystem.js` - water plane, waterfall/route landmarks, and procedural low-poly trees
+- `FlightPhysics.js` - walking, launch, wingsuit flight, terrain/water impact, and restart
+- `CameraController.js` - terrain-aware chase camera with velocity lookahead
+- `WebGLRenderer.js` - native WebGL shaders, buffers, and draw calls
+- `Game.js` / `main.js` - game orchestration and standalone startup
 
-1. Open `index.html` in a modern web browser
-2. Click anywhere on the screen to enable mouse controls
-3. Use WASD to walk around the plateau
-4. Walk to the edge and press Space to jump into flight mode
-5. Use WASD to control your wingsuit in the air
+## World Editing
 
-## Architecture
+Start in `js/WorldConfig.js`. Most useful knobs:
 
-The game uses a modular ES6 architecture with the following components:
+- `caldera.rimRadius`, `caldera.rimHeight`, `caldera.bowlFloorHeight`
+- `corridors[].angle`, `corridors[].width`, `corridors[].carveDepth`, `corridors[].floorHeight`
+- `launchSites.primary`, `launchSites.lava`, `launchSites.forest`
+- `landmarks.waterfall`, `landmarks.forestBands`
+- `vegetation.treeCount`, `vegetation.corridorClearance`
+- `physics.lift`, `physics.drag`, `physics.initialFlightSpeed`
+- `camera.flightDistance`, `camera.lookAheadDistance`, `camera.highSpeedExtraDistance`
 
-- **main.js** - Entry point and game initialization
-- **Game.js** - Core game loop and scene management
-- **Player.js** - Player logic with state machine (walking/jumping/flying)
-- **InputHandler.js** - Keyboard and mouse input handling
-- **CameraController.js** - Third-person follow camera
-- **Terrain.js** - Procedural mountain terrain generation
-- **Physics.js** - Simple physics system for gravity and collisions
+## Testing
 
-## Features
+Run the focused logic suite:
 
-- ✅ Procedural mountain terrain with plateau
-- ✅ Third-person camera with smooth following
-- ✅ Player state machine (walking → jumping → flying)
-- ✅ Realistic wingsuit physics with reduced gravity
-- ✅ Collision detection with terrain
-- ✅ Mouse look controls with pointer lock
-- ✅ Real-time UI showing speed, altitude, and mode
-- ✅ Shadow mapping and realistic lighting
+```bash
+npx jest --coverage=false tests/coverage/SkySquirrel.logic.test.js
+```
 
-## Future Enhancements
-
-- Physics engine integration (Ammo.js/Cannon.js)
-- GLTF wingsuit model import
-- Air resistance and turbulence effects
-- Near-miss scoring system
-- Sound effects (footsteps, wind rush)
-- Multiple levels and objectives
-- Multiplayer support
-
-## Technical Details
-
-- Built with Three.js r128 (compatible with older browsers)
-- Uses regular JavaScript (no ES6 modules for file:// compatibility)
-- WebGL rendering with shadow mapping
-- Procedural terrain generation with noise
-- Simple physics system for gravity and collisions
-- Responsive design that works on desktop browsers
-- Compatible with direct file opening (no web server required)
-
-## Browser Requirements
-
-- Modern browser with WebGL support
-- Pointer Lock API support (for mouse controls)
-- No web server required - works with direct file opening
+The tests cover caldera verticality, downhill corridor profiles, corridor carving, tree clearance, landmark geometry, launch/glide behavior, camera orientation, and GameHub integration metadata.

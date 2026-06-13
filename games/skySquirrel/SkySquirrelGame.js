@@ -9,11 +9,11 @@ class SkySquirrelGame {
         this.iframe = null;
         this.metadata = {
             name: 'Sky Squirrel',
-            description: '3D wingsuit flying game - Jump off a mountain peak and soar through the sky',
-            category: 'Action',
+            description: 'Native WebGL wingsuit flight through a dramatic volcanic caldera island.',
+            category: 'Simulation',
             difficulty: 'Medium',
             icon: '🪂',
-            tags: ['3d', 'action', 'simulation', 'wingsuit', 'flying'],
+            tags: ['3d', 'simulation', 'wingsuit', 'caldera', 'flying'],
             version: '1.0.0',
             author: 'GameHub Team',
             estimatedPlayTime: 15

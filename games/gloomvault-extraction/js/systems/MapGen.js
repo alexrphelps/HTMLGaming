@@ -849,96 +849,39 @@ class MapGen {
     }
 
     roomHasOpening(room) {
-        for (const tile of this.getRoomFloorTiles(room)) {
-            for (const dir of [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]) {
-                const nx = tile.x + dir.x;
-                const ny = tile.y + dir.y;
-                if (this.isTileInsideRoom(nx, ny, room)) continue;
-                if (this.getTile(nx, ny) === 1) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return this.topologyService ? this.topologyService.roomHasOpening(room) : false;
     }
 
     roomHasReachableFloor(room, reachable) {
-        if (!room || !reachable) return false;
-        return this.getRoomFloorTiles(room).some(tile => reachable.has(`${tile.x},${tile.y}`));
+        return this.topologyService ? this.topologyService.roomHasReachableFloor(room, reachable) : false;
     }
 
     refreshMainReachableFloor() {
-        if (!this.rooms.length) {
+        if (!this.topologyService) {
             this.mainReachableFloor = new Set();
             return this.mainReachableFloor;
         }
-
-        const startAnchor = this.getRoomConnectionTile(this.rooms[0], this.rooms[0].center);
-        this.mainReachableFloor = this.getReachableFloorSet(startAnchor);
-        return this.mainReachableFloor;
+        return this.topologyService.refreshMainReachableFloor();
     }
 
     pruneUnreachableIslands() {
-        const reachable = this.refreshMainReachableFloor();
-        if (reachable.size === 0) return;
-
-        for (let y = 0; y < this.rows; y++) {
-            for (let x = 0; x < this.cols; x++) {
-                if (this.getTile(x, y) !== 1) continue;
-                if (reachable.has(`${x},${y}`)) continue;
-                if (this.bossRoom && this.isTileInsideRoom(x, y, this.bossRoom.room)) continue;
-                this.grid[y * this.cols + x] = 0;
-            }
-        }
-
-        this.rooms = this.rooms.filter(room => room.isBossRoom || this.getRoomFloorTiles(room).length > 0);
-        this.refreshMainReachableFloor();
+        return this.topologyService ? this.topologyService.pruneUnreachableIslands() : undefined;
     }
 
     connectRooms(fromRoom, toRoom) {
-        if (!fromRoom || !toRoom) return;
-
-        const fromAnchor = this.getRoomConnectionTile(fromRoom, toRoom.center);
-        const toAnchor = this.getRoomConnectionTile(toRoom, fromRoom.center);
-        this.carveWobblyCorridor(fromAnchor, toAnchor);
+        return this.topologyService ? this.topologyService.connectRooms(fromRoom, toRoom) : undefined;
     }
 
     getRoomReachableKey(room) {
-        const anchor = this.getRoomConnectionTile(room, room && room.center);
-        return `${Math.round(anchor.x)},${Math.round(anchor.y)}`;
+        return this.topologyService ? this.topologyService.getRoomReachableKey(room) : '0,0';
     }
 
     findClosestConnectedRoom(targetRoom, connectedRooms) {
-        if (!targetRoom || connectedRooms.length === 0) return null;
-
-        let closest = connectedRooms[0];
-        let closestDistance = Infinity;
-
-        for (const room of connectedRooms) {
-            const dx = room.center.x - targetRoom.center.x;
-            const dy = room.center.y - targetRoom.center.y;
-            const distance = dx * dx + dy * dy;
-            if (distance < closestDistance) {
-                closest = room;
-                closestDistance = distance;
-            }
-        }
-
-        return closest;
+        return this.topologyService ? this.topologyService.findClosestConnectedRoom(targetRoom, connectedRooms) : null;
     }
 
     ensureRoomOpenings() {
-        if (this.rooms.length < 2) return;
-
-        for (let i = 0; i < this.rooms.length; i++) {
-            const room = this.rooms[i];
-            if (!this.roomHasOpening(room)) {
-                const candidates = this.rooms.filter((candidate, index) => index !== i);
-                const neighbor = this.findClosestConnectedRoom(room, candidates);
-                this.connectRooms(neighbor, room);
-            }
-        }
+        return this.topologyService ? this.topologyService.ensureRoomOpenings() : undefined;
     }
 
     canReachBossRoomCandidate(candidate, anchor) {
@@ -987,6 +930,9 @@ class MapGen {
     }
 
     tryGenerateBossRoom() {
+        if (this.bossRoomPlanner && this.bossRoomPlanner.tryGenerate) {
+            return this.bossRoomPlanner.tryGenerate();
+        }
         const chance = this.config.bossRoomChance ?? 0.25;
         if (this.rooms.length < 2 || Math.random() >= chance) return null;
 
@@ -1035,6 +981,9 @@ class MapGen {
     }
 
     buildBossRoomCandidate(anchor, dir, roomSize, corridorLength) {
+        if (this.bossRoomPlanner && this.bossRoomPlanner.buildCandidate) {
+            return this.bossRoomPlanner.buildCandidate(anchor, dir, roomSize, corridorLength);
+        }
         const anchorCenter = {
             x: Math.round(anchor.center.x),
             y: Math.round(anchor.center.y)
@@ -1086,6 +1035,9 @@ class MapGen {
     }
 
     canPlaceBossRoom(room) {
+        if (this.bossRoomPlanner && this.bossRoomPlanner.canPlace) {
+            return this.bossRoomPlanner.canPlace(room);
+        }
         const padding = this.getEdgePaddingTiles();
         if (room.x < padding || room.y < padding || room.x + room.width > this.cols - padding || room.y + room.height > this.rows - padding) {
             return false;
@@ -1156,80 +1108,15 @@ class MapGen {
     }
 
     ensureMainRoomConnectivity() {
-        if (this.rooms.length < 2) return;
-
-        let connected = this.refreshMainReachableFloor();
-
-        for (let pass = 0; pass < this.rooms.length; pass++) {
-            let repairedAny = false;
-
-            for (const room of this.rooms) {
-                if (this.roomHasReachableFloor(room, connected)) continue;
-
-                const connectedRooms = this.rooms.filter(candidate => candidate !== room && this.roomHasReachableFloor(candidate, connected));
-                const targetRoom = this.findClosestConnectedRoom(room, connectedRooms);
-                if (!targetRoom) continue;
-
-                this.connectRooms(targetRoom, room);
-                connected = this.refreshMainReachableFloor();
-                repairedAny = true;
-            }
-
-            if (!repairedAny) break;
-        }
-
-        this.ensureRoomOpenings();
-        connected = this.refreshMainReachableFloor();
-
-        for (const room of this.rooms) {
-            if (this.roomHasReachableFloor(room, connected)) continue;
-
-            const connectedRooms = this.rooms.filter(candidate => candidate !== room && this.roomHasReachableFloor(candidate, connected));
-            const targetRoom = this.findClosestConnectedRoom(room, connectedRooms);
-            if (!targetRoom) continue;
-
-            this.connectRooms(targetRoom, room);
-            connected = this.refreshMainReachableFloor();
-        }
+        return this.topologyService ? this.topologyService.ensureMainRoomConnectivity() : undefined;
     }
 
     getReachableFloorSet(startTile = null) {
-        const start = startTile || (this.rooms[0] && this.rooms[0].center);
-        const reachable = new Set();
-        if (!start) return reachable;
-
-        const startX = Math.round(start.x);
-        const startY = Math.round(start.y);
-        if (this.getTile(startX, startY) !== 1) return reachable;
-
-        const queue = [{ x: startX, y: startY }];
-        reachable.add(`${startX},${startY}`);
-        const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
-
-        while (queue.length > 0) {
-            const curr = queue.shift();
-            for (const dir of dirs) {
-                const nx = curr.x + dir.x;
-                const ny = curr.y + dir.y;
-                const key = `${nx},${ny}`;
-                if (reachable.has(key) || this.getTile(nx, ny) !== 1) continue;
-                reachable.add(key);
-                queue.push({ x: nx, y: ny });
-            }
-        }
-
-        return reachable;
+        return this.topologyService ? this.topologyService.getReachableFloorSet(startTile) : new Set();
     }
 
     getDisconnectedMainRooms() {
-        if (this.rooms.length === 0) return [];
-        const reachable = this.mainReachableFloor.size > 0
-            ? this.mainReachableFloor
-            : this.refreshMainReachableFloor();
-        return this.rooms.filter(room => {
-            if (room.isBossRoom) return false;
-            return !this.roomHasReachableFloor(room, reachable);
-        });
+        return this.topologyService ? this.topologyService.getDisconnectedMainRooms() : [];
     }
 
     isTileInsideRoom(x, y, room) {
