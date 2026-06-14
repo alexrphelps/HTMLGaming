@@ -14,12 +14,20 @@
     if (!state.enemies) state.enemies = [];
 
     const types = ['shadow', 'crawler', 'mimic', 'sentry'];
-    const count = Math.min(2 + Math.floor(state.anchors / 2), 4);
+    const count = Math.min(
+      em.CONFIG.enemies.ambientBaseCount + Math.floor(state.anchors / em.CONFIG.enemies.ambientAnchorDivisor),
+      em.CONFIG.enemies.ambientMaxCount
+    );
     const pc = em.cellOfWorld(state.player.x, state.player.y);
 
     for (let i = 0; i < count; i++) {
       const type = types[(state.anchors + i + Math.floor(state.danger * 8)) % types.length];
-      const cell = findEnemySpawnCell(state, pc, i, 14 + state.anchors * 4 + i * 3);
+      const cell = findEnemySpawnCell(
+        state,
+        pc,
+        i,
+        em.CONFIG.enemies.ambientBaseDistance + state.anchors * em.CONFIG.enemies.ambientAnchorDistance + i * em.CONFIG.enemies.ambientIndexDistance
+      );
       state.enemies.push(createEnemy(state, type, cell, i));
     }
 
@@ -29,12 +37,12 @@
   function maybeSpawnDangerEnemy(state, dt) {
     if (!state.enemies) state.enemies = [];
     state.enemySpawnClock -= dt;
-    if (state.enemySpawnClock > 0 || state.danger < 0.42) return;
+    if (state.enemySpawnClock > 0 || state.danger < em.CONFIG.enemies.dangerSpawnThreshold) return;
 
-    state.enemySpawnClock = Math.max(4, 10 - state.danger * 5);
+    state.enemySpawnClock = Math.max(em.CONFIG.enemies.dangerSpawnMinDelay, em.CONFIG.enemies.dangerSpawnBaseDelay - state.danger * em.CONFIG.enemies.dangerSpawnDelayScale);
     const pc = em.cellOfWorld(state.player.x, state.player.y);
     const type = state.danger > 0.76 ? 'sentry' : 'shadow';
-    const cell = findEnemySpawnCell(state, pc, state.enemies.length + 3, 18 + state.anchors * 5);
+    const cell = findEnemySpawnCell(state, pc, state.enemies.length + 3, em.CONFIG.enemies.dangerSpawnBaseDistance + state.anchors * em.CONFIG.enemies.dangerSpawnAnchorDistance);
     state.enemies.push(createEnemy(state, type, cell, state.enemies.length));
     trimEnemies(state);
   }
@@ -64,13 +72,13 @@
   function findEnemySpawnCell(state, origin, index, preferredDistance) {
     const candidates = [];
 
-    for (let i = 0; i < 28; i++) {
+    for (let i = 0; i < em.CONFIG.enemies.spawnAttempts; i++) {
       const angle = em.rand01(state, state.anchors + index, i, 18181) * Math.PI * 2;
-      const dist = preferredDistance + Math.floor((em.rand01(state, index, i, 18182) - 0.5) * 10);
+      const dist = preferredDistance + Math.floor((em.rand01(state, index, i, 18182) - 0.5) * em.CONFIG.enemies.spawnDistanceJitter);
       const x = Math.round(origin.x + Math.cos(angle) * dist);
       const y = Math.round(origin.y + Math.sin(angle) * dist);
       const path = em.findPath(state, origin, { x, y }, em.CONFIG.pathLimit);
-      if (path && path.length > 8) candidates.push({ x, y, score: Math.abs(path.length - preferredDistance) });
+      if (path && path.length > em.CONFIG.enemies.minSpawnPathLength) candidates.push({ x, y, score: Math.abs(path.length - preferredDistance) });
     }
 
     candidates.sort((a, b) => a.score - b.score);
@@ -93,8 +101,8 @@
 
       const dist = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y);
       if (dist < state.player.r + enemy.radius && enemy.damageCooldown <= 0 && enemy.awake !== false) {
-        enemy.damageCooldown = 1.2;
-        enemy.alert = 1.8;
+        enemy.damageCooldown = em.CONFIG.enemies.damageCooldown;
+        enemy.alert = em.CONFIG.enemies.alertDuration;
         em.damagePlayer(state);
       }
     }
@@ -104,7 +112,7 @@
     const distToPlayer = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y);
 
     if (enemy.type === 'mimic' && !enemy.awake) {
-      if (distToPlayer < em.CONFIG.cell * 2.4) {
+      if (distToPlayer < em.CONFIG.cell * em.CONFIG.enemies.mimicWakeCells) {
         enemy.awake = true;
         enemy.alert = 5;
         em.addFloatingText(state, 'Mimic!', enemy.x, enemy.y - 20, enemy.color);
@@ -120,7 +128,7 @@
 
     if (enemy.pathTimer <= 0 || !enemy.path.length) {
       enemy.pathTimer = enemy.type === 'crawler' ? 0.75 : 0.55;
-      enemy.path = em.findPath(state, start, target, 900) || em.fallbackWardenStep(state, start, target);
+      enemy.path = em.findPath(state, start, target, em.CONFIG.enemies.mobilePathLimit) || em.fallbackWardenStep(state, start, target);
     }
 
     const next = enemy.path[1] || target;
@@ -148,7 +156,7 @@
   }
 
   function updateSentry(state, enemy, dt, playerCell) {
-    if (hasLineOfSight(state, { x: enemy.cellX, y: enemy.cellY }, playerCell, 9 + state.player.compassDanger * 2)) {
+    if (hasLineOfSight(state, { x: enemy.cellX, y: enemy.cellY }, playerCell, em.CONFIG.enemies.sentryBaseRange + state.player.compassDanger * em.CONFIG.enemies.sentryCompassRange)) {
       enemy.alert = 1.5;
       em.raiseDanger(state, dt * 0.18);
       if (state.dangerPulse <= 0.1) em.addDangerSmoke(state, enemy.x, enemy.y, 4);
@@ -181,7 +189,7 @@
   }
 
   function trimEnemies(state) {
-    const max = 10 + state.anchors * 2;
+    const max = em.CONFIG.enemies.maxBaseCount + state.anchors * em.CONFIG.enemies.maxPerAnchor;
     if (state.enemies.length > max) state.enemies.splice(0, state.enemies.length - max);
   }
 

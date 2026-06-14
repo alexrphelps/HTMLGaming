@@ -74,7 +74,7 @@
     }));
 
     scored.sort((a, b) => a.score - b.score);
-    return scored.slice(0, 3).map(entry => entry.id);
+    return scored.slice(0, em.CONFIG.upgrades.choices).map(entry => entry.id);
   }
 
   function beginUpgradeSelection(state) {
@@ -109,14 +109,14 @@
     else if (id === 'compassDanger') p.compassDanger = level;
     else if (id === 'compassRange') p.minimapBonus = level;
     else if (id === 'lanternReservoir') {
-      p.maxFuel += 18;
-      restoreFuel(state, 55, false);
+      p.maxFuel += em.CONFIG.upgrades.lanternReservoirFuelMax;
+      restoreFuel(state, em.CONFIG.upgrades.lanternReservoirRestore, false);
     } else if (id === 'lanternFocus') {
-      restoreFuel(state, 24, false);
+      restoreFuel(state, em.CONFIG.upgrades.lanternFocusRestore, false);
     } else if (id === 'phaseDuration') {
-      p.phaseDuration = em.CONFIG.phaseDuration + level * 0.55;
+      p.phaseDuration = em.CONFIG.phaseDuration + level * em.CONFIG.upgrades.phaseDurationPerLevel;
     } else if (id === 'phaseCooldown') {
-      p.phaseCooldown = Math.max(1.6, em.CONFIG.phaseCooldown - level * 0.7);
+      p.phaseCooldown = Math.max(em.CONFIG.upgrades.phaseCooldownFloor, em.CONFIG.phaseCooldown - level * em.CONFIG.upgrades.phaseCooldownPerLevel);
     }
 
     updateLanternVision(state);
@@ -140,8 +140,14 @@
     const p = state.player;
     p.phaseCooldownTimer = Math.max(0, p.phaseCooldownTimer - dt);
 
+    if (state.gameMode === 'beginner' && (!em.hasDiscoveredTutorial || !em.hasDiscoveredTutorial(state, 'lantern'))) {
+      state.danger = 0;
+      updateLanternVision(state);
+      return;
+    }
+
     const focus = state.upgrades.lanternFocus || 0;
-    const drain = em.CONFIG.fuelDrainPerSecond * (1 - focus * 0.15);
+    const drain = em.CONFIG.fuelDrainPerSecond * (1 - focus * em.CONFIG.upgrades.lanternFocusDrainReduction);
     p.fuel = Math.max(0, p.fuel - drain * dt);
 
     if (state.gameMode === 'beginner') {
@@ -150,10 +156,10 @@
       return;
     }
 
-    if (p.fuel <= p.maxFuel * 0.24) {
-      raiseDanger(state, dt * (0.035 + state.anchors * 0.008));
+    if (p.fuel <= p.maxFuel * em.CONFIG.danger.lowFuelRatio) {
+      raiseDanger(state, dt * (em.CONFIG.danger.lowFuelBaseRise + state.anchors * em.CONFIG.danger.lowFuelAnchorRise));
     } else {
-      state.danger = Math.max(0, state.danger - dt * 0.012);
+      state.danger = Math.max(0, state.danger - dt * em.CONFIG.danger.recoveryRate);
     }
 
     updateLanternVision(state);
@@ -162,19 +168,24 @@
   function updateLanternVision(state) {
     const p = state.player;
     const focus = state.upgrades?.lanternFocus || 0;
-    const minVision = em.CONFIG.baseVision + focus * 0.22;
+    const minVision = em.CONFIG.baseVision + focus * em.CONFIG.upgrades.lanternFocusMinVision;
+    if (state.gameMode === 'beginner' && (!em.hasDiscoveredTutorial || !em.hasDiscoveredTutorial(state, 'lantern'))) {
+      p.vision = Math.min(em.CONFIG.maxVision, minVision + p.visionBonus);
+      return;
+    }
+
     const fuelRatio = p.maxFuel > 0 ? p.fuel / p.maxFuel : 0;
     const fuelBonus = em.CONFIG.fuelVisionBonus * Math.sqrt(Math.max(0, fuelRatio));
     p.vision = Math.min(em.CONFIG.maxVision, minVision + p.visionBonus + fuelBonus);
   }
 
   function raiseDanger(state, amount) {
-    const beforeBucket = Math.floor(state.danger * 4);
+    const beforeBucket = Math.floor(state.danger * em.CONFIG.danger.warningBuckets);
     state.danger = Math.min(1, state.danger + amount);
-    const afterBucket = Math.floor(state.danger * 4);
+    const afterBucket = Math.floor(state.danger * em.CONFIG.danger.warningBuckets);
 
-    if (afterBucket > beforeBucket || (state.danger > 0.72 && state.dangerPulse <= 0)) {
-      state.dangerPulse = 4.5;
+    if (afterBucket > beforeBucket || (state.danger > em.CONFIG.danger.warningThreshold && state.dangerPulse <= 0)) {
+      state.dangerPulse = em.CONFIG.danger.warningPulse;
       em.addFloatingText(state, 'Danger Rising', state.player.x, state.player.y - 34, '#ff6f9d');
       em.addMessage(state, 'Danger rising. Find fuel or stabilize an Anchor.');
       if (typeof em.addDangerSmoke === 'function') em.addDangerSmoke(state, state.player.x, state.player.y, 10);

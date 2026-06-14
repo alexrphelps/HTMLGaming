@@ -159,6 +159,24 @@ function collectCurrentTutorialItem(em, state) {
   return item;
 }
 
+function findProceduralBeginnerItems(em, state, limit = 44) {
+  return findItemsInWindow(em, state, -limit, -limit, limit * 2 + 1);
+}
+
+function findItemsInWindow(em, state, minX, minY, size) {
+  const found = [];
+
+  for (let y = minY; y < minY + size; y++) {
+    for (let x = minX; x < minX + size; x++) {
+      if (em.tutorialTargetAt(state, x, y)) continue;
+      const item = em.itemForCell(state, x, y);
+      if (item) found.push({ x, y, type: item.type });
+    }
+  }
+
+  return found;
+}
+
 describe('Echo Maze modular runtime', () => {
   test('provides a clean iframe entry point with ordered external assets', () => {
     expect(fs.existsSync(gamePath)).toBe(true);
@@ -263,24 +281,37 @@ describe('Echo Maze modular runtime', () => {
 
     context.window.EchoMaze.renderOverlay(app);
     const beginnerCard = app.dom.overlayStats.querySelector('[data-menu-mode="beginner"]');
-    beginnerCard.dispatchEvent(new context.window.Event('pointerdown', { bubbles: true, cancelable: true }));
+    const preventPointer = jest.fn();
+    const preventClick = jest.fn();
+    context.window.EchoMaze.handleOverlayStatsAction(app, { target: beginnerCard, preventDefault: preventPointer });
+    const firstBeginnerState = app.state;
+    const firstBeginnerSeed = app.state.seed;
+    context.window.EchoMaze.handleOverlayStatsAction(app, { target: beginnerCard, preventDefault: preventClick });
     expect(app.state.mode).toBe('playing');
     expect(app.state.gameMode).toBe('beginner');
+    expect(app.state).toBe(firstBeginnerState);
+    expect(app.state.seed).toBe(firstBeginnerSeed);
+    expect(preventPointer).toHaveBeenCalledTimes(1);
+    expect(preventClick).toHaveBeenCalledTimes(1);
     expect(app.state.tutorialTarget).toEqual(expect.objectContaining({
       kind: 'item',
       itemType: 'lantern'
     }));
 
+    const staleState = app.state;
+    context.window.EchoMaze.handleOverlayStatsAction(app, { target: beginnerCard, preventDefault: jest.fn() });
+    expect(app.state).toBe(staleState);
+
     context.window.EchoMaze.openMainMenu(app);
     context.window.EchoMaze.renderOverlay(app);
     const classicCard = app.dom.overlayStats.querySelector('[data-menu-mode="classic"]');
-    classicCard.dispatchEvent(new context.window.Event('pointerdown', { bubbles: true, cancelable: true }));
+    context.window.EchoMaze.handleOverlayStatsAction(app, { target: classicCard, preventDefault: jest.fn() });
     expect(app.state.mode).toBe('playing');
     expect(app.state.gameMode).toBe('classic');
     expect(app.state.objective).toEqual(expect.objectContaining({ type: 'anchor', tier: 1 }));
   });
 
-  test('beginner mode uses default biome and multiple scripted copies of one lesson item', () => {
+  test('beginner mode uses default biome and starts without hidden advanced resources', () => {
     const em = loadEchoMazeRuntime();
     const state = em.createRun(9191, { gameMode: 'beginner', mode: 'playing' });
     const target = state.tutorialTarget;
@@ -288,6 +319,10 @@ describe('Echo Maze modular runtime', () => {
     expect(state.gameMode).toBe('beginner');
     expect(state.mode).toBe('playing');
     expect(em.biomeForChunk(state, 4, -3).id).toBe('stone');
+    expect(state.player.phaseCharges).toBe(0);
+    expect(state.player.shields).toBe(0);
+    expect(state.player.fuel).toBe(100);
+    expect(state.player.vision).toBe(em.CONFIG.baseVision);
     expect(target).toEqual(expect.objectContaining({
       kind: 'item',
       itemType: 'lantern'
@@ -297,7 +332,67 @@ describe('Echo Maze modular runtime', () => {
     expect(em.itemForCell(state, target.x, target.y).type).toBe('lantern');
     const alternate = state.tutorialTargets[1];
     expect(em.itemForCell(state, alternate.x, alternate.y).type).toBe('lantern');
-    expect(em.itemForCell(state, target.x + 20, target.y + 20)).toBe(null);
+    expect(findProceduralBeginnerItems(em, state)).toHaveLength(0);
+  });
+
+  test('beginner procedural items spawn map-wide from completed lesson unlocks', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(9192, { gameMode: 'beginner', mode: 'playing' });
+    const distantWindows = [
+      { x: -80, y: -80 },
+      { x: 48, y: -24 },
+      { x: -36, y: 54 }
+    ];
+
+    expect(em.unlockedBeginnerItemTypes(state)).toEqual([]);
+    expect(findProceduralBeginnerItems(em, state)).toHaveLength(0);
+    for (const win of distantWindows) {
+      expect(findItemsInWindow(em, state, win.x, win.y, 42)).toHaveLength(0);
+    }
+
+    collectCurrentTutorialItem(em, state);
+    expect(em.continueTutorial(state)).toBe(true);
+    expect(em.unlockedBeginnerItemTypes(state)).toEqual(['lantern']);
+    expect(em.itemForCell(state, state.tutorialTarget.x, state.tutorialTarget.y).type).toBe('boots');
+
+    const lanternWindows = distantWindows.map(win => findItemsInWindow(em, state, win.x, win.y, 42));
+    expect(lanternWindows.every(items => items.length > 0)).toBe(true);
+    expect(lanternWindows.flat().every(item => item.type === 'lantern')).toBe(true);
+
+    const lanternKeys = lanternWindows.flat().map(item => `${item.x},${item.y}`).sort();
+
+    collectCurrentTutorialItem(em, state);
+    expect(em.continueTutorial(state)).toBe(true);
+    expect(em.unlockedBeginnerItemTypes(state)).toEqual(['lantern', 'boots']);
+
+    const unlockedItems = distantWindows.flatMap(win => findItemsInWindow(em, state, win.x, win.y, 42));
+    const unlockedKeys = unlockedItems.map(item => `${item.x},${item.y}`).sort();
+    expect(unlockedKeys).toEqual(lanternKeys);
+    expect(unlockedItems.every(item => ['lantern', 'boots'].includes(item.type))).toBe(true);
+    expect(new Set(unlockedItems.map(item => item.type))).toEqual(new Set(['lantern', 'boots']));
+  });
+
+  test('beginner item pickup advances epoch and rerolls map-wide procedural items', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(9193, { gameMode: 'beginner', mode: 'playing' });
+
+    collectCurrentTutorialItem(em, state);
+    expect(em.continueTutorial(state)).toBe(true);
+
+    const firstWindow = findItemsInWindow(em, state, -70, 20, 48);
+    expect(firstWindow.length).toBeGreaterThan(0);
+
+    const beforeEpoch = state.beginnerItemEpoch;
+    const beforeKeys = firstWindow.map(item => `${item.x},${item.y}`).sort();
+    const picked = firstWindow[0];
+    em.collectItem(state, picked.x, picked.y, em.itemForCell(state, picked.x, picked.y));
+
+    expect(state.mode).toBe('playing');
+    expect(state.beginnerItemEpoch).toBe(beforeEpoch + 1);
+
+    const afterKeys = findItemsInWindow(em, state, -70, 20, 48).map(item => `${item.x},${item.y}`).sort();
+    expect(afterKeys).not.toEqual(beforeKeys);
+    expect(afterKeys).not.toContain(`${picked.x},${picked.y}`);
   });
 
   test('beginner HUD hides undiscovered classic stats until lessons reveal them', () => {
@@ -316,6 +411,7 @@ describe('Echo Maze modular runtime', () => {
     expect(app.dom.itemMeters.textContent).not.toContain('Compass');
     expect(app.dom.itemMeters.textContent).not.toContain('Danger');
     expect(app.state.danger).toBe(0);
+    expect(app.state.player.fuel).toBe(100);
 
     collectCurrentTutorialItem(em, app.state);
     em.updateHud(app);
@@ -323,6 +419,33 @@ describe('Echo Maze modular runtime', () => {
     expect(app.dom.itemMeters.textContent).toContain('Vision');
     expect(app.dom.itemMeters.textContent).not.toContain('Phase');
     expect(app.dom.itemMeters.textContent).not.toContain('Danger');
+  });
+
+  test('beginner phase is inert until the phase lesson is complete', () => {
+    const em = loadEchoMazeRuntime();
+    const state = em.createRun(6262, { gameMode: 'beginner', mode: 'playing' });
+
+    em.usePhase(state);
+    expect(state.player.phaseTimer).toBe(0);
+    expect(state.player.phaseCharges).toBe(0);
+
+    collectCurrentTutorialItem(em, state);
+    em.continueTutorial(state);
+    collectCurrentTutorialItem(em, state);
+    em.continueTutorial(state);
+
+    em.usePhase(state);
+    expect(state.player.phaseTimer).toBe(0);
+    expect(state.player.phaseCharges).toBe(0);
+
+    collectCurrentTutorialItem(em, state);
+    expect(state.tutorialInfo).toEqual(expect.objectContaining({ type: 'phase' }));
+    expect(state.player.phaseCharges).toBe(1);
+    em.continueTutorial(state);
+
+    em.usePhase(state);
+    expect(state.player.phaseCharges).toBe(0);
+    expect(state.player.phaseTimer).toBeGreaterThan(0);
   });
 
   test('beginner item lessons pause with info and advance through each pickup', () => {
@@ -384,10 +507,18 @@ describe('Echo Maze modular runtime', () => {
     expect(state.tutorialInfo).toEqual(expect.objectContaining({ type: 'anchor' }));
 
     em.continueTutorial(state);
-    expect(state.mode).toBe('playing');
+    expect(state.mode).toBe('upgrade');
     expect(state.gameMode).toBe('classic');
     expect(state.anchors).toBe(1);
     expect(state.tier).toBe(2);
+    expect(em.hasDiscoveredTutorial(state, 'lantern')).toBe(true);
+    expect(em.hasDiscoveredTutorial(state, 'anchor')).toBe(true);
+    expect(state.pendingUpgrades).toHaveLength(3);
+    expect(state.objective).toBe(null);
+    expect(state.warden).toBeTruthy();
+
+    expect(em.chooseUpgrade(state, state.pendingUpgrades[0])).toBe(true);
+    expect(state.mode).toBe('playing');
     expect(state.objective).toEqual(expect.objectContaining({ type: 'anchor', tier: 2 }));
 
     const start = em.cellOfWorld(state.player.x, state.player.y);
@@ -437,6 +568,22 @@ describe('Echo Maze modular runtime', () => {
     expect(app.dom.tertiaryBtn.style.display).toBe('none');
   });
 
+  test('upgrade card clicks are ignored outside upgrade mode', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const app = context.window.EchoMaze.bootstrap(context.document, context.window);
+    const em = context.window.EchoMaze;
+
+    app.state.pendingUpgrades = ['compassObjective', 'phaseDuration', 'lanternFocus'];
+    app.state.mode = 'playing';
+    const staleUpgradeButton = app.document.createElement('button');
+    staleUpgradeButton.setAttribute('data-upgrade-id', 'compassObjective');
+
+    em.handleOverlayStatsAction(app, { target: staleUpgradeButton, preventDefault: jest.fn() });
+    expect(app.state.mode).toBe('playing');
+    expect(app.state.upgrades.compassObjective).toBe(0);
+    expect(app.state.pendingUpgrades).toEqual(['compassObjective', 'phaseDuration', 'lanternFocus']);
+  });
+
   test('destroy cancels the active animation frame and removes listeners', () => {
     const context = loadEchoMazeBootstrapContext();
     const app = context.window.EchoMaze.bootstrap(context.document, context.window);
@@ -446,6 +593,18 @@ describe('Echo Maze modular runtime', () => {
 
     expect(context.window.cancelAnimationFrame).toHaveBeenCalledWith(1);
     expect(app.isDestroyed).toBe(true);
+    expect(context.window.EchoMazeApp).toBe(null);
+  });
+
+  test('destroyed apps can be bootstrapped fresh', () => {
+    const context = loadEchoMazeBootstrapContext();
+    const first = context.window.EchoMaze.bootstrap(context.document, context.window);
+    first.destroy();
+
+    const second = context.window.EchoMaze.bootstrap(context.document, context.window);
+    expect(second).not.toBe(first);
+    expect(second.isDestroyed).toBe(false);
+    expect(context.window.EchoMazeApp).toBe(second);
   });
 
   test('new runs start with fuel-powered light clamped to max vision', () => {
@@ -525,19 +684,99 @@ describe('Echo Maze modular runtime', () => {
     expect(state.player.y).toBe(south.ny * em.CONFIG.cell + r);
   });
 
-  test('item collection applies upgrades once', () => {
+  test('item collection applies registry effects once', () => {
     const em = loadEchoMazeRuntime();
-    const state = em.createRun(3333);
-    const item = { type: 'lantern', data: em.ITEM_DATA.lantern };
-    state.player.fuel = 40;
-    em.updateLanternVision(state);
-    const beforeVision = state.player.vision;
+    const cases = {
+      lantern: {
+        x: 6,
+        y: 0,
+        assertEffect(state) {
+          state.player.fuel = 40;
+          em.updateLanternVision(state);
+          const beforeVision = state.player.vision;
+          em.collectItem(state, 6, 0, { type: 'lantern', data: em.ITEM_DATA.lantern });
+          expect(state.player.vision).toBeGreaterThan(beforeVision);
+          expect(state.player.fuel).toBeGreaterThan(40);
+        }
+      },
+      boots: {
+        x: 7,
+        y: 0,
+        assertEffect(state) {
+          const before = state.player.speed;
+          em.collectItem(state, 7, 0, { type: 'boots', data: em.ITEM_DATA.boots });
+          expect(state.player.speed).toBeGreaterThan(before);
+        }
+      },
+      phase: {
+        x: 8,
+        y: 0,
+        assertEffect(state) {
+          const before = state.player.phaseCharges;
+          em.collectItem(state, 8, 0, { type: 'phase', data: em.ITEM_DATA.phase });
+          expect(state.player.phaseCharges).toBe(before + 1);
+        }
+      },
+      compass: {
+        x: 9,
+        y: 0,
+        assertEffect(state) {
+          const before = state.player.compass;
+          em.collectItem(state, 9, 0, { type: 'compass', data: em.ITEM_DATA.compass });
+          expect(state.player.compass).toBe(before + 1);
+        }
+      },
+      map: {
+        x: 10,
+        y: 0,
+        assertEffect(state) {
+          const before = state.revealed.size;
+          em.collectItem(state, 10, 0, { type: 'map', data: em.ITEM_DATA.map });
+          expect(state.revealed.size).toBeGreaterThan(before);
+        }
+      },
+      shield: {
+        x: 11,
+        y: 0,
+        assertEffect(state) {
+          const before = state.player.shields;
+          em.collectItem(state, 11, 0, { type: 'shield', data: em.ITEM_DATA.shield });
+          expect(state.player.shields).toBe(before + 1);
+        }
+      },
+      battery: {
+        x: 12,
+        y: 0,
+        assertEffect(state) {
+          state.danger = 0.5;
+          const before = state.player.battery;
+          em.collectItem(state, 12, 0, { type: 'battery', data: em.ITEM_DATA.battery });
+          expect(state.player.battery).toBe(before + 1);
+          expect(state.danger).toBeLessThan(0.5);
+        }
+      },
+      relic: {
+        x: 13,
+        y: 0,
+        assertEffect(state) {
+          const beforeCharges = state.player.phaseCharges;
+          const beforeScore = state.score;
+          em.collectItem(state, 13, 0, { type: 'relic', data: em.ITEM_DATA.relic });
+          expect(state.player.phaseCharges).toBe(beforeCharges + 1);
+          expect(state.score).toBeGreaterThan(beforeScore);
+        }
+      }
+    };
 
-    em.collectItem(state, 6, 0, item);
-    expect(state.collected.has('6,0')).toBe(true);
-    expect(state.player.vision).toBeGreaterThan(beforeVision);
-    expect(state.player.fuel).toBeGreaterThan(40);
-    expect(em.itemForCell(state, 6, 0)).toBe(null);
+    for (const [type, testCase] of Object.entries(cases)) {
+      const state = em.createRun(3333);
+      testCase.assertEffect(state);
+      expect(state.collected.size).toBe(1);
+      expect(state.collected.has(`${testCase.x},${testCase.y}`)).toBe(true);
+      expect(state.items).toBe(1);
+      expect(em.itemForCell(state, testCase.x, testCase.y)).toBe(null);
+      expect(em.ITEM_EFFECTS[type]).toBeTruthy();
+    }
   });
 
   test('pickup reachability respects blocked and open maze edges', () => {

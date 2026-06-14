@@ -4,8 +4,8 @@
   const em = window.EchoMaze || {};
 
   function addMessage(state, text) {
-    state.messages.unshift({ text, ttl: 5.7 });
-    state.messages = state.messages.slice(0, 5);
+    state.messages.unshift({ text, ttl: em.CONFIG.messages.ttl });
+    state.messages = state.messages.slice(0, em.CONFIG.messages.maxVisible);
   }
 
   function addFloatingText(state, text, x, y, color) {

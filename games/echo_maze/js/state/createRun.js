@@ -5,6 +5,7 @@
 
   function createRun(seed = Math.floor(Math.random() * 1_000_000_000), options = {}) {
     const gameMode = options.gameMode || 'classic';
+    const isBeginner = gameMode === 'beginner';
     const state = {
       seed,
       mode: options.mode || 'mainMenu',
@@ -50,7 +51,7 @@
         visionBonus: 0,
         fuel: 100,
         maxFuel: 100,
-        phaseCharges: 1,
+        phaseCharges: isBeginner ? 0 : 1,
         phaseTimer: 0,
         phaseDuration: em.CONFIG.phaseDuration,
         phaseCooldown: em.CONFIG.phaseCooldown,
@@ -61,7 +62,7 @@
         compassItems: 0,
         compassDanger: 0,
         minimapBonus: 0,
-        shields: 1,
+        shields: isBeginner ? 0 : 1,
         health: 3,
         battery: 0,
         angle: 0
@@ -75,7 +76,9 @@
       tutorialTarget: null,
       tutorialTargets: [],
       tutorialInfo: null,
-      tutorialCompleted: false
+      tutorialCompleted: false,
+      tutorialDiscovered: new Set(),
+      beginnerItemEpoch: 0
     };
 
     em.ensureSpawnRoom(state);

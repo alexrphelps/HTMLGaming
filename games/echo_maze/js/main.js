@@ -39,21 +39,15 @@
   }
 
   function handlePrimaryAction(app) {
-    if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[0]);
-    else if (app.state.mode === 'tutorialInfo') em.continueTutorial(app.state);
-    else if (app.state.mode === 'mainMenu') startMode(app, 'classic');
-    else if (app.state.mode === 'start') em.startRun(app.state);
-    else if (app.state.mode === 'paused') em.pauseRun(app.state);
-    else if (app.state.mode === 'victory' || app.state.mode === 'gameover') openMainMenu(app);
+    return em.runModeAction(app, 'primary');
   }
 
   function handleSecondaryAction(app) {
-    if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[1]);
-    else if (app.state.mode === 'paused') openMainMenu(app);
+    return em.runModeAction(app, 'secondary');
   }
 
   function handleTertiaryAction(app) {
-    if (app.state.mode === 'upgrade') em.chooseUpgrade(app.state, app.state.pendingUpgrades[2]);
+    return em.runModeAction(app, 'tertiary');
   }
 
   function handleOverlayStatsAction(app, event) {
@@ -63,14 +57,14 @@
     const btn = target.closest('[data-upgrade-id]');
     if (btn) {
       event.preventDefault();
-      em.chooseUpgrade(app.state, btn.getAttribute('data-upgrade-id'));
+      em.runOverlayChoice(app, 'upgrade', btn.getAttribute('data-upgrade-id'));
       return;
     }
 
     const modeBtn = target.closest('[data-menu-mode]');
     if (modeBtn) {
       event.preventDefault();
-      em.startMode(app, modeBtn.getAttribute('data-menu-mode'));
+      em.runOverlayChoice(app, 'menu', modeBtn.getAttribute('data-menu-mode'));
     }
   }
 
@@ -107,6 +101,10 @@
         this.rafId = null;
       }
 
+      if (win.EchoMazeApp === this) {
+        win.EchoMazeApp = null;
+      }
+
       while (this.listeners.length > 0) {
         const remove = this.listeners.pop();
         try {
@@ -131,7 +129,7 @@
         return;
       }
 
-      const dt = Math.min(0.05, (now - app.lastTime) / 1000);
+      const dt = Math.min(em.CONFIG.frame.maxDt, (now - app.lastTime) / 1000);
       app.lastTime = now;
       em.update(app.state, dt, em.readInput(app.state, app.input));
       em.draw(app);

@@ -19,6 +19,20 @@
     return mins + ':' + String(secs).padStart(2, '0');
   }
 
-  Object.assign(em, { easeOutCubic, alphaColor, formatTime });
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function safeColor(value, fallback = '#ffffff') {
+    const color = String(value || '');
+    return /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+  }
+
+  Object.assign(em, { easeOutCubic, alphaColor, formatTime, escapeHtml, safeColor });
   window.EchoMaze = em;
 })();

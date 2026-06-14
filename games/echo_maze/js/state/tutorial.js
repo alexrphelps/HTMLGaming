@@ -3,55 +3,8 @@
 
   const em = window.EchoMaze || {};
 
-  const BEGINNER_SEQUENCE = ['lantern', 'boots', 'phase', 'compass', 'map', 'shield', 'battery', 'relic', 'anchor'];
-
-  const TUTORIAL_INFO = {
-    lantern: {
-      title: 'Lantern Core',
-      text: 'Lantern Cores restore fuel and push your light farther into the maze.',
-      stat: 'Watch Fuel and Vision. Fuel drains over time, and more fuel means you can see farther.'
-    },
-    boots: {
-      title: 'Quickstep Boots',
-      text: 'Quickstep Boots permanently increase movement speed.',
-      stat: 'Watch Speed. Higher speed helps you reach Anchors before danger catches up.'
-    },
-    phase: {
-      title: 'Phase Crystal',
-      text: 'Phase Crystals add a charge for briefly slipping through walls. Press Space to use Phase.',
-      stat: 'Watch Phase. Charges are shown as pips, and the timer changes when Phase is active or cooling down.'
-    },
-    compass: {
-      title: 'Compass Lens',
-      text: 'Compass Lenses sharpen distant signals and make objectives easier to track.',
-      stat: 'Watch Compass. More compass strength improves how confidently the HUD and minimap point you forward.'
-    },
-    map: {
-      title: 'Map Fragment',
-      text: 'Map Fragments reveal nearby maze structure in a burst.',
-      stat: 'Watch Revealed and the minimap. More revealed cells give you safer routes back and forward.'
-    },
-    shield: {
-      title: 'Ward Shield',
-      text: 'Ward Shields add protection before your health is harmed.',
-      stat: 'Watch Integrity. Shields absorb danger before health becomes the problem.'
-    },
-    battery: {
-      title: 'Echo Battery',
-      text: 'Echo Batteries stabilize your lantern and push back the maze danger.',
-      stat: 'Watch Battery and Danger. Batteries help you recover while danger shows how close the maze is to overwhelming you.'
-    },
-    relic: {
-      title: 'Lost Relic',
-      text: 'Lost Relics are rare score treasures that also grant a Phase charge.',
-      stat: 'Watch Score and Items. Items count your discoveries, while score rewards efficient exploration.'
-    },
-    anchor: {
-      title: 'Echo Anchor',
-      text: 'Echo Anchors are the main objectives. Stabilizing them advances the run.',
-      stat: 'Watch Anchors and Tier. This tutorial Anchor counts as your first Classic Anchor; the next signal begins the full run.'
-    }
-  };
+  const BEGINNER_SEQUENCE = em.BEGINNER_SEQUENCE || ['lantern', 'boots', 'phase', 'compass', 'map', 'shield', 'battery', 'relic', 'anchor'];
+  const TUTORIAL_INFO = em.TUTORIAL_INFO || {};
 
   function initBeginnerTutorial(state) {
     state.tutorialStep = 0;
@@ -60,6 +13,8 @@
     state.tutorialTargets = [];
     state.tutorialInfo = null;
     state.tutorialCompleted = false;
+    state.tutorialDiscovered = new Set();
+    state.beginnerItemEpoch = 0;
     state.objective = null;
     state.exitPortal = null;
     spawnNextTutorialTarget(state);
@@ -94,7 +49,7 @@
       return state.tutorialTarget;
     }
 
-    const cells = findTutorialCells(state, 4 + (state.tutorialStep % 3), 5);
+    const cells = findTutorialCells(state, 4 + (state.tutorialStep % 3), em.CONFIG.tutorial.targetCount);
     state.objective = null;
     state.tutorialTargets = cells.map(cell => ({ kind: 'item', itemType: type, x: cell.x, y: cell.y }));
     state.tutorialTarget = state.tutorialTargets[0];
@@ -113,16 +68,16 @@
     const seen = new Set([em.keyOf(start.x, start.y)]);
     const candidates = [];
 
-    while (queue.length && seen.size < 240) {
+    while (queue.length && seen.size < em.CONFIG.tutorial.maxSearchCells) {
       const cur = queue.shift();
       const key = em.keyOf(cur.x, cur.y);
 
-      if (cur.d >= 3 && !state.collected.has(key) && !isReservedTutorialCell(state, cur.x, cur.y)) {
-        const score = Math.abs(cur.d - preferredDistance) + em.rand01(state, cur.x, cur.y, 18000 + state.tutorialStep) * 0.25;
+      if (cur.d >= em.CONFIG.tutorial.minTargetDistance && !state.collected.has(key) && !isReservedTutorialCell(state, cur.x, cur.y)) {
+        const score = Math.abs(cur.d - preferredDistance) + em.rand01(state, cur.x, cur.y, em.CONFIG.tutorial.targetScoreSalt + state.tutorialStep) * 0.25;
         candidates.push({ x: cur.x, y: cur.y, distance: cur.d, score });
       }
 
-      if (cur.d >= 9) continue;
+      if (cur.d >= em.CONFIG.tutorial.maxTargetDistance) continue;
 
       for (const dir of em.DIRS) {
         const nx = cur.x + em.VEC[dir].x;
@@ -169,22 +124,32 @@
     if (!target || target.kind !== 'item') return;
 
     state.tutorialInfo = tutorialInfoFor(item.type);
+    rememberTutorialDiscovery(state, item.type);
     state.tutorialTarget = null;
     state.tutorialTargets = [];
     state.tutorialStep++;
     state.previousMode = 'playing';
     state.mode = 'tutorialInfo';
+    if (em.updateLanternVision) em.updateLanternVision(state);
   }
 
   function completeBeginnerAnchor(state, obj) {
     state.score += obj.baseReward;
     state.anchors = 1;
     state.tier = 2;
+    state.phaseUsesSinceAnchor = 0;
+    state.anchorClock = 0;
     state.objective = null;
+    state.pendingAnchorAdvance = {
+      complete: false,
+      objName: obj.name,
+      reward: obj.baseReward
+    };
     state.tutorialTarget = null;
     state.tutorialTargets = [];
     state.tutorialStep++;
     state.tutorialInfo = tutorialInfoFor('anchor');
+    rememberTutorialDiscovery(state, 'anchor');
     state.previousMode = 'playing';
     state.mode = 'tutorialInfo';
     state.screenPulse = 0.7;
@@ -216,19 +181,24 @@
     state.tutorialTargets = [];
     state.tutorialSequence = [];
     state.mode = 'playing';
-    state.objective = em.makeObjective(state, state.tier);
     if (em.spawnWarden && !state.warden) em.spawnWarden(state);
+    if (em.beginUpgradeSelection && em.availableUpgradeIds(state).length > 0) {
+      em.beginUpgradeSelection(state);
+    } else if (typeof em.completeAnchorAdvance === 'function') {
+      em.completeAnchorAdvance(state);
+    }
     em.addMessage(state, 'Beginner lessons complete. The maze is now in Classic mode.');
   }
 
   function tutorialInfoFor(type) {
     const data = TUTORIAL_INFO[type];
+    const item = em.ITEM_DATA[type];
     return {
       type,
       title: data.title,
       text: data.text,
       stat: data.stat,
-      color: type === 'anchor' ? '#ffe27a' : em.ITEM_DATA[type].color
+      color: type === 'anchor' ? '#ffe27a' : item.color
     };
   }
 
@@ -238,9 +208,16 @@
   }
 
   function hasDiscoveredTutorial(state, type) {
-    if (!state || !state.tutorialSequence) return false;
+    if (!state) return false;
+    if (state.tutorialDiscovered && state.tutorialDiscovered.has(type)) return true;
+    if (!state.tutorialSequence) return false;
     const index = state.tutorialSequence.indexOf(type);
     return index >= 0 && state.tutorialStep > index;
+  }
+
+  function rememberTutorialDiscovery(state, type) {
+    if (!state.tutorialDiscovered) state.tutorialDiscovered = new Set();
+    state.tutorialDiscovered.add(type);
   }
 
   Object.assign(em, {
@@ -257,7 +234,8 @@
     graduateBeginnerToClassic,
     tutorialInfoFor,
     tutorialTargetAt,
-    hasDiscoveredTutorial
+    hasDiscoveredTutorial,
+    rememberTutorialDiscovery
   });
 
   window.EchoMaze = em;

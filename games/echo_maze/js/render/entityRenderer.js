@@ -29,7 +29,9 @@
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
 
-    if (item.type === 'lantern') {
+    const renderType = item.data.renderType || item.type;
+
+    if (renderType === 'lantern') {
       ctx.beginPath();
       ctx.arc(0, 0, 8, 0, Math.PI * 2);
       ctx.fill();
@@ -40,17 +42,17 @@
       ctx.moveTo(0, -12);
       ctx.lineTo(0, 12);
       ctx.stroke();
-    } else if (item.type === 'boots') {
+    } else if (renderType === 'boots') {
       ctx.beginPath();
       ctx.moveTo(-8, -8);
       ctx.lineTo(12, 0);
       ctx.lineTo(-8, 8);
       ctx.closePath();
       ctx.fill();
-    } else if (item.type === 'phase') {
+    } else if (renderType === 'phase') {
       ctx.rotate(Math.PI / 4);
       ctx.fillRect(-7, -7, 14, 14);
-    } else if (item.type === 'compass') {
+    } else if (renderType === 'compass') {
       ctx.beginPath();
       ctx.arc(0, 0, 10, 0, Math.PI * 2);
       ctx.stroke();
@@ -61,7 +63,7 @@
       ctx.lineTo(-5, 5);
       ctx.closePath();
       ctx.fill();
-    } else if (item.type === 'map') {
+    } else if (renderType === 'map') {
       ctx.strokeRect(-9, -8, 18, 16);
       ctx.beginPath();
       ctx.moveTo(-3, -8);
@@ -69,7 +71,7 @@
       ctx.moveTo(4, -8);
       ctx.lineTo(4, 8);
       ctx.stroke();
-    } else if (item.type === 'shield') {
+    } else if (renderType === 'shield') {
       ctx.beginPath();
       ctx.moveTo(0, -12);
       ctx.lineTo(10, -6);
@@ -79,7 +81,7 @@
       ctx.lineTo(-10, -6);
       ctx.closePath();
       ctx.fill();
-    } else if (item.type === 'battery') {
+    } else if (renderType === 'battery') {
       ctx.fillRect(-7, -11, 14, 22);
       ctx.fillRect(-3, -15, 6, 4);
     } else {

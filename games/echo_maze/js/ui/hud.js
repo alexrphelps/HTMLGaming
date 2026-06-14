@@ -3,6 +3,94 @@
 
   const em = window.EchoMaze || {};
 
+  const BEGINNER_RUN_STAT_GROUPS = [
+    {
+      render(state) {
+        const sequenceLength = tutorialSequenceLength(state);
+        const learned = Math.min(state.tutorialStep, sequenceLength);
+        return [
+          statMarkup('Mode', 'Beginner'),
+          statMarkup('Lessons', learned + '/' + sequenceLength)
+        ];
+      }
+    },
+    {
+      unlock: 'relic',
+      render(state) {
+        return [
+          statMarkup('Score', state.score),
+          statMarkup('Items', state.items)
+        ];
+      }
+    },
+    {
+      unlock: 'shield',
+      render(state) {
+        return [statMarkup('Integrity', state.player.health + ' HP / ' + state.player.shields + ' SH')];
+      }
+    },
+    {
+      unlock: 'anchor',
+      render(state) {
+        return [
+          statMarkup('Anchors', state.anchors + '/' + em.CONFIG.runAnchors),
+          statMarkup('Tier', state.tier)
+        ];
+      }
+    }
+  ];
+
+  const BEGINNER_METER_GROUPS = [
+    {
+      unlock: 'lantern',
+      render(state) {
+        const p = state.player;
+        return [
+          meter('Fuel', p.fuel, p.maxFuel, em.ITEM_DATA.lantern.color, Math.round(p.fuel) + '/' + Math.round(p.maxFuel)),
+          meter('Vision', p.vision - em.CONFIG.baseVision, em.CONFIG.maxVision - em.CONFIG.baseVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1))
+        ];
+      }
+    },
+    {
+      unlock: 'phase',
+      render(state, context) {
+        const p = state.player;
+        return [pips('Phase', p.phaseTimer > 0 ? 1 : p.phaseCharges, em.CONFIG.playerCaps.maxPhaseCharges, em.ITEM_DATA.phase.color, context.phase)];
+      }
+    },
+    {
+      unlock: 'compass',
+      render(state) {
+        const p = state.player;
+        return [pips('Compass', p.compass + p.compassObjective, 8, em.ITEM_DATA.compass.color, (p.compass + p.compassObjective) + '/8')];
+      }
+    },
+    {
+      unlock: 'boots',
+      render(state) {
+        const p = state.player;
+        return [meter('Speed', p.speed - em.CONFIG.baseSpeed, em.CONFIG.playerCaps.maxSpeed - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, Math.round(p.speed))];
+      }
+    },
+    {
+      unlock: 'battery',
+      render(state) {
+        return [pips('Battery', state.player.battery, em.CONFIG.playerCaps.maxBattery, em.ITEM_DATA.battery.color, state.player.battery + '/' + em.CONFIG.playerCaps.maxBattery)];
+      }
+    },
+    {
+      unlock: 'map',
+      render(state) {
+        return [itemTotalMarkup('Revealed', state.revealed.size, em.ITEM_DATA.map.color)];
+      }
+    }
+  ];
+
+  const BEGINNER_SECONDARY_GROUPS = [
+    { unlock: 'map', render: state => '<span>Depth ' + em.escapeHtml(state.maxDepth) + '</span>' },
+    { unlock: 'compass', render: (state, context) => '<span>' + em.escapeHtml(context.pc.x) + ', ' + em.escapeHtml(context.pc.y) + '</span>' }
+  ];
+
   function renderMessages(app) {
     const log = app.dom.messageLog;
     const messages = app.state.messages;
@@ -37,8 +125,8 @@
     const fill = Math.max(0, Math.min(1, value / safeMax)) * 100;
 
     return `
-      <div class="meter" style="--meter-color: ${color}; --meter-fill: ${fill}%">
-        <div class="meter-head"><span>${label}</span><strong>${detail}</strong></div>
+      <div class="meter" style="--meter-color: ${em.safeColor(color)}; --meter-fill: ${fill}%">
+        <div class="meter-head"><span>${em.escapeHtml(label)}</span><strong>${em.escapeHtml(detail)}</strong></div>
         <div class="meter-track"><span></span></div>
       </div>
     `;
@@ -52,53 +140,42 @@
     }
 
     return `
-      <div class="pips" style="--meter-color: ${color}">
-        <div class="meter-head"><span>${label}</span><strong>${detail}</strong></div>
+      <div class="pips" style="--meter-color: ${em.safeColor(color)}">
+        <div class="meter-head"><span>${em.escapeHtml(label)}</span><strong>${em.escapeHtml(detail)}</strong></div>
         <div class="pip-row">${dots}</div>
       </div>
     `;
+  }
+
+  function statMarkup(label, value, className = '') {
+    const extra = className ? ' ' + em.escapeHtml(className) : '';
+    return `<div class="stat${extra}"><span>${em.escapeHtml(label)}</span><strong>${em.escapeHtml(value)}</strong></div>`;
+  }
+
+  function itemTotalMarkup(label, value, color) {
+    return `<div class="item-total" style="--meter-color: ${em.safeColor(color)}"><span>${em.escapeHtml(label)}</span><strong>${em.escapeHtml(value)}</strong></div>`;
+  }
+
+  function tutorialSequenceLength(state) {
+    return state.tutorialSequence && state.tutorialSequence.length ? state.tutorialSequence.length : em.BEGINNER_SEQUENCE.length;
+  }
+
+  function renderBeginnerGroups(groups, state, context) {
+    return groups.flatMap(group => {
+      if (group.unlock && !em.hasDiscoveredTutorial(state, group.unlock)) return [];
+      return group.render(state, context);
+    });
   }
 
   function updateHud(app) {
     const state = app.state;
     const p = state.player;
     const pc = em.cellOfWorld(p.x, p.y);
-    const obj = state.objective || state.exitPortal;
-    const objWorldX = obj ? obj.x * em.CONFIG.cell + em.CONFIG.cell / 2 : p.x;
-    const objWorldY = obj ? obj.y * em.CONFIG.cell + em.CONFIG.cell / 2 : p.y;
-    const objDist = obj ? Math.round(Math.hypot(objWorldX - p.x, objWorldY - p.y) / em.CONFIG.cell) : 0;
-    const phase = p.phaseTimer > 0 ? p.phaseTimer.toFixed(1) + 's' : p.phaseCooldownTimer > 0 ? p.phaseCooldownTimer.toFixed(1) + 's CD' : p.phaseCharges + '/9';
+    const phase = p.phaseTimer > 0 ? p.phaseTimer.toFixed(1) + 's' : p.phaseCooldownTimer > 0 ? p.phaseCooldownTimer.toFixed(1) + 's CD' : p.phaseCharges + '/' + em.CONFIG.playerCaps.maxPhaseCharges;
     const wardenText = !state.warden ? 'Dormant' : state.warden.wake > 0 ? 'Waking' : 'Hunting';
     const dangerText = state.danger < 0.25 ? 'Calm' : state.danger < 0.55 ? 'Rising' : state.danger < 0.82 ? 'High' : 'Critical';
 
-    if (state.mode === 'victory') {
-      app.dom.goalText.innerHTML = '<strong>Victory:</strong> The Anchor chain is stable.';
-    } else if (state.mode === 'gameover') {
-      app.dom.goalText.innerHTML = '<strong>Run lost:</strong> Return to the main menu when you are ready.';
-    } else if (state.mode === 'mainMenu') {
-      app.dom.goalText.innerHTML = '<strong>Mode:</strong> Choose Beginner or Classic.';
-    } else if (state.mode === 'tutorialInfo') {
-      app.dom.goalText.innerHTML = '<strong>Lesson:</strong> Read the note, then continue.';
-    } else if (state.gameMode === 'beginner' && state.tutorialTarget) {
-      app.dom.goalText.innerHTML = beginnerGoalText(state);
-    } else if (state.mode === 'upgrade') {
-      app.dom.goalText.innerHTML = '<strong>Upgrade:</strong> Choose one Echo upgrade before the maze shifts.';
-    } else if (state.exitPortal) {
-      app.dom.goalText.innerHTML = '<strong>Goal:</strong> Reach the Exit Portal | ' + objDist + ' cells away.';
-    } else if (obj) {
-      app.dom.goalText.innerHTML =
-        '<strong>Goal:</strong> Stabilize ' +
-        obj.name +
-        ' | ' +
-        objDist +
-        ' cells away. Anchor ' +
-        (state.anchors + 1) +
-        '/' +
-        em.CONFIG.runAnchors +
-        '.';
-    } else {
-      app.dom.goalText.innerHTML = '<strong>Goal:</strong> Signal stabilizing...';
-    }
+    app.dom.goalText.innerHTML = em.goalHtmlForState(state);
 
     if (state.gameMode === 'beginner') {
       updateBeginnerHud(app, phase, pc);
@@ -107,29 +184,29 @@
     }
 
     app.dom.runStats.innerHTML = `
-      <div class="stat"><span>Score</span><strong>${state.score}</strong></div>
-      <div class="stat"><span>Anchors</span><strong>${state.anchors}/${em.CONFIG.runAnchors}</strong></div>
-      <div class="stat"><span>Tier</span><strong>${state.tier}</strong></div>
-      <div class="stat"><span>Integrity</span><strong>${p.health} HP / ${p.shields} SH</strong></div>
-      <div class="stat warden ${wardenText.toLowerCase()}"><span>Warden</span><strong>${wardenText}</strong></div>
+      ${statMarkup('Score', state.score)}
+      ${statMarkup('Anchors', state.anchors + '/' + em.CONFIG.runAnchors)}
+      ${statMarkup('Tier', state.tier)}
+      ${statMarkup('Integrity', p.health + ' HP / ' + p.shields + ' SH')}
+      ${statMarkup('Warden', wardenText, 'warden ' + wardenText.toLowerCase())}
     `;
 
     app.dom.itemMeters.innerHTML = `
       ${meter('Fuel', p.fuel, p.maxFuel, em.ITEM_DATA.lantern.color, Math.round(p.fuel) + '/' + Math.round(p.maxFuel))}
       ${meter('Vision', p.vision - em.CONFIG.baseVision, em.CONFIG.maxVision - em.CONFIG.baseVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1))}
-      ${pips('Phase', p.phaseTimer > 0 ? 1 : p.phaseCharges, 9, em.ITEM_DATA.phase.color, phase)}
+      ${pips('Phase', p.phaseTimer > 0 ? 1 : p.phaseCharges, em.CONFIG.playerCaps.maxPhaseCharges, em.ITEM_DATA.phase.color, phase)}
       ${meter('Danger', state.danger, 1, em.ITEM_DATA.battery.color, dangerText)}
       ${pips('Compass', p.compass + p.compassObjective, 8, em.ITEM_DATA.compass.color, (p.compass + p.compassObjective) + '/8')}
-      ${meter('Speed', p.speed - em.CONFIG.baseSpeed, 255 - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, Math.round(p.speed))}
-      ${pips('Battery', p.battery, 5, em.ITEM_DATA.battery.color, p.battery + '/5')}
-      <div class="item-total" style="--meter-color: ${em.ITEM_DATA.relic.color}"><span>Items</span><strong>${state.items}</strong></div>
+      ${meter('Speed', p.speed - em.CONFIG.baseSpeed, em.CONFIG.playerCaps.maxSpeed - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, Math.round(p.speed))}
+      ${pips('Battery', p.battery, em.CONFIG.playerCaps.maxBattery, em.ITEM_DATA.battery.color, p.battery + '/' + em.CONFIG.playerCaps.maxBattery)}
+      ${itemTotalMarkup('Items', state.items, em.ITEM_DATA.relic.color)}
     `;
 
     app.dom.secondaryStats.innerHTML = `
-      <span>Depth ${state.maxDepth}</span>
-      <span>Revealed ${state.revealed.size}</span>
-      <span>${upgradeSummary(state)}</span>
-      <span>${pc.x}, ${pc.y}</span>
+      <span>Depth ${em.escapeHtml(state.maxDepth)}</span>
+      <span>Revealed ${em.escapeHtml(state.revealed.size)}</span>
+      <span>${em.escapeHtml(upgradeSummary(state))}</span>
+      <span>${em.escapeHtml(pc.x)}, ${em.escapeHtml(pc.y)}</span>
     `;
 
     renderMessages(app);
@@ -137,56 +214,14 @@
 
   function updateBeginnerHud(app, phase, pc) {
     const state = app.state;
-    const p = state.player;
-    const sequenceLength = state.tutorialSequence && state.tutorialSequence.length ? state.tutorialSequence.length : em.BEGINNER_SEQUENCE.length;
-    const learned = Math.min(state.tutorialStep, sequenceLength);
-    const runStats = [
-      `<div class="stat"><span>Mode</span><strong>Beginner</strong></div>`,
-      `<div class="stat"><span>Lessons</span><strong>${learned}/${sequenceLength}</strong></div>`
-    ];
-
-    if (em.hasDiscoveredTutorial(state, 'relic')) {
-      runStats.push(`<div class="stat"><span>Score</span><strong>${state.score}</strong></div>`);
-      runStats.push(`<div class="stat"><span>Items</span><strong>${state.items}</strong></div>`);
-    }
-
-    if (em.hasDiscoveredTutorial(state, 'shield')) {
-      runStats.push(`<div class="stat"><span>Integrity</span><strong>${p.health} HP / ${p.shields} SH</strong></div>`);
-    }
-
-    if (em.hasDiscoveredTutorial(state, 'anchor')) {
-      runStats.push(`<div class="stat"><span>Anchors</span><strong>${state.anchors}/${em.CONFIG.runAnchors}</strong></div>`);
-      runStats.push(`<div class="stat"><span>Tier</span><strong>${state.tier}</strong></div>`);
-    }
-
+    const context = { phase, pc };
+    const runStats = renderBeginnerGroups(BEGINNER_RUN_STAT_GROUPS, state, context);
     app.dom.runStats.innerHTML = runStats.join('');
 
-    const meters = [];
-    if (em.hasDiscoveredTutorial(state, 'lantern')) {
-      meters.push(meter('Fuel', p.fuel, p.maxFuel, em.ITEM_DATA.lantern.color, Math.round(p.fuel) + '/' + Math.round(p.maxFuel)));
-      meters.push(meter('Vision', p.vision - em.CONFIG.baseVision, em.CONFIG.maxVision - em.CONFIG.baseVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1)));
-    }
-    if (em.hasDiscoveredTutorial(state, 'phase')) {
-      meters.push(pips('Phase', p.phaseTimer > 0 ? 1 : p.phaseCharges, 9, em.ITEM_DATA.phase.color, phase));
-    }
-    if (em.hasDiscoveredTutorial(state, 'compass')) {
-      meters.push(pips('Compass', p.compass + p.compassObjective, 8, em.ITEM_DATA.compass.color, (p.compass + p.compassObjective) + '/8'));
-    }
-    if (em.hasDiscoveredTutorial(state, 'boots')) {
-      meters.push(meter('Speed', p.speed - em.CONFIG.baseSpeed, 255 - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, Math.round(p.speed)));
-    }
-    if (em.hasDiscoveredTutorial(state, 'battery')) {
-      meters.push(pips('Battery', p.battery, 5, em.ITEM_DATA.battery.color, p.battery + '/5'));
-    }
-    if (em.hasDiscoveredTutorial(state, 'map')) {
-      meters.push(`<div class="item-total" style="--meter-color: ${em.ITEM_DATA.map.color}"><span>Revealed</span><strong>${state.revealed.size}</strong></div>`);
-    }
-
+    const meters = renderBeginnerGroups(BEGINNER_METER_GROUPS, state, context);
     app.dom.itemMeters.innerHTML = meters.length ? meters.join('') : '';
 
-    const secondary = [];
-    if (em.hasDiscoveredTutorial(state, 'map')) secondary.push(`<span>Depth ${state.maxDepth}</span>`);
-    if (em.hasDiscoveredTutorial(state, 'compass')) secondary.push(`<span>${pc.x}, ${pc.y}</span>`);
+    const secondary = renderBeginnerGroups(BEGINNER_SECONDARY_GROUPS, state, context);
     app.dom.secondaryStats.innerHTML = secondary.join('');
   }
 
@@ -202,9 +237,24 @@
     const target = state.tutorialTarget;
     if (!target) return '<strong>Beginner:</strong> Follow the next training signal.';
     const label = target.kind === 'anchor' ? 'Training Echo Anchor' : em.ITEM_DATA[target.itemType].label;
-    return '<strong>Beginner:</strong> Find ' + label + ' to learn the next HUD stat.';
+    return '<strong>Beginner:</strong> Find ' + em.escapeHtml(label) + ' to learn the next HUD stat.';
   }
 
-  Object.assign(em, { renderMessages, meter, pips, updateHud, updateBeginnerHud, upgradeSummary, beginnerGoalText });
+  Object.assign(em, {
+    BEGINNER_RUN_STAT_GROUPS,
+    BEGINNER_METER_GROUPS,
+    BEGINNER_SECONDARY_GROUPS,
+    renderMessages,
+    meter,
+    pips,
+    statMarkup,
+    itemTotalMarkup,
+    tutorialSequenceLength,
+    renderBeginnerGroups,
+    updateHud,
+    updateBeginnerHud,
+    upgradeSummary,
+    beginnerGoalText
+  });
   window.EchoMaze = em;
 })();

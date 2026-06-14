@@ -5,6 +5,7 @@
 
   function usePhase(state) {
     if (!state || state.mode !== 'playing') return;
+    if (state.gameMode === 'beginner' && (!em.hasDiscoveredTutorial || !em.hasDiscoveredTutorial(state, 'phase'))) return;
 
     const p = state.player;
     if (p.phaseTimer > 0) return;
