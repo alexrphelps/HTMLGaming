@@ -1,4 +1,8 @@
 const { createBrowserContext, loadBrowserScript } = require('../helpers/browserScriptHarness');
+const fs = require('fs');
+const path = require('path');
+
+const repoRoot = path.resolve(__dirname, '../..');
 
 function loadMiniInvadersClass(fileName, className, overrides = {}) {
   const context = createBrowserContext({
@@ -122,6 +126,7 @@ describe('MiniInvaders GameLoop', () => {
       cancelAnimationFrame: global.cancelAnimationFrame
     });
     loop = new GameLoop();
+    loop.setAdaptivePerformance(false);
   });
 
   afterEach(() => {
@@ -139,7 +144,7 @@ describe('MiniInvaders GameLoop', () => {
     expect([warn.mock.calls.length, global.cancelAnimationFrame]).toEqual([2, expect.any(Function)]);
   });
 
-  test('game loop caps delta time and schedules the next frame', () => {
+  test('game loop uses fixed target tick and schedules the next frame', () => {
     const update = jest.fn();
     const render = jest.fn();
     loop.setUpdateCallback(update);
@@ -152,7 +157,25 @@ describe('MiniInvaders GameLoop', () => {
 
     rafCallback();
 
-    expect([loop.deltaTime, update.mock.calls[0][0], render.mock.calls.length]).toEqual([50, 50, 1]);
+    expect(loop.deltaTime).toBeCloseTo(1000 / 60, 2);
+    expect(update.mock.calls[0][0]).toBeCloseTo(1000 / 60, 2);
+    expect([loop.performanceStats.frameTime, render.mock.calls.length]).toEqual([50, 1]);
+  });
+
+  test('game loop skips high-refresh frames until the target tick elapses', () => {
+    const update = jest.fn();
+    const render = jest.fn();
+    loop.setUpdateCallback(update);
+    loop.setRenderCallback(render);
+    loop.start();
+    update.mockClear();
+    render.mockClear();
+    global.requestAnimationFrame.mockClear();
+    now = 8;
+
+    rafCallback();
+
+    expect([update.mock.calls.length, render.mock.calls.length, global.requestAnimationFrame.mock.calls.length]).toEqual([0, 0, 1]);
   });
 
   test('slow frames are skipped until the threshold is reached', () => {
@@ -187,6 +210,22 @@ describe('MiniInvaders GameLoop', () => {
 
     expect([update.mock.calls.length, render.mock.calls.length, loop.frameCount, loop.performanceLevel]).toEqual([1, 1, 0, 'high']);
   });
+
+  test('stopping during update prevents render and next frame scheduling', () => {
+    const render = jest.fn();
+    loop.frameSkipThreshold = 100;
+    loop.setUpdateCallback(jest.fn());
+    loop.setRenderCallback(render);
+    loop.start();
+    global.requestAnimationFrame.mockClear();
+    render.mockClear();
+    loop.setUpdateCallback(() => loop.stop());
+    now = 1000;
+
+    rafCallback();
+
+    expect([render.mock.calls.length, global.requestAnimationFrame.mock.calls.length, loop.isRunning]).toEqual([0, 0, false]);
+  });
 });
 
 // Behaviour under test: SmartInputManager handles special-key branches beyond the existing lifecycle tests.
@@ -194,6 +233,7 @@ describe('MiniInvaders SmartInputManager additional branches', () => {
   let SmartInputManager;
   let manager;
   let gameState;
+  let actions;
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -202,11 +242,14 @@ describe('MiniInvaders SmartInputManager additional branches', () => {
       addEventListener: window.addEventListener.bind(window),
       removeEventListener: window.removeEventListener.bind(window),
       setInterval,
-      clearInterval,
-      restartGame: jest.fn()
+      clearInterval
     });
     SmartInputManager = loadBrowserScript(smartContext, 'games/miniinvaders/SmartInputManager.js', ['SmartInputManager']).SmartInputManager;
-    global.restartGame = smartContext.restartGame;
+    actions = {
+      restart: jest.fn(),
+      togglePause: jest.fn(),
+      activateNuke: jest.fn()
+    };
     gameState = {
       keys: {},
       gameOver: false,
@@ -214,12 +257,11 @@ describe('MiniInvaders SmartInputManager additional branches', () => {
       pauseStartTime: 0,
       totalPausedTime: 0,
       nukeCount: 1,
-      explosions: [],
-      aliens: [{ id: 1 }],
       player: { x: 10, y: 20, width: 10, height: 10 }
     };
     manager = new SmartInputManager();
     manager.setGameState(gameState);
+    manager.setActions(actions);
     manager.stopSmartDetection();
   });
 
@@ -227,32 +269,95 @@ describe('MiniInvaders SmartInputManager additional branches', () => {
     manager.destroy();
     jest.useRealTimers();
     jest.restoreAllMocks();
-    delete global.restartGame;
   });
 
   test('space restarts when game is over', () => {
     gameState.gameOver = true;
     manager.handleSpecialKeys(' ');
-    expect(global.restartGame).toHaveBeenCalledTimes(1);
+    expect(actions.restart).toHaveBeenCalledTimes(1);
   });
 
-  test('pause key toggles pause accounting', () => {
-    jest.spyOn(Date, 'now').mockReturnValueOnce(100).mockReturnValueOnce(250);
+  test('pause key emits pause intent', () => {
     manager.handleSpecialKeys('p');
     manager.handleSpecialKeys('P');
-    expect([gameState.paused, gameState.pauseStartTime, gameState.totalPausedTime]).toEqual([false, 0, 150]);
+    expect([actions.togglePause.mock.calls.length, gameState.paused, gameState.totalPausedTime]).toEqual([2, false, 0]);
   });
 
-  test('shift activates tactical nuke and resets movement keys', () => {
+  test('shift emits nuke intent and resets movement keys only', () => {
     manager.keyStates.set('ArrowLeft', { isPressed: true });
     gameState.keys.ArrowLeft = true;
     manager.handleSpecialKeys('Shift');
-    expect([gameState.nukeCount, gameState.aliens.length, gameState.explosions.length, gameState.keys.ArrowLeft]).toEqual([0, 0, 1, false]);
+    expect([actions.activateNuke.mock.calls.length, gameState.nukeCount, gameState.keys.ArrowLeft]).toEqual([1, 1, false]);
   });
 
   test('query helpers report pressed key combinations and stats', () => {
     manager.keyStates.set('a', { isPressed: true, isStuck: false, lastKeyDownTime: Date.now(), keyType: 'movement', pressCount: 1 });
     manager.keyStates.set('d', { isPressed: false, isStuck: false, lastKeyDownTime: Date.now(), keyType: 'movement', pressCount: 1 });
     expect([manager.isAnyKeyPressed(['a', 'd']), manager.areAllKeysPressed(['a', 'd']), manager.getSystemStats().activeKeys]).toEqual([true, false, 1]);
+  });
+});
+
+describe('MiniInvaders extracted pure modules', () => {
+  let context;
+
+  beforeEach(() => {
+    context = createBrowserContext({ document });
+    loadBrowserScript(context, 'games/miniinvaders/MiniInvadersConfig.js', []);
+    loadBrowserScript(context, 'games/miniinvaders/MiniInvadersState.js', ['createMiniInvadersState', 'createMiniInvadersTalents']);
+    loadBrowserScript(context, 'games/miniinvaders/MiniInvadersCombat.js', []);
+    loadBrowserScript(context, 'games/miniinvaders/MiniInvadersFormations.js', []);
+    loadBrowserScript(context, 'games/miniinvaders/MiniInvadersTalents.js', []);
+  });
+
+  test('state factory creates independent default state', () => {
+    const first = context.createMiniInvadersState(context.MiniInvadersConfig);
+    const second = context.createMiniInvadersState(context.MiniInvadersConfig);
+    first.talents.rapidFire = 2;
+    expect([second.talents.rapidFire, first.descentSpeed]).toEqual([0, context.MiniInvadersConfig.alien.baseDescentSpeed]);
+  });
+
+  test('combat collision helper handles overlap and separation', () => {
+    const a = { left: 0, right: 10, top: 0, bottom: 10 };
+    const b = { left: 5, right: 15, top: 5, bottom: 15 };
+    const c = { left: 11, right: 20, top: 11, bottom: 20 };
+    expect([context.MiniInvadersCombat.checkCollision(a, b), context.MiniInvadersCombat.checkCollision(a, c)]).toEqual([true, false]);
+  });
+
+  test('formation generator clamps positions into safe play area', () => {
+    const positions = context.MiniInvadersFormations.generateFormation('spiral', 20, context.MiniInvadersConfig);
+    const maxX = context.MiniInvadersConfig.canvas.width - 50 - context.MiniInvadersConfig.alien.width;
+    const maxY = context.MiniInvadersConfig.canvas.height * 0.4;
+    expect(positions.every(pos => pos.x >= 50 && pos.x <= maxX && pos.y >= 60 && pos.y <= maxY)).toBe(true);
+  });
+
+  test('talent rules apply purchases and reset derived state consistently', () => {
+    const state = context.createMiniInvadersState(context.MiniInvadersConfig);
+    state.talentPoints = 3;
+    const rapid = context.MiniInvadersTalents.applyTalentPurchase(state, 'rapidFire', 1);
+    const spread = context.MiniInvadersTalents.applyTalentPurchase(state, 'spreadShot', 2);
+    expect([rapid.purchased, spread.purchased, state.fireRateLevel, state.spreadShotCount, state.tier3Unlocked]).toEqual([true, true, 1, 2, true]);
+
+    const returned = context.MiniInvadersTalents.resetTalentLoadout(state);
+    expect([returned, state.talentPoints, state.fireRateLevel, state.spreadShotCount, state.tier2Unlocked]).toEqual([3, 3, 0, 1, false]);
+  });
+});
+
+describe('MiniInvaders browser-script integration', () => {
+  test('index loads the live modules and excludes the legacy input manager', () => {
+    const html = fs.readFileSync(path.join(repoRoot, 'games/miniinvaders/index.html'), 'utf8');
+    [
+      'MiniInvadersConfig.js',
+      'MiniInvadersState.js',
+      'MiniInvadersCombat.js',
+      'MiniInvadersFormations.js',
+      'MiniInvadersTalents.js',
+      'GameLoop.js',
+      'MemoryManager.js',
+      'SmartInputManager.js'
+    ].forEach(script => {
+      expect(html).toContain(`<script src="${script}"></script>`);
+    });
+    expect(html).not.toContain('<script src="InputManager.js"></script>');
+    expect(html).not.toContain('requestAnimationFrame(gameLoop)');
   });
 });

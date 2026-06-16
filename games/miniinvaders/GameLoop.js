@@ -104,15 +104,17 @@ class GameLoop {
         if (!this.isRunning) return;
         
         const currentTime = performance.now();
-        this.deltaTime = currentTime - this.lastFrameTime;
+        const elapsed = currentTime - this.lastFrameTime;
         
-        // Cap delta time to prevent large jumps (e.g., tab switching)
-        if (this.deltaTime > this.maxDeltaTime) {
-            this.deltaTime = this.maxDeltaTime;
+        if (elapsed < this.targetFrameTime) {
+            this.animationFrameId = requestAnimationFrame(() => this.gameLoop());
+            return;
         }
+
+        this.deltaTime = this.targetFrameTime;
         
         // Update performance stats
-        this.updatePerformanceStats(currentTime);
+        this.updatePerformanceStats(currentTime, Math.min(elapsed, this.maxDeltaTime));
         
         // Adaptive performance management
         if (this.adaptivePerformance) {
@@ -131,6 +133,8 @@ class GameLoop {
             this.updateCallback(this.deltaTime);
             this.performanceStats.updateTime = performance.now() - updateStartTime;
         }
+
+        if (!this.isRunning) return;
         
         // Render frame
         if (this.renderCallback) {
@@ -138,9 +142,11 @@ class GameLoop {
             this.renderCallback();
             this.performanceStats.renderTime = performance.now() - renderStartTime;
         }
+
+        if (!this.isRunning) return;
         
         // Update frame tracking
-        this.lastFrameTime = currentTime;
+        this.lastFrameTime = currentTime - (elapsed % this.targetFrameTime);
         this.frameCount++;
         this.consecutiveSlowFrames = 0;
         
@@ -151,7 +157,7 @@ class GameLoop {
     /**
      * Update performance statistics
      */
-    updatePerformanceStats(currentTime) {
+    updatePerformanceStats(currentTime, frameTime = this.deltaTime) {
         // Update FPS counter
         this.fpsCounter++;
         if (currentTime - this.fpsUpdateTime >= 1000) {
@@ -162,10 +168,10 @@ class GameLoop {
         }
         
         // Track frame time
-        this.performanceStats.frameTime = this.deltaTime;
+        this.performanceStats.frameTime = frameTime;
         
         // Detect dropped frames
-        if (this.deltaTime > this.targetFrameTime * 1.5) {
+        if (frameTime > this.targetFrameTime * 1.5) {
             this.performanceStats.droppedFrames++;
         }
     }

@@ -8,6 +8,7 @@
       runStats: doc.getElementById('runStats'),
       itemMeters: doc.getElementById('itemMeters'),
       secondaryStats: doc.getElementById('secondaryStats'),
+      vitalsDock: doc.getElementById('vitalsDock'),
       goalText: doc.getElementById('goalText'),
       messageLog: doc.getElementById('messageLog'),
       overlay: doc.getElementById('overlay'),

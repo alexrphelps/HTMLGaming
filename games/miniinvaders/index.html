@@ -582,6 +582,13 @@
             </div>
         </div>
     </div>
+    <script src="MiniInvadersConfig.js"></script>
+    <script src="MiniInvadersState.js"></script>
+    <script src="MiniInvadersCombat.js"></script>
+    <script src="MiniInvadersFormations.js"></script>
+    <script src="MiniInvadersTalents.js"></script>
+    <script src="GameLoop.js"></script>
+    <script src="MemoryManager.js"></script>
     <script src="SmartInputManager.js"></script>
 
     <!-- Game Container (Hidden initially) -->
@@ -736,160 +743,10 @@
 
     <script>
         /* ==================== GAME CONFIGURATION ==================== */
-        const CONFIG = {
-            canvas: {
-                width: 800,
-                height: 600
-            },
-            player: {
-                width: 40,
-                height: 30,
-                speed: 4.5, // Reduced by 25% (was 6)
-                color: '#00ff88'
-            },
-            bullet: {
-                width: 4,
-                height: 15,
-                speed: 8,
-                color: '#00ff88',
-                baseFireRate: 150
-            },
-            overheat: {
-                increasePerShot: 8,
-                decreaseRate: 1.5,
-                maxHeat: 100,
-                cooldownTime: 2000,
-                barWidth: 60,
-                barHeight: 8
-            },
-            alien: {
-                width: 32,
-                height: 24,
-                baseAlienCount: 30, // Base aliens in wave 1
-                alienIncreasePerWave: 3, // +3 aliens per wave
-                maxAliens: 70, // Maximum aliens
-                colors: ['#ff0080', '#ff00ff', '#8000ff', '#00ffff', '#ffff00'],
-                basePointValue: 30,
-                shieldedPointValue: 60,
-                shuffleSpeed: 0.5,
-                shuffleRange: 30,
-                baseDescentSpeed: 0.12,
-                descentSpeedIncrease: 0.03, // Increase per wave
-                shieldWaveStart: 5 // Shields appear starting wave 5
-            },
-            boss: {
-                baseWidth: 80,
-                baseHeight: 60,
-                sizeIncreasePerBoss: 20, // Gets bigger each boss
-                maxSize: 180,
-                baseHealth: 60, // 300% increase (was 20)
-                healthIncreasePerBoss: 30, // 300% increase (was 10)
-                baseShieldHealth: 15, // Takes 15 hits to break shield (was 5)
-                shieldHealthIncreasePerBoss: 5, // Shield gets stronger (was 2)
-                shieldBossStart: 3, // Shields on 3rd boss (wave 15)
-                shootInterval: 2000, // Shoot every 2 seconds
-                bulletSpeed: 6, // Faster bullets (was 4)
-                bulletWidth: 12, // Bigger bullets (was 8)
-                bulletHeight: 12,
-                color: '#ff0000',
-                pointValue: 500
-            },
-            powerup: {
-                width: 30,
-                height: 30,
-                speed: 3,
-                spawnInterval: 10000, // Every 10 seconds
-                types: {
-                    talentPoint: { icon: '⭐', color: '#ff00ff', name: 'TALENT +1' } // Changed from spreadShot
-                }
-            },
-            formations: {
-                patterns: ['circle', 'diamond', 'vShape', 'cross', 'spiral', 'heart', 'wings', 'hexagon']
-            },
-            fps: 60
-        };
+        const CONFIG = window.MiniInvadersConfig;
 
         /* ==================== GAME STATE ==================== */
-        const gameState = {
-            player: null,
-            duplicatePlayer: null, // For "Duplicate" talent
-            aliens: [],
-            bullets: [],
-            powerups: [],
-            boss: null,
-            bosses: [], // Array for multiple bosses
-            bossBullets: [],
-            nukes: [], // For tactical nuke ability
-            score: 0,
-            highScore: 0,
-            wave: 1,
-            gameOver: false,
-            paused: false,
-            // Game mode system
-            gameMode: 'infinite', // 'timed', 'infinite', 'endgame'
-            timeRemaining: 300, // 5 minutes in seconds (for timed mode)
-            gameStartTime: 0,
-            timeBonusTotal: 0, // Track total time bonuses added
-            pauseStartTime: 0, // When the current pause started
-            totalPausedTime: 0, // Total time spent paused
-            keys: {},
-            keyPressTime: 0,
-            overheat: 0,
-            isOverheated: false,
-            overheatCooldownTimer: 0,
-            lastShotTime: 0,
-            powerupSpawnTimer: 0,
-            // Talent system
-            talentPoints: 0,        // Unspent talent points
-            totalTalentPoints: 0,   // Total earned
-            spentTalentPoints: 0,   // Points spent on currently equipped talents
-            showTalentMenu: false,
-            // Talent purchases (track how many times bought)
-            talents: {
-                rapidFire: 0,        // 1 point - can buy multiple
-                cooling: 0,          // 1 point - can buy multiple
-                spreadShot: 0,       // 2 points - max 4
-                shipSpeed: 0,        // 1 point - max 5 (100% speed boost)
-                gunPower: 0,         // 2 points - max 3 (bullet penetration)
-                shield: 0,           // 3 points - max 3, gives player shield
-                overheatReduction: false,  // 2 points - once only, 50% cooldown
-                duplicate: 0,        // 3 points - max 1, 2nd ship
-                tacticalNuke: 0      // 3 points - max 1, shift key nuke
-            },
-            // Player shield system
-            playerShieldCount: 0,        // Number of shields available (0-3)
-            playerShieldActive: false,   // Whether a shield is currently protecting the player
-            maxShieldCount: 0,           // Maximum shields that can be purchased (0-3)
-            
-            // Duplicate ship system
-            duplicateCount: 0,           // Number of duplicate ships available (0-1)
-            maxDuplicateCount: 0,        // Maximum duplicate ships available based on talent level
-            // Gun Power system
-            gunPowerLevel: 0,        // Number of penetrations (0-3)
-            // Duplicate player timing
-            duplicateLastShotTime: 0,
-            // Talent point limit per wave
-            talentPointsCollectedThisWave: 0,
-            maxTalentPointsPerWave: 3,
-            // Nuke animation
-            nukeAnimation: null,
-            duplicateNukeAnimation: null,
-            // Nuke system
-            nukeCount: 0,        // Number of nukes available (0-1)
-            maxNukeCount: 0,     // Maximum nukes that can be purchased (0-1)
-            // Talent tier system
-            tier2Unlocked: false,  // Requires at least 1 tier 1 purchase
-            tier3Unlocked: false,  // Requires at least 1 tier 2 purchase
-            // Permanent upgrades (from old system, kept for compatibility)
-            fireRateLevel: 0,      // Now managed by talents.rapidFire
-            spreadShotCount: 1,    // Now managed by talents.spreadShot
-            cooldownLevel: 0,      // Now managed by talents.cooling
-            descentSpeed: CONFIG.alien.baseDescentSpeed,
-            // Wave transition
-            waveTransitioning: false,
-            transitionAlpha: 0,
-            isBossWave: false
-        };
+        const gameState = window.createMiniInvadersState(CONFIG);
 
         /* ==================== DOM ELEMENTS ==================== */
         const canvas = document.getElementById('gameCanvas');
@@ -1957,167 +1814,12 @@
 
         /* ==================== COLLISION DETECTION ==================== */
         function checkCollision(rect1, rect2) {
-            return rect1.left < rect2.right &&
-                   rect1.right > rect2.left &&
-                   rect1.top < rect2.bottom &&
-                   rect1.bottom > rect2.top;
+            return window.MiniInvadersCombat.checkCollision(rect1, rect2);
         }
 
         /* ==================== FORMATION GENERATORS ==================== */
         function generateFormation(pattern, alienCount) {
-            const formations = [];
-            const centerX = CONFIG.canvas.width / 2;
-            const startY = 60;
-            
-            switch(pattern) {
-                case 'circle':
-                    const radius = Math.min(150, 80 + alienCount * 0.5);
-                    for (let i = 0; i < alienCount; i++) {
-                        const angle = (i / alienCount) * Math.PI * 2;
-                        formations.push({
-                            x: centerX + Math.cos(angle) * radius,
-                            y: startY + Math.sin(angle) * radius * 0.5
-                        });
-                    }
-                    break;
-                    
-                case 'diamond':
-                    const rows = Math.ceil(Math.sqrt(alienCount * 1.5));
-                    for (let i = 0; i < alienCount; i++) {
-                        const row = Math.floor(i / rows);
-                        const col = i % rows;
-                        const rowWidth = Math.max(1, rows - Math.abs(row - rows / 2) * 2);
-                        const offsetX = (rows - rowWidth) * 20;
-                        formations.push({
-                            x: centerX - rowWidth * 18 + (col % rowWidth) * 36 + offsetX,
-                            y: startY + row * 35
-                        });
-                    }
-                    break;
-                    
-                case 'vShape':
-                    // Inverted V (point at top) - more compact and safe
-                    const vRows = Math.ceil(alienCount / 4);
-                    const maxVWidth = 300; // Max width of V
-                    let vIndex = 0;
-                    for (let row = 0; row < vRows && vIndex < alienCount; row++) {
-                        const rowAliens = Math.min(4, alienCount - vIndex);
-                        const rowWidth = (row / vRows) * maxVWidth;
-                        const spacing = rowAliens > 1 ? rowWidth / (rowAliens - 1) : 0;
-                        
-                        for (let col = 0; col < rowAliens && vIndex < alienCount; col++) {
-                            const offset = col - (rowAliens - 1) / 2;
-                            formations.push({
-                                x: centerX + offset * spacing,
-                                y: startY + row * 35
-                            });
-                            vIndex++;
-                        }
-                    }
-                    break;
-                    
-                case 'cross':
-                    const crossSize = Math.ceil(alienCount / 2);
-                    for (let i = 0; i < alienCount; i++) {
-                        if (i < crossSize) {
-                            formations.push({
-                                x: centerX - crossSize * 16 + i * 32,
-                                y: startY + 60
-                            });
-                        } else {
-                            const vIndex = i - crossSize;
-                            formations.push({
-                                x: centerX,
-                                y: startY + vIndex * 32
-                            });
-                        }
-                    }
-                    break;
-                    
-                case 'spiral':
-                    for (let i = 0; i < alienCount; i++) {
-                        const angle = i * 0.4;
-                        const spiralRadius = 25 + i * 1.8;
-                        formations.push({
-                            x: centerX + Math.cos(angle) * spiralRadius,
-                            y: startY + Math.sin(angle) * spiralRadius * 0.5 + i * 2.5
-                        });
-                    }
-                    break;
-                    
-                case 'heart':
-                    for (let i = 0; i < alienCount; i++) {
-                        const t = (i / alienCount) * Math.PI * 2;
-                        const x = 16 * Math.pow(Math.sin(t), 3);
-                        const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
-                        formations.push({
-                            x: centerX + x * 3.5,
-                            y: startY + 80 + y * 2.5
-                        });
-                    }
-                    break;
-                    
-                case 'wings':
-                    for (let i = 0; i < alienCount; i++) {
-                        const side = i % 2;
-                        const layer = Math.floor(i / 2);
-                        const angle = layer * 0.3;
-                        const radius = 80 + layer * 15;
-                        formations.push({
-                            x: centerX + (side === 0 ? -Math.cos(angle) * radius : Math.cos(angle) * radius),
-                            y: startY + 40 + Math.sin(angle) * radius * 0.4
-                        });
-                    }
-                    break;
-                    
-                case 'hexagon':
-                    const hexRadius = 100;
-                    const sides = 6;
-                    const perSide = Math.floor(alienCount / sides);
-                    let index = 0;
-                    for (let s = 0; s < sides; s++) {
-                        const angle1 = (s / sides) * Math.PI * 2;
-                        const angle2 = ((s + 1) / sides) * Math.PI * 2;
-                        const x1 = centerX + Math.cos(angle1) * hexRadius;
-                        const y1 = startY + 100 + Math.sin(angle1) * hexRadius * 0.6;
-                        const x2 = centerX + Math.cos(angle2) * hexRadius;
-                        const y2 = startY + 100 + Math.sin(angle2) * hexRadius * 0.6;
-                        
-                        for (let p = 0; p < perSide && index < alienCount; p++, index++) {
-                            const t = p / perSide;
-                            formations.push({
-                                x: x1 + (x2 - x1) * t,
-                                y: y1 + (y2 - y1) * t
-                            });
-                        }
-                    }
-                    break;
-                    
-                default:
-                    const cols = Math.ceil(Math.sqrt(alienCount * 1.5));
-                    for (let i = 0; i < alienCount; i++) {
-                        const row = Math.floor(i / cols);
-                        const col = i % cols;
-                        formations.push({
-                            x: centerX - cols * 20 + col * 40,
-                            y: startY + row * 38
-                        });
-                    }
-            }
-            
-            // Safety bounds: Clamp all positions to safe screen area
-            const safeMargin = 50;
-            const minX = safeMargin;
-            const maxX = CONFIG.canvas.width - safeMargin - CONFIG.alien.width;
-            const minY = startY;
-            const maxY = CONFIG.canvas.height * 0.4; // Don't spawn below 40% of screen
-            
-            formations.forEach(pos => {
-                pos.x = Math.max(minX, Math.min(maxX, pos.x));
-                pos.y = Math.max(minY, Math.min(maxY, pos.y));
-            });
-            
-            return formations;
+            return window.MiniInvadersFormations.generateFormation(pattern, alienCount, CONFIG);
         }
 
         /* ==================== GAME INITIALIZATION ==================== */
@@ -2132,6 +1834,8 @@
             gameState.wave = 1;
             gameState.gameOver = false;
             gameState.paused = false;
+            gameState.pauseStartTime = 0;
+            gameState.totalPausedTime = 0;
             
             // Reset game mode variables (but preserve mode selection)
             if (gameState.gameMode === 'timed') {
@@ -2139,7 +1843,7 @@
                 gameState.gameStartTime = Date.now();
                 gameState.timeBonusTotal = 0; // Reset time bonuses
                 gameState.pauseStartTime = 0; // Reset pause tracking
-                gameState.totalPausedTime = 0; // Reset total paused time
+                gameState.totalPausedTime = 0; // Reset total paused time in milliseconds
             } else if (gameState.gameMode === 'endgame') {
                 gameState.wave = 24;
                 gameState.talentPoints = 15;
@@ -2179,17 +1883,7 @@
             gameState.showTalentMenu = false;
             
             // Reset all talents
-            gameState.talents = {
-                rapidFire: 0,
-                cooling: 0,
-                spreadShot: 0,
-                shipSpeed: 0,
-                gunPower: 0,
-                shield: 0,
-                overheatReduction: false,
-                duplicate: 0,
-                tacticalNuke: 0
-            };
+            gameState.talents = window.MiniInvadersTalents.createDefaultTalents();
             
             // Reset duplicate player and shield
             gameState.duplicatePlayer = null;
@@ -2319,22 +2013,28 @@
         }
 
         /* ==================== GAME LOOP ==================== */
-        let lastTime = 0;
-        const deltaTime = 1000 / CONFIG.fps;
-
-        function gameLoop(currentTime) {
-            const elapsed = currentTime - lastTime;
-            
-            if (elapsed >= deltaTime) {
-                lastTime = currentTime - (elapsed % deltaTime);
-                
-                if (!gameState.gameOver && !gameState.paused) {
-                    update(deltaTime);
-                }
-                render();
+        const miniInvadersLoop = new GameLoop();
+        miniInvadersLoop.setTargetFPS(CONFIG.fps);
+        miniInvadersLoop.setAdaptivePerformance(false);
+        miniInvadersLoop.setUpdateCallback((dt) => {
+            if (!gameState.gameOver && !gameState.paused) {
+                update(dt);
             }
-            
-            requestAnimationFrame(gameLoop);
+        });
+        miniInvadersLoop.setRenderCallback(render);
+
+        function startGameLoop() {
+            if (miniInvadersLoop.isRunning) {
+                miniInvadersLoop.stop();
+            }
+            miniInvadersLoop.reset();
+            miniInvadersLoop.start();
+        }
+
+        function stopGameLoop() {
+            if (miniInvadersLoop.isRunning) {
+                miniInvadersLoop.stop();
+            }
         }
 
         /* ==================== UPDATE LOGIC ==================== */
@@ -2772,132 +2472,17 @@
         });
 
         function purchaseTalent(talent, cost) {
-            // Check if player has enough points
-            if (gameState.talentPoints < cost) {
-                console.log('❌ Not enough talent points!');
-                return;
-            }
-            
-            // Check tier requirements
-            if (cost === 2 && !gameState.tier2Unlocked) {
-                console.log('❌ Tier 2 talents locked! Buy a Tier 1 talent first.');
-                return;
-            }
-            if (cost === 3 && !gameState.tier3Unlocked) {
-                console.log('❌ Tier 3 talents locked! Buy a Tier 2 talent first.');
+            const result = window.MiniInvadersTalents.applyTalentPurchase(gameState, talent, cost);
+            if (!result.purchased) {
+                console.log(`❌ Could not purchase ${talent}`);
                 return;
             }
 
-            // Check talent-specific restrictions
-            const talents = gameState.talents;
-            
-            switch(talent) {
-                case 'rapidFire':
-                    if (talents.rapidFire >= 5) {
-                        console.log('❌ Rapid Fire maxed at 5!');
-                        return;
-                    }
-                    talents.rapidFire++;
-                    gameState.fireRateLevel++;
-                    break;
-                    
-                case 'cooling':
-                    if (talents.cooling >= 5) {
-                        console.log('❌ Cooling System maxed at 5!');
-                        return;
-                    }
-                    talents.cooling++;
-                    gameState.cooldownLevel++;
-                    break;
-                    
-                case 'spreadShot':
-                    if (talents.spreadShot >= 4) {
-                        console.log('❌ Multi-Shot maxed at 4!');
-                        return;
-                    }
-                    talents.spreadShot++;
-                    gameState.spreadShotCount++;
-                    break;
-                    
-                case 'shipSpeed':
-                    if (talents.shipSpeed >= 5) {
-                        console.log('❌ Ship Speed maxed at 5!');
-                        return;
-                    }
-                    talents.shipSpeed++;
-                    break;
-                    
-                case 'gunPower':
-                    if (talents.gunPower >= 3) {
-                        console.log('❌ Gun Power maxed at 3!');
-                        return;
-                    }
-                    talents.gunPower++;
-                    gameState.gunPowerLevel = talents.gunPower;
-                    break;
-                    
-                case 'overheatReduction':
-                    if (talents.overheatReduction) {
-                        console.log('❌ Already purchased!');
-                        return;
-                    }
-                    talents.overheatReduction = true;
-                    break;
-                    
-                case 'shield':
-                    if (gameState.maxShieldCount >= 3 && gameState.playerShieldCount >= gameState.maxShieldCount) {
-                        console.log('❌ Shield maxed at 3!');
-                        return;
-                    }
-                    // If this is the first shield purchase, increase max count
-                    if (gameState.maxShieldCount === 0) {
-                        gameState.maxShieldCount = 1;
-                    }
-                    // Always increase current shield count (up to max)
-                    if (gameState.playerShieldCount < gameState.maxShieldCount) {
-                        gameState.playerShieldCount++;
-                        talents.shield = gameState.playerShieldCount;
-                    } else {
-                        // If already at max, increase the max and current
-                        gameState.maxShieldCount++;
-                        gameState.playerShieldCount++;
-                        talents.shield = gameState.playerShieldCount;
-                    }
-                    break;
-                    
-                case 'duplicate':
-                    if (gameState.maxDuplicateCount >= 1 && gameState.duplicateCount >= gameState.maxDuplicateCount) {
-                        console.log('❌ Maximum duplicate ships already purchased!');
-                        return;
-                    }
-                    talents.duplicate = Math.min(talents.duplicate + 1, 1);
-                    gameState.maxDuplicateCount = Math.max(gameState.maxDuplicateCount, talents.duplicate);
-                    gameState.duplicateCount = gameState.maxDuplicateCount;
-                    createDuplicateShip();
-                    break;
-                    
-                case 'tacticalNuke':
-                    if (gameState.nukeCount >= 1) {
-                        console.log('❌ Already have maximum nuke charges!');
-                        return;
-                    }
-                    gameState.maxNukeCount = Math.max(gameState.maxNukeCount, 1);
-                    gameState.nukeCount = 1;
-                    talents.tacticalNuke = gameState.nukeCount;
-                    break;
-                    
-                default:
-                    return;
+            if (result.action === 'createDuplicateShip') {
+                createDuplicateShip();
             }
-            
-            // Deduct points
-            gameState.talentPoints -= cost;
-            gameState.spentTalentPoints += cost;
+
             console.log(`✅ Purchased ${talent}! Points remaining: ${gameState.talentPoints}`);
-            
-            // Tiers are now unlocked dynamically based on active talents
-            
-            // Update UI
             updateTalentMenu();
         }
 
@@ -2910,58 +2495,13 @@
         }
 
         function resetTalents() {
-            // Return only points spent on currently equipped talents
-            const returnedPoints = gameState.spentTalentPoints;
-            gameState.talentPoints += returnedPoints;
-            gameState.spentTalentPoints = 0;
-            
-            // Reset all talents
-            gameState.talents = {
-                rapidFire: 0,
-                cooling: 0,
-                spreadShot: 0,
-                shipSpeed: 0,
-                gunPower: 0,
-                shield: 0,
-                overheatReduction: false,
-                duplicate: 0,
-                tacticalNuke: 0
-            };
-            
-            // Reset related game state
-            gameState.fireRateLevel = 0;
-            gameState.spreadShotCount = 1;
-            gameState.cooldownLevel = 0;
-            gameState.playerShieldCount = 0;
-            gameState.playerShieldActive = false;
-            gameState.maxShieldCount = 0;
-            gameState.nukeCount = 0;
-            gameState.maxNukeCount = 0;
-            gameState.gunPowerLevel = 0;
-            gameState.duplicatePlayer = null;
-            gameState.duplicateCount = 0;
-            gameState.maxDuplicateCount = 0;
-            
-            // Reset tier unlock system
-            gameState.tier2Unlocked = false;
-            gameState.tier3Unlocked = false;
-            
+            const returnedPoints = window.MiniInvadersTalents.resetTalentLoadout(gameState);
             console.log(`🔄 Talents reset! ${returnedPoints} points returned.`);
             updateTalentMenu();
         }
 
         function checkTierUnlocks() {
-            // Check if tier 2 should be unlocked (any tier 1 talent active)
-            const hasTier1Talent = gameState.talents.rapidFire > 0 || 
-                                 gameState.talents.cooling > 0 || 
-                                 gameState.talents.shipSpeed > 0;
-            gameState.tier2Unlocked = hasTier1Talent;
-            
-            // Check if tier 3 should be unlocked (any tier 2 talent active)
-            const hasTier2Talent = gameState.talents.spreadShot > 0 || 
-                                 gameState.talents.gunPower > 0 || 
-                                 gameState.talents.overheatReduction;
-            gameState.tier3Unlocked = hasTier2Talent;
+            window.MiniInvadersTalents.refreshTierUnlocks(gameState);
         }
 
         function consumeShield() {
@@ -3007,31 +2547,7 @@
         }
 
         function hasPurchasableTalents() {
-            // Check if there are any talents the player can actually purchase
-            const talents = gameState.talents;
-            
-            // Tier 1 talents (always available)
-            if (gameState.talentPoints >= 1) {
-                if (talents.rapidFire < 5) return true;
-                if (talents.cooling < 5) return true;
-                if (talents.shipSpeed < 5) return true;
-            }
-            
-            // Tier 2 talents (require tier 1)
-            if (gameState.tier2Unlocked && gameState.talentPoints >= 2) {
-                if (talents.spreadShot < 4) return true;
-                if (talents.gunPower < 3) return true;
-                if (!talents.overheatReduction) return true;
-            }
-            
-            // Tier 3 talents (require tier 2)
-            if (gameState.tier3Unlocked && gameState.talentPoints >= 3) {
-                if (gameState.maxShieldCount < 3 || gameState.playerShieldCount < gameState.maxShieldCount) return true;
-                if (!talents.duplicate) return true;
-                if (gameState.nukeCount < 1) return true;
-            }
-            
-            return false;
+            return window.MiniInvadersTalents.hasPurchasableTalents(gameState);
         }
 
         function updateTalentMenu() {
@@ -3051,60 +2567,9 @@
             talentButtons.forEach(button => {
                 const talent = button.dataset.talent;
                 const cost = parseInt(button.dataset.cost);
-                const talents = gameState.talents;
-                
-                // Determine if button should be disabled
-                let disabled = false;
-                let count = '';
-                
-                // Check tier lock status
-                if (cost === 2 && !gameState.tier2Unlocked) {
-                    disabled = true;
-                    count = '🔒';
-                } else if (cost === 3 && !gameState.tier3Unlocked) {
-                    disabled = true;
-                    count = '🔒';
-                } else {
-                    // Normal talent logic
-                    switch(talent) {
-                    case 'rapidFire':
-                        count = talents.rapidFire > 0 ? `(${talents.rapidFire}/5)` : '';
-                        disabled = talents.rapidFire >= 5;
-                        break;
-                    case 'cooling':
-                        count = talents.cooling > 0 ? `(${talents.cooling}/5)` : '';
-                        disabled = talents.cooling >= 5;
-                        break;
-                    case 'spreadShot':
-                        count = talents.spreadShot > 0 ? `(${talents.spreadShot}/4)` : '';
-                        disabled = talents.spreadShot >= 4;
-                        break;
-                    case 'shipSpeed':
-                        count = talents.shipSpeed > 0 ? `(${talents.shipSpeed}/5)` : '';
-                        disabled = talents.shipSpeed >= 5;
-                        break;
-                    case 'gunPower':
-                        count = talents.gunPower > 0 ? `(${talents.gunPower}/3)` : '';
-                        disabled = talents.gunPower >= 3;
-                        break;
-                    case 'overheatReduction':
-                        count = talents.overheatReduction ? '✓' : '';
-                        disabled = talents.overheatReduction;
-                        break;
-                    case 'shield':
-                        count = gameState.maxShieldCount > 0 ? `(${gameState.talents.shield}/3)` : '';
-                        disabled = gameState.maxShieldCount >= 3 && gameState.playerShieldCount >= gameState.maxShieldCount;
-                        break;
-                    case 'duplicate':
-                        count = gameState.maxDuplicateCount > 0 ? `(${gameState.duplicateCount}/1)` : '';
-                        disabled = gameState.maxDuplicateCount >= 1 && gameState.duplicateCount >= gameState.maxDuplicateCount;
-                        break;
-                    case 'tacticalNuke':
-                        count = gameState.maxNukeCount > 0 ? `(${gameState.nukeCount}/1)` : '';
-                        disabled = gameState.nukeCount >= 1;
-                        break;
-                    }
-                }
+                const buttonState = window.MiniInvadersTalents.getTalentButtonState(gameState, talent, cost);
+                const disabled = buttonState.disabled;
+                const count = buttonState.count;
                 
                 // Update visual state
                 if (disabled || gameState.talentPoints < cost) {
@@ -3141,7 +2606,7 @@
         function hideTalentMenu() {
             // Add any pause time to total before closing
             if (gameState.pauseStartTime > 0) {
-                const pauseDuration = Math.floor((Date.now() - gameState.pauseStartTime) / 1000);
+                const pauseDuration = Date.now() - gameState.pauseStartTime;
                 gameState.totalPausedTime += pauseDuration;
                 gameState.pauseStartTime = 0;
             }
@@ -3151,6 +2616,23 @@
             talentMenu.classList.remove('active');
             // Music continues playing
             console.log('⭐ Talent menu closed');
+        }
+
+        function togglePause() {
+            if (gameState.gameOver || gameState.showTalentMenu) return;
+
+            if (gameState.paused) {
+                if (gameState.pauseStartTime > 0) {
+                    gameState.totalPausedTime += Date.now() - gameState.pauseStartTime;
+                    gameState.pauseStartTime = 0;
+                }
+                gameState.paused = false;
+                console.log('🎮 Game unpaused');
+            } else {
+                gameState.pauseStartTime = Date.now();
+                gameState.paused = true;
+                console.log('🎮 Game paused');
+            }
         }
 
         nextWaveButton.addEventListener('click', () => {
@@ -3197,6 +2679,8 @@
                 isNewHighScore = true;
             }
             
+            stopGameLoop();
+            
             // Pause music on game over
             pauseMusic();
             
@@ -3204,10 +2688,6 @@
             showGameOverScreen();
             
             console.log('💀 Game Over!');
-        }
-
-        function restartGame() {
-            initGame();
         }
 
         /* ==================== RENDER LOGIC ==================== */
@@ -3416,10 +2896,39 @@
         // Initialize volume
         loadVolumePreference();
 
+        function activateTacticalNuke() {
+            if (gameState.nukeCount <= 0 || gameState.gameOver || gameState.paused) return;
+
+            const sourceShip = gameState.player || gameState.duplicatePlayer;
+            if (!sourceShip) return;
+
+            const startX = sourceShip.x + sourceShip.width / 2;
+            const startY = sourceShip.y;
+            const targetX = CONFIG.canvas.width / 2;
+            const targetY = CONFIG.canvas.height / 2;
+            const animation = new NukeAnimation(startX, startY, targetX, targetY);
+
+            if (sourceShip === gameState.duplicatePlayer && !gameState.player) {
+                gameState.duplicateNukeAnimation = animation;
+            } else {
+                gameState.nukeAnimation = animation;
+            }
+
+            gameState.nukeCount--;
+            gameState.talents.tacticalNuke = gameState.nukeCount;
+            console.log('💣 Tactical nuke launched!');
+            updateTalentMenu();
+        }
+
         /* ==================== INPUT HANDLING ==================== */
         // Use SmartInputManager for robust input handling and stuck-key prevention
         const inputManager = new SmartInputManager();
         inputManager.setGameState(gameState);
+        inputManager.setActions({
+            restart: restartGame,
+            togglePause,
+            activateNuke: activateTacticalNuke
+        });
 
 
         canvas.addEventListener('click', () => {
@@ -3487,6 +2996,7 @@
         });
 
         function startGame(mode) {
+            stopGameLoop();
             gameState.gameMode = mode;
             
             // Hide main menu, show game
@@ -3499,7 +3009,7 @@
                 gameState.gameStartTime = Date.now();
                 gameState.timeBonusTotal = 0; // Reset time bonuses
                 gameState.pauseStartTime = 0; // Reset pause tracking
-                gameState.totalPausedTime = 0; // Reset total paused time
+                gameState.totalPausedTime = 0; // Reset total paused time in milliseconds
                 document.getElementById('timer').style.display = 'block';
                 updateTimer();
             } else if (mode === 'endgame') {
@@ -3512,7 +3022,7 @@
             // Attempt to start music on game start; this is triggered by a user
             // gesture (click on menu), which avoids autoplay blocking in browsers.
             try { startMusic(); } catch (e) { console.warn('startMusic failed on startGame', e); }
-            requestAnimationFrame(gameLoop);
+            startGameLoop();
             
             console.log(`🎮 Starting ${mode} mode!`);
         }
@@ -3525,6 +3035,7 @@
             
             // Stop game loop
             gameState.gameOver = true;
+            stopGameLoop();
         }
 
         function restartGame() {
@@ -3562,9 +3073,8 @@
                 
                 if (!gameState.paused && !gameState.showTalentMenu) {
                     // Game is running - calculate elapsed time minus total paused time
-                    const totalElapsed = Math.floor((now - gameState.gameStartTime) / 1000);
-                    const actualElapsed = totalElapsed - gameState.totalPausedTime;
-                    gameState.timeRemaining = Math.max(0, 300 + gameState.timeBonusTotal - actualElapsed);
+                    const actualElapsedSeconds = Math.floor((now - gameState.gameStartTime - gameState.totalPausedTime) / 1000);
+                    gameState.timeRemaining = Math.max(0, 300 + gameState.timeBonusTotal - actualElapsedSeconds);
                     
                     const minutes = Math.floor(gameState.timeRemaining / 60);
                     const seconds = gameState.timeRemaining % 60;
@@ -3575,15 +3085,9 @@
                         endGame();
                     }
                 } else {
-                    // Game is paused - track pause duration
+                    // Game is paused - the pause duration is finalized when unpausing.
                     if (gameState.pauseStartTime === 0) {
-                        // Just started pausing - record when pause began
                         gameState.pauseStartTime = now;
-                    } else {
-                        // Already paused - update total paused time
-                        const currentPauseDuration = Math.floor((now - gameState.pauseStartTime) / 1000);
-                        gameState.totalPausedTime = gameState.totalPausedTime + currentPauseDuration;
-                        gameState.pauseStartTime = now; // Reset for next update cycle
                     }
                 }
             }

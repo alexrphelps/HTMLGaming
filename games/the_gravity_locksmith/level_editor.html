@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Gravity Locksmith Level Editor</title>
+<link rel="stylesheet" href="css/level_editor.css">
+</head>
+<body>
+<main class="editor-shell">
+  <header class="editor-topbar">
+    <div class="brand-block">
+      <span class="eyebrow">The Gravity Locksmith</span>
+      <h1>Level Editor</h1>
+    </div>
+    <div class="topbar-actions">
+      <label class="field-label" for="room-select">Room</label>
+      <select id="room-select"></select>
+      <button id="new-room-btn" type="button">New level</button>
+      <button id="reset-room-btn" type="button">Reset room</button>
+      <button id="open-file-btn" type="button">Open rooms.js</button>
+      <button id="save-file-btn" type="button" class="primary-action">Save rooms.js</button>
+      <button id="export-btn" type="button">Export text</button>
+    </div>
+  </header>
+
+  <section class="editor-body">
+    <aside class="tool-panel">
+      <section class="panel-section">
+        <h2>Builder</h2>
+        <label class="field-label" for="item-select">Item</label>
+        <select id="item-select">
+          <option value="spawn">Spawn</option>
+          <option value="exit">Exit</option>
+          <option value="platform">Platform</option>
+          <option value="shard">Shard</option>
+          <option value="spike">Spike</option>
+          <option value="flipBattery">Flip battery</option>
+          <option value="jumpBattery">Jump battery</option>
+          <option value="gate">Gate</option>
+          <option value="patrolEnemy">Patrol enemy</option>
+          <option value="hunterEnemy">Hunter enemy</option>
+          <option value="mover">Moving platform</option>
+          <option value="sentry">Sentry</option>
+        </select>
+        <div class="inline-fields">
+          <label class="checkbox-label">
+            <input id="snap-toggle" type="checkbox" checked>
+            Snap
+          </label>
+          <label class="field-label compact-label" for="grid-size">Grid</label>
+          <input id="grid-size" type="number" min="4" max="128" step="4" value="24">
+        </div>
+      </section>
+
+      <section class="panel-section" id="room-properties">
+        <h2>Room</h2>
+      </section>
+    </aside>
+
+    <section class="stage-panel">
+      <canvas id="editor-canvas" width="1920" height="1080"></canvas>
+      <div id="status-line" class="status-line" role="status" aria-live="polite"></div>
+    </section>
+
+    <aside class="property-panel">
+      <section class="panel-section" id="selection-properties">
+        <h2>Selection</h2>
+        <p class="empty-state">Select or place an item to edit its properties.</p>
+      </section>
+      <section class="panel-section export-panel is-hidden" id="export-panel">
+        <h2>Export</h2>
+        <p id="export-message"></p>
+        <textarea id="export-output" spellcheck="false"></textarea>
+      </section>
+      <section class="panel-section error-panel is-hidden" id="error-panel">
+        <h2>Validation</h2>
+        <ul id="error-list"></ul>
+      </section>
+    </aside>
+  </section>
+</main>
+
+<script src="js/constants.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/roomSchema.js"></script>
+<script src="js/rooms.js"></script>
+<script src="js/level_editor.js"></script>
+</body>
+</html>

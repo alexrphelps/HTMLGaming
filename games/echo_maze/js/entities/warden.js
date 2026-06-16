@@ -55,25 +55,37 @@
 
     if (playerDist < state.player.r + 14 && w.damageCooldown <= 0) {
       w.damageCooldown = em.CONFIG.wardenDamageCooldown;
-      damagePlayer(state);
+      damagePlayer(state, 'Maze Warden', 1 + (state.danger > 0.82 ? 1 : 0));
     }
   }
 
-  function damagePlayer(state) {
+  function damagePlayer(state, sourceLabel = 'Danger', amount = 1) {
     const p = state.player;
+    let remaining = Math.max(1, amount);
+    let cracked = 0;
+    let healthLost = 0;
 
-    if (p.shields > 0) {
-      p.shields--;
-      em.addMessage(state, 'Ward Shield cracked. The Warden recoils.');
+    while (remaining > 0 && (p.shields > 0 || p.health > 0)) {
+      if (p.shields > 0) {
+        p.shields--;
+        cracked++;
+      } else {
+        p.health--;
+        healthLost++;
+      }
+      remaining--;
+    }
+
+    if (cracked > 0 && healthLost <= 0) {
+      em.addMessage(state, 'Ward Shield cracked. ' + sourceLabel + ' recoils.');
     } else {
-      p.health--;
-      em.addMessage(state, 'The Warden strikes. Echo integrity failing.');
+      em.addMessage(state, sourceLabel + ' strikes. Echo integrity failing.');
     }
 
     state.screenShake = 10;
     state.screenPulse = 0.75;
-    em.addPulse(state, p.x, p.y, em.CONFIG.cell * 3.4, 0.55, '#ff6f9d');
-    em.addParticles(state, p.x, p.y, '#ff6f9d', 22);
+    em.addPulse(state, p.x, p.y, em.CONFIG.cell * 3.4, 0.55, '#ff4e38');
+    em.addParticles(state, p.x, p.y, '#ff4e38', 22);
   }
 
   Object.assign(em, { spawnWarden, updateWarden, damagePlayer });

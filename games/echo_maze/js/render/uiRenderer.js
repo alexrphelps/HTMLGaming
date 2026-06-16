@@ -40,6 +40,7 @@
       }
     }
 
+    em.drawNoExitVoid(ctx, state, camX, camY);
     em.drawPulses(ctx, state, camX, camY);
     em.drawParticles(ctx, state, camX, camY);
     em.drawWarden(ctx, state, camX, camY);

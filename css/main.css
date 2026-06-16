@@ -264,12 +264,48 @@ body {
     cursor: not-allowed;
 }
 
-/* Games Grid */
+/* Games Library Sections */
 .games-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    padding-bottom: 2rem;
+}
+
+.library-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: calc(var(--border-radius) + 4px);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--background-secondary);
+}
+
+.library-section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.library-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.library-section-description {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.games-grid-section {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-    padding-bottom: 2rem;
+    gap: 1.25rem;
 }
 
 .game-card {
@@ -677,6 +713,10 @@ body {
     }
     
     .games-grid {
+        gap: 1rem;
+    }
+
+    .games-grid-section {
         grid-template-columns: 1fr;
         gap: 1rem;
     }

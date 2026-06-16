@@ -18,7 +18,7 @@ describe('SmartInputManager', () => {
 
     beforeEach(() => {
         jest.useFakeTimers();
-        gameState = { keys: {}, gameOver: false, paused: false, nukeCount: 1, explosions: [], aliens: [], player: { x: 0, y: 0, width: 10, height: 10 } };
+        gameState = { keys: {}, gameOver: false, paused: false, nukeCount: 1, player: { x: 0, y: 0, width: 10, height: 10 } };
         manager = new SmartInputManager();
         manager.setGameState(gameState);
         // Stop automatic intervals so tests can control detection explicitly
@@ -89,5 +89,18 @@ describe('SmartInputManager', () => {
         const key = 'ArrowLeft';
         expect(() => window.dispatchEvent(new KeyboardEvent('keydown', { key }))).not.toThrow();
         expect(manager.isKeyPressed(key)).toBe(false);
+    });
+
+    test('destroy removes the same focus handler that was registered', () => {
+        const addSpy = jest.spyOn(window, 'addEventListener');
+        const removeSpy = jest.spyOn(window, 'removeEventListener');
+        const focusedManager = new SmartInputManager();
+        const focusHandler = addSpy.mock.calls.find(call => call[0] === 'focus')[1];
+
+        focusedManager.destroy();
+
+        expect(removeSpy).toHaveBeenCalledWith('focus', focusHandler);
+        addSpy.mockRestore();
+        removeSpy.mockRestore();
     });
 });

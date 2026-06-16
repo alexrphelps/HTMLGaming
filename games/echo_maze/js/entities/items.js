@@ -7,16 +7,28 @@
   const ITEM_EFFECTS = {
     lantern(state, effect, context) {
       const p = state.player;
-      p.visionBonus = Math.min(em.CONFIG.playerCaps.maxVisionBonus, p.visionBonus + effect.visionBonus);
-      em.restoreFuel(state, effect.restoreFuel, false);
+      const maxBonus = Math.max(0, Math.min(em.CONFIG.playerCaps.maxVisionBonus, em.CONFIG.maxVision - p.minVision));
+      p.visionBonus = Math.min(maxBonus, p.visionBonus + effect.visionBonus);
+      em.updateLanternVision(state, 0);
       context.revealRadius = p.vision + 1;
       em.addFloatingText(state, effect.floatingText, context.cx, context.cy - 28, context.color);
     },
     boots(state, effect) {
-      state.player.speed = Math.min(em.CONFIG.playerCaps.maxSpeed, state.player.speed + effect.speed);
+      const p = state.player;
+      const before = p.speed;
+      p.speed = Math.min(em.CONFIG.playerCaps.maxSpeed, p.speed + effect.speed);
+
+      if (before >= em.CONFIG.playerCaps.maxSpeed && p.speed >= em.CONFIG.playerCaps.maxSpeed) {
+        p.speedBoostTimer = Math.max(p.speedBoostTimer || 0, em.CONFIG.upgrades.quickstepOverflowDuration);
+        p.speedBoostMultiplier = em.CONFIG.upgrades.quickstepOverflowMultiplier;
+        state.screenPulse = Math.max(state.screenPulse, 0.36);
+        if (effect.overflowFloatingText) {
+          em.addFloatingText(state, effect.overflowFloatingText, p.x, p.y - 34, em.ITEM_DATA.boots.color);
+        }
+      }
     },
     phase(state, effect) {
-      state.player.phaseCharges = Math.min(em.CONFIG.playerCaps.maxPhaseCharges, state.player.phaseCharges + effect.charges);
+      grantPhaseCharges(state, effect.charges);
     },
     compass(state, effect, context) {
       state.player.compass = Math.min(em.CONFIG.playerCaps.maxCompass, state.player.compass + effect.compass);
@@ -31,14 +43,28 @@
     },
     battery(state, effect) {
       state.player.battery = Math.min(em.CONFIG.playerCaps.maxBattery, state.player.battery + effect.battery);
-      em.restoreFuel(state, effect.restoreFuel, false);
+      state.player.health = Math.min(em.CONFIG.playerCaps.maxHealth, state.player.health + (effect.heal || 0));
       state.danger = Math.max(0, state.danger - em.CONFIG.danger.batteryReduction);
     },
     relic(state, effect, context) {
-      state.player.phaseCharges = Math.min(em.CONFIG.playerCaps.maxPhaseCharges, state.player.phaseCharges + effect.charges);
+      grantPhaseCharges(state, effect.charges);
       context.revealRadius = effect.revealRadius;
     }
   };
+
+  function grantPhaseCharges(state, charges) {
+    const p = state.player;
+    const max = em.CONFIG.playerCaps.maxPhaseCharges;
+    const amount = Math.max(0, charges || 0);
+    if (amount <= 0) return;
+
+    if (p.phaseCharges >= max && em.activatePhase) {
+      em.activatePhase(state, { force: true });
+      return;
+    }
+
+    p.phaseCharges = Math.min(max, p.phaseCharges + amount);
+  }
 
   function itemForCell(state, x, y) {
     if (state.gameMode === 'beginner') {
@@ -61,6 +87,7 @@
     if (state.collected.has(k)) return false;
     if (Math.abs(x) + Math.abs(y) < em.CONFIG.items.spawnExclusionDistance) return false;
     if (state.objective && x === state.objective.x && y === state.objective.y) return false;
+    if (state.objectives && state.objectives.some(obj => obj && x === obj.x && y === obj.y)) return false;
     if (state.exitPortal && x === state.exitPortal.x && y === state.exitPortal.y) return false;
     if (em.enemyAtCell && em.enemyAtCell(state, x, y, 'mimic')) return false;
     return true;
@@ -188,6 +215,7 @@
     beginnerItemSalt,
     beginnerItemTypeForCell,
     ITEM_EFFECTS,
+    grantPhaseCharges,
     collectNearbyItems,
     canReachItemForPickup,
     collectItem

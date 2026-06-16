@@ -25,15 +25,13 @@
     },
     {
       unlock: 'shield',
-      render(state) {
-        return [statMarkup('Integrity', state.player.health + ' HP / ' + state.player.shields + ' SH')];
-      }
+      render: () => []
     },
     {
       unlock: 'anchor',
       render(state) {
         return [
-          statMarkup('Anchors', state.anchors + '/' + em.CONFIG.runAnchors),
+          statMarkup('Anchors', anchorStatText(state)),
           statMarkup('Tier', state.tier)
         ];
       }
@@ -46,30 +44,24 @@
       render(state) {
         const p = state.player;
         return [
-          meter('Fuel', p.fuel, p.maxFuel, em.ITEM_DATA.lantern.color, Math.round(p.fuel) + '/' + Math.round(p.maxFuel)),
-          meter('Vision', p.vision - em.CONFIG.baseVision, em.CONFIG.maxVision - em.CONFIG.baseVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1))
+          meter('Vision', p.vision - p.minVision, em.CONFIG.maxVision - p.minVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1))
         ];
-      }
-    },
-    {
-      unlock: 'phase',
-      render(state, context) {
-        const p = state.player;
-        return [pips('Phase', p.phaseTimer > 0 ? 1 : p.phaseCharges, em.CONFIG.playerCaps.maxPhaseCharges, em.ITEM_DATA.phase.color, context.phase)];
       }
     },
     {
       unlock: 'compass',
       render(state) {
         const p = state.player;
-        return [pips('Compass', p.compass + p.compassObjective, 8, em.ITEM_DATA.compass.color, (p.compass + p.compassObjective) + '/8')];
+        return [pips('Compass', p.compass, em.CONFIG.playerCaps.maxCompass, em.ITEM_DATA.compass.color, p.compass + '/' + em.CONFIG.playerCaps.maxCompass)];
       }
     },
     {
       unlock: 'boots',
       render(state) {
         const p = state.player;
-        return [meter('Speed', p.speed - em.CONFIG.baseSpeed, em.CONFIG.playerCaps.maxSpeed - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, Math.round(p.speed))];
+        const speed = em.effectivePlayerSpeed ? em.effectivePlayerSpeed(state) : p.speed;
+        const detail = p.speedBoostTimer > 0 ? Math.round(speed) + ' boost' : Math.round(speed);
+        return [meter('Speed', speed - em.CONFIG.baseSpeed, em.CONFIG.playerCaps.maxBoostedSpeed - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, detail)];
       }
     },
     {
@@ -152,8 +144,96 @@
     return `<div class="stat${extra}"><span>${em.escapeHtml(label)}</span><strong>${em.escapeHtml(value)}</strong></div>`;
   }
 
+  function anchorStatText(state) {
+    return em.anchorProgressText ? em.anchorProgressText(state) : state.anchors + '/' + em.CONFIG.runAnchors;
+  }
+
   function itemTotalMarkup(label, value, color) {
     return `<div class="item-total" style="--meter-color: ${em.safeColor(color)}"><span>${em.escapeHtml(label)}</span><strong>${em.escapeHtml(value)}</strong></div>`;
+  }
+
+  function vitalIcons(kind, count, max) {
+    let icons = '';
+
+    for (let i = 0; i < max; i++) {
+      const stateClass = i < count ? ' filled' : '';
+      const label = kind === 'health' ? 'Health' : 'Shield';
+      icons += `<span class="vital-icon ${kind}${stateClass}" aria-label="${label} point ${i + 1} of ${max}"></span>`;
+    }
+
+    return icons;
+  }
+
+  function vitalsMarkup(state) {
+    const p = state.player;
+    const health = Math.max(0, Math.min(em.CONFIG.playerCaps.maxHealth, p.health));
+    const shields = Math.max(0, Math.min(em.CONFIG.playerCaps.maxShields, p.shields));
+    const showHealth = shouldShowHealthVitals(state);
+
+    return `
+      ${shouldShowPhaseVitals(state) ? phaseVitalsMarkup(state) : ''}
+      ${showHealth ? `
+      <div class="vital-row health-row" aria-label="Health">
+        <span>Health</span>
+        <div class="vital-icons">${vitalIcons('health', health, em.CONFIG.playerCaps.maxHealth)}</div>
+      </div>
+      <div class="vital-row shield-row" aria-label="Shields">
+        <span>Shields</span>
+        <div class="vital-icons">${vitalIcons('shield', shields, em.CONFIG.playerCaps.maxShields)}</div>
+      </div>
+      ` : ''}
+    `;
+  }
+
+  function phaseVitalsMarkup(state) {
+    const p = state.player;
+    const active = p.phaseTimer > 0 ? p.phaseTimer.toFixed(1) + 's' : 'Ready';
+    const cooldown = p.phaseCooldownTimer > 0 ? p.phaseCooldownTimer.toFixed(1) + 's' : 'Ready';
+
+    return `
+      <div class="phase-vitals" aria-label="Phase">
+        <div class="phase-vitals-head">
+          <span>Phase</span>
+          <strong>${em.escapeHtml(p.phaseCharges + '/' + em.CONFIG.playerCaps.maxPhaseCharges)}</strong>
+        </div>
+        <div class="pip-row phase-charge-row">${phaseChargeDots(p.phaseCharges, em.CONFIG.playerCaps.maxPhaseCharges)}</div>
+        <div class="phase-timers">
+          <span>Active <strong>${em.escapeHtml(active)}</strong></span>
+          <span>Cooldown <strong>${em.escapeHtml(cooldown)}</strong></span>
+        </div>
+      </div>
+    `;
+  }
+
+  function phaseChargeDots(count, max) {
+    let dots = '';
+    for (let i = 0; i < max; i++) dots += `<span class="${i < count ? 'filled' : ''}"></span>`;
+    return dots;
+  }
+
+  function shouldShowPhaseVitals(state) {
+    return state.gameMode !== 'beginner' || (em.hasDiscoveredTutorial && em.hasDiscoveredTutorial(state, 'phase'));
+  }
+
+  function shouldShowHealthVitals(state) {
+    return state.gameMode !== 'beginner' || (em.hasDiscoveredTutorial && em.hasDiscoveredTutorial(state, 'shield'));
+  }
+
+  function shouldShowVitals(state) {
+    return shouldShowPhaseVitals(state) || shouldShowHealthVitals(state);
+  }
+
+  function updateVitals(app) {
+    if (!app.dom.vitalsDock) return;
+
+    if (!shouldShowVitals(app.state)) {
+      app.dom.vitalsDock.innerHTML = '';
+      app.dom.vitalsDock.classList.add('hidden');
+      return;
+    }
+
+    app.dom.vitalsDock.innerHTML = vitalsMarkup(app.state);
+    app.dom.vitalsDock.classList.remove('hidden');
   }
 
   function tutorialSequenceLength(state) {
@@ -171,33 +251,30 @@
     const state = app.state;
     const p = state.player;
     const pc = em.cellOfWorld(p.x, p.y);
-    const phase = p.phaseTimer > 0 ? p.phaseTimer.toFixed(1) + 's' : p.phaseCooldownTimer > 0 ? p.phaseCooldownTimer.toFixed(1) + 's CD' : p.phaseCharges + '/' + em.CONFIG.playerCaps.maxPhaseCharges;
     const wardenText = !state.warden ? 'Dormant' : state.warden.wake > 0 ? 'Waking' : 'Hunting';
     const dangerText = state.danger < 0.25 ? 'Calm' : state.danger < 0.55 ? 'Rising' : state.danger < 0.82 ? 'High' : 'Critical';
 
     app.dom.goalText.innerHTML = em.goalHtmlForState(state);
+    updateVitals(app);
 
     if (state.gameMode === 'beginner') {
-      updateBeginnerHud(app, phase, pc);
+      updateBeginnerHud(app, pc);
       renderMessages(app);
       return;
     }
 
     app.dom.runStats.innerHTML = `
       ${statMarkup('Score', state.score)}
-      ${statMarkup('Anchors', state.anchors + '/' + em.CONFIG.runAnchors)}
+      ${statMarkup('Anchors', anchorStatText(state))}
       ${statMarkup('Tier', state.tier)}
-      ${statMarkup('Integrity', p.health + ' HP / ' + p.shields + ' SH')}
       ${statMarkup('Warden', wardenText, 'warden ' + wardenText.toLowerCase())}
     `;
 
     app.dom.itemMeters.innerHTML = `
-      ${meter('Fuel', p.fuel, p.maxFuel, em.ITEM_DATA.lantern.color, Math.round(p.fuel) + '/' + Math.round(p.maxFuel))}
-      ${meter('Vision', p.vision - em.CONFIG.baseVision, em.CONFIG.maxVision - em.CONFIG.baseVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1))}
-      ${pips('Phase', p.phaseTimer > 0 ? 1 : p.phaseCharges, em.CONFIG.playerCaps.maxPhaseCharges, em.ITEM_DATA.phase.color, phase)}
-      ${meter('Danger', state.danger, 1, em.ITEM_DATA.battery.color, dangerText)}
-      ${pips('Compass', p.compass + p.compassObjective, 8, em.ITEM_DATA.compass.color, (p.compass + p.compassObjective) + '/8')}
-      ${meter('Speed', p.speed - em.CONFIG.baseSpeed, em.CONFIG.playerCaps.maxSpeed - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, Math.round(p.speed))}
+      ${meter('Vision', p.vision - p.minVision, em.CONFIG.maxVision - p.minVision, em.ITEM_DATA.lantern.color, p.vision.toFixed(1))}
+      ${meter('Danger', state.danger, 1, '#ff4e38', dangerText)}
+      ${pips('Compass', p.compass, em.CONFIG.playerCaps.maxCompass, em.ITEM_DATA.compass.color, p.compass + '/' + em.CONFIG.playerCaps.maxCompass)}
+      ${speedMeterMarkup(state)}
       ${pips('Battery', p.battery, em.CONFIG.playerCaps.maxBattery, em.ITEM_DATA.battery.color, p.battery + '/' + em.CONFIG.playerCaps.maxBattery)}
       ${itemTotalMarkup('Items', state.items, em.ITEM_DATA.relic.color)}
     `;
@@ -212,9 +289,9 @@
     renderMessages(app);
   }
 
-  function updateBeginnerHud(app, phase, pc) {
+  function updateBeginnerHud(app, pc) {
     const state = app.state;
-    const context = { phase, pc };
+    const context = { pc };
     const runStats = renderBeginnerGroups(BEGINNER_RUN_STAT_GROUPS, state, context);
     app.dom.runStats.innerHTML = runStats.join('');
 
@@ -223,6 +300,13 @@
 
     const secondary = renderBeginnerGroups(BEGINNER_SECONDARY_GROUPS, state, context);
     app.dom.secondaryStats.innerHTML = secondary.join('');
+  }
+
+  function speedMeterMarkup(state) {
+    const p = state.player;
+    const speed = em.effectivePlayerSpeed ? em.effectivePlayerSpeed(state) : p.speed;
+    const detail = p.speedBoostTimer > 0 ? Math.round(speed) + ' boost' : Math.round(speed);
+    return meter('Speed', speed - em.CONFIG.baseSpeed, em.CONFIG.playerCaps.maxBoostedSpeed - em.CONFIG.baseSpeed, em.ITEM_DATA.boots.color, detail);
   }
 
   function upgradeSummary(state) {
@@ -248,11 +332,21 @@
     meter,
     pips,
     statMarkup,
+    anchorStatText,
     itemTotalMarkup,
+    vitalIcons,
+    vitalsMarkup,
+    phaseVitalsMarkup,
+    phaseChargeDots,
+    shouldShowPhaseVitals,
+    shouldShowHealthVitals,
+    shouldShowVitals,
+    updateVitals,
     tutorialSequenceLength,
     renderBeginnerGroups,
     updateHud,
     updateBeginnerHud,
+    speedMeterMarkup,
     upgradeSummary,
     beginnerGoalText
   });

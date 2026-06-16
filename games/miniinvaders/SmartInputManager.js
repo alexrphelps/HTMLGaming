@@ -41,6 +41,11 @@ class SmartInputManager {
         
         // Game state reference
         this.gameState = null;
+        this.actions = {
+            restart: null,
+            togglePause: null,
+            activateNuke: null
+        };
         
         // Statistics for debugging
         this.stats = {
@@ -62,7 +67,7 @@ class SmartInputManager {
         document.addEventListener('keydown', this.boundKeyDown, { passive: false });
         document.addEventListener('keyup', this.boundKeyUp, { passive: false });
         window.addEventListener('blur', this.boundBlur);
-        window.addEventListener('focus', this.handleFocus);
+        window.addEventListener('focus', this.boundFocus);
         
         // Start intelligent stuck key detection
         this.startSmartDetection();
@@ -75,6 +80,16 @@ class SmartInputManager {
      */
     setGameState(gameState) {
         this.gameState = gameState;
+    }
+
+    /**
+     * Set game intent callbacks owned by the game runtime.
+     */
+    setActions(actions = {}) {
+        this.actions = {
+            ...this.actions,
+            ...actions
+        };
     }
     
     /**
@@ -165,40 +180,33 @@ class SmartInputManager {
         
         // Game over restart
         if (this.gameState.gameOver && key === ' ') {
-            if (typeof restartGame === 'function') {
-                restartGame();
+            if (typeof this.actions.restart === 'function') {
+                this.actions.restart();
             }
             return;
         }
         
         // Pause toggle
         if ((key === 'p' || key === 'P') && !this.gameState.gameOver) {
-            if (this.gameState.paused) {
-                if (this.gameState.pauseStartTime > 0) {
-                    this.gameState.totalPausedTime += Date.now() - this.gameState.pauseStartTime;
-                    this.gameState.pauseStartTime = 0;
-                }
-                this.gameState.paused = false;
-                console.log('🎮 Game unpaused');
-            } else {
-                this.gameState.pauseStartTime = Date.now();
-                this.gameState.paused = true;
-                console.log('🎮 Game paused');
+            if (typeof this.actions.togglePause === 'function') {
+                this.actions.togglePause();
             }
             return;
         }
         
         // Tactical Nuke activation
         if (key === 'Shift' && this.gameState.nukeCount > 0 && !this.gameState.gameOver && !this.gameState.paused) {
-            this.activateTacticalNuke();
+            this.resetActionKeys();
+            if (typeof this.actions.activateNuke === 'function') {
+                this.actions.activateNuke();
+            }
         }
     }
     
     /**
-     * Activate tactical nuke and reset movement keys
+     * Reset movement and action keys after one-shot special actions.
      */
-    activateTacticalNuke() {
-        // Reset all movement keys to prevent stuck actions when nuking
+    resetActionKeys() {
         const movementKeys = ['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D', ' ', 'ArrowUp', 'w', 'W'];
         movementKeys.forEach(key => {
             if (this.keyStates.has(key)) {
@@ -209,27 +217,7 @@ class SmartInputManager {
             }
         });
         
-        console.log('🎮 Tactical nuke activated - movement keys reset');
-        
-        // Execute nuke logic (existing game logic)
-        if (this.gameState.player) {
-            const playerX = this.gameState.player.x + this.gameState.player.width / 2;
-            const playerY = this.gameState.player.y + this.gameState.player.height / 2;
-            
-            this.gameState.explosions.push({
-                x: playerX,
-                y: playerY,
-                radius: 0,
-                maxRadius: 200,
-                duration: 1000,
-                startTime: Date.now(),
-                color: '#ff4444'
-            });
-            
-            this.gameState.aliens = [];
-            this.gameState.nukeCount--;
-            this.gameState.lastNukeTime = Date.now();
-        }
+        console.log('🎮 Special action activated - movement keys reset');
     }
     
     /**
@@ -470,6 +458,11 @@ class SmartInputManager {
         
         // Clear references
         this.gameState = null;
+        this.actions = {
+            restart: null,
+            togglePause: null,
+            activateNuke: null
+        };
         
         console.log('🎮 SmartInputManager: Cleanup complete');
     }

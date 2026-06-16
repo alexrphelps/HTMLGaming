@@ -92,7 +92,11 @@
   }
 
   function drawObjective(ctx, state, camX, camY) {
-    const obj = state.objective;
+    const objectives = state.objectives && state.objectives.length ? state.objectives : (state.objective ? [state.objective] : []);
+    for (const obj of objectives) drawObjectiveMarker(ctx, state, obj, camX, camY);
+  }
+
+  function drawObjectiveMarker(ctx, state, obj, camX, camY) {
     if (!obj || !state.revealed.has(em.keyOf(obj.x, obj.y))) return;
 
     const cx = obj.x * em.CONFIG.cell + em.CONFIG.cell / 2 - camX;
@@ -163,10 +167,10 @@
     ctx.globalAlpha = wakeAlpha;
     ctx.translate(sx, sy);
     ctx.scale(pulse, pulse);
-    ctx.shadowColor = '#ff6f9d';
+    ctx.shadowColor = '#ff4e38';
     ctx.shadowBlur = 26;
-    ctx.fillStyle = 'rgba(255, 111, 157, 0.82)';
-    ctx.strokeStyle = '#ffd7e3';
+    ctx.fillStyle = 'rgba(255, 78, 56, 0.82)';
+    ctx.strokeStyle = '#ffd8c2';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(0, 0, 15, 0, Math.PI * 2);
@@ -203,9 +207,9 @@
 
     ctx.save();
     ctx.translate(sx, sy);
-    ctx.shadowColor = '#ffb86c';
+    ctx.shadowColor = enemy.color;
     ctx.shadowBlur = 12;
-    ctx.fillStyle = '#ffb86c';
+    ctx.fillStyle = enemy.color;
     drawStar(ctx, 0, 0, 5, 11, 5);
     ctx.restore();
   }
@@ -330,6 +334,7 @@
     drawItems,
     drawItem,
     drawObjective,
+    drawObjectiveMarker,
     drawExitPortal,
     drawWarden,
     drawEnemies,

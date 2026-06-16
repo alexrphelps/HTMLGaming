@@ -5,8 +5,11 @@
   --muted: #8fb2bf;
   --accent: #7df9ff;
   --gold: #ffe27a;
-  --danger: #ff6f9d;
+  --danger: #ff4e38;
+  --danger-warn: #ff9f1c;
   --good: #8ef7a2;
+  --health: #8ef7a2;
+  --shield: #d8f3ff;
 }
 
 * { box-sizing: border-box; }
@@ -97,7 +100,7 @@ canvas {
 }
 
 .warden.hunting strong { color: var(--danger); }
-.warden.waking strong { color: var(--gold); }
+.warden.waking strong { color: var(--danger-warn); }
 .warden.dormant strong { color: var(--good); }
 .muted { color: var(--muted); }
 
@@ -187,6 +190,158 @@ canvas {
   font-size: 11px;
 }
 
+.vitals-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  display: grid;
+  gap: 7px;
+  width: min(340px, calc(100vw - 28px));
+  padding: 10px 12px;
+  background: rgba(7, 12, 18, 0.80);
+  border: 1px solid rgba(216, 243, 255, 0.20);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  transition: opacity 150ms ease, transform 150ms ease;
+  pointer-events: none;
+}
+
+.vitals-dock.hidden {
+  opacity: 0;
+  transform: translate(-50%, 10px);
+}
+
+.phase-vitals {
+  --meter-color: #bd8cff;
+  display: grid;
+  gap: 6px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.phase-vitals-head,
+.phase-timers {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.phase-vitals-head span,
+.phase-timers span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.phase-vitals-head strong,
+.phase-timers strong {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.phase-charge-row {
+  margin-top: 0;
+}
+
+.phase-charge-row span {
+  flex: 1 1 auto;
+  height: 7px;
+  border-radius: 999px;
+}
+
+.vital-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+}
+
+.vital-row > span {
+  flex: 0 0 56px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.vital-icons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+
+.vital-icon {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  opacity: 0.42;
+}
+
+.vital-icon.health {
+  width: 17px;
+  height: 17px;
+  border-right: 2px solid var(--health);
+  border-bottom: 2px solid var(--health);
+  transform: rotate(45deg);
+}
+
+.vital-icon.health::before,
+.vital-icon.health::after {
+  content: "";
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--health);
+  border-radius: 50%;
+}
+
+.vital-icon.health::before {
+  left: -8px;
+  top: 1px;
+  border-right: 0;
+}
+
+.vital-icon.health::after {
+  left: 1px;
+  top: -8px;
+  border-bottom: 0;
+}
+
+.vital-icon.health.filled {
+  background: var(--health);
+  box-shadow: 0 0 14px rgba(142, 247, 162, 0.48);
+  opacity: 1;
+}
+
+.vital-icon.health.filled::before,
+.vital-icon.health.filled::after {
+  background: var(--health);
+}
+
+.vital-icon.shield {
+  width: 17px;
+  height: 20px;
+  border: 2px solid var(--shield);
+  border-radius: 9px 9px 11px 11px;
+  clip-path: polygon(50% 0, 92% 16%, 82% 72%, 50% 100%, 18% 72%, 8% 16%);
+}
+
+.vital-icon.shield.filled {
+  background: var(--shield);
+  box-shadow: 0 0 14px rgba(216, 243, 255, 0.44);
+  opacity: 1;
+}
+
 #controlsDock {
   position: fixed;
   left: 14px;
@@ -260,7 +415,7 @@ kbd {
 #overlay.visible { display: grid; }
 
 .overlay-panel {
-  width: min(560px, calc(100vw - 34px));
+  width: min(680px, calc(100vw - 34px));
   padding: 24px;
   background: rgba(5, 10, 15, 0.94);
   border: 1px solid rgba(125, 249, 255, 0.28);
@@ -310,7 +465,7 @@ kbd {
 }
 
 .upgrade-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(112px, 1fr));
   text-align: left;
 }
 
@@ -365,22 +520,25 @@ kbd {
 }
 
 .upgrade-choice {
-  display: block;
+  display: grid;
+  grid-template-columns: 26px minmax(92px, 0.85fr) minmax(132px, 1.15fr);
+  align-items: center;
+  gap: 10px;
   min-width: 0;
   width: 100%;
-  min-height: 132px;
+  min-height: 94px;
   padding: 12px;
   border-color: var(--upgrade-color);
   background: rgba(255, 255, 255, 0.055);
   text-align: left;
+  overflow: hidden;
 }
 
 .upgrade-choice span {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-bottom: 10px;
+  width: 26px;
+  height: 26px;
   color: #061017;
   background: var(--upgrade-color);
   border-radius: 50%;
@@ -390,17 +548,17 @@ kbd {
 .upgrade-choice strong {
   display: block;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.25;
 }
 
 .upgrade-choice em {
   display: block;
-  margin-top: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
-  line-height: 1.35;
+  line-height: 1.3;
+  overflow: hidden;
 }
 
 .upgrade-choice:hover,
@@ -451,11 +609,57 @@ button:focus-visible {
 
   #secondaryStats { display: none; }
   #controlsDock { display: none; }
+  .vitals-dock {
+    bottom: 10px;
+    width: min(312px, calc(100vw - 24px));
+    padding: 9px 10px;
+  }
+  .vital-row > span {
+    flex-basis: 50px;
+    font-size: 10px;
+  }
+  .vital-icons {
+    gap: 5px;
+  }
+  .vital-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .vital-icon.shield {
+    width: 16px;
+    height: 18px;
+  }
   #messageLog {
-    bottom: 14px;
+    bottom: 96px;
     width: min(360px, calc(100vw - 24px));
   }
   .msg { font-size: 12px; }
-  .upgrade-grid { grid-template-columns: 1fr; }
-  .upgrade-choice { min-height: 0; }
+  .overlay-panel {
+    width: min(520px, calc(100vw - 20px));
+    padding: 16px;
+  }
+  .upgrade-grid {
+    grid-template-columns: repeat(3, minmax(86px, 1fr));
+    gap: 6px;
+  }
+  .upgrade-choice {
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-content: start;
+    min-height: 116px;
+    padding: 8px;
+  }
+  .upgrade-choice span {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
+  .upgrade-choice strong {
+    font-size: 12px;
+  }
+  .upgrade-choice em {
+    grid-column: 1 / -1;
+    margin-top: 5px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
 }

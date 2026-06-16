@@ -1,44 +1,43 @@
 const { createBrowserContext, loadBrowserScript } = require('../helpers/browserScriptHarness');
 
-function loadInputManager(restartGame = jest.fn()) {
+function loadSmartInputManager() {
   const context = createBrowserContext({
     document,
     addEventListener: window.addEventListener.bind(window),
     removeEventListener: window.removeEventListener.bind(window),
     setInterval,
-    clearInterval,
-    restartGame
+    clearInterval
   });
-  return {
-    InputManager: loadBrowserScript(context, 'games/miniinvaders/InputManager.js', ['InputManager']).InputManager,
-    restartGame
-  };
+  return loadBrowserScript(context, 'games/miniinvaders/SmartInputManager.js', ['SmartInputManager']).SmartInputManager;
 }
 
-// Behaviour under test: MiniInvaders input state tracks keyboard lifecycle, special keys, stuck-key release, and cleanup.
-describe('MiniInvaders InputManager', () => {
-  let InputManagerClass;
+// Behaviour under test: MiniInvaders uses SmartInputManager as the canonical input layer.
+describe('MiniInvaders SmartInputManager canonical input', () => {
+  let SmartInputManagerClass;
   let manager;
   let gameState;
-  let restartGame;
+  let actions;
 
   beforeEach(() => {
     jest.useFakeTimers();
-    ({ InputManager: InputManagerClass, restartGame } = loadInputManager());
+    SmartInputManagerClass = loadSmartInputManager();
+    actions = {
+      restart: jest.fn(),
+      togglePause: jest.fn(),
+      activateNuke: jest.fn()
+    };
     gameState = {
       keys: {},
       gameOver: false,
       paused: false,
       pauseStartTime: 0,
       totalPausedTime: 0,
-      nukeCount: 1,
-      explosions: [],
-      aliens: [{ id: 1 }],
-      player: { x: 10, y: 20, width: 10, height: 10 }
+      nukeCount: 1
     };
-    manager = new InputManagerClass();
+    manager = new SmartInputManagerClass();
     manager.setGameState(gameState);
-    manager.stopStuckKeyDetection();
+    manager.setActions(actions);
+    manager.stopSmartDetection();
   });
 
   afterEach(() => {
@@ -54,48 +53,65 @@ describe('MiniInvaders InputManager', () => {
     expect([keydown.preventDefault.mock.calls.length, manager.isKeyPressed('ArrowLeft'), gameState.keys.ArrowLeft]).toEqual([1, false, false]);
   });
 
-  test('game over space calls restart function', () => {
+  test('game over space emits restart intent without owning restart logic', () => {
     gameState.gameOver = true;
     manager.handleSpecialKeys(' ');
-    expect(restartGame).toHaveBeenCalledTimes(1);
+    expect(actions.restart).toHaveBeenCalledTimes(1);
   });
 
-  test('pause key toggles pause bookkeeping', () => {
-    jest.spyOn(Date, 'now').mockReturnValueOnce(100).mockReturnValueOnce(175);
+  test('pause key emits pause intent without mutating pause bookkeeping', () => {
     manager.handleSpecialKeys('p');
-    manager.handleSpecialKeys('P');
-    expect([gameState.paused, gameState.pauseStartTime, gameState.totalPausedTime]).toEqual([false, 0, 75]);
+    expect([actions.togglePause.mock.calls.length, gameState.paused, gameState.totalPausedTime]).toEqual([1, false, 0]);
   });
 
-  test('shift nuke clears movement and destroys aliens', () => {
-    manager.keyStates.set('a', true);
+  test('shift nuke clears movement and emits nuke intent without touching gameplay state', () => {
+    manager.keyStates.set('a', { isPressed: true });
     gameState.keys.a = true;
     manager.handleSpecialKeys('Shift');
-    expect([gameState.nukeCount, gameState.aliens.length, gameState.explosions.length, manager.isKeyPressed('a')]).toEqual([0, 0, 1, false]);
+    expect([actions.activateNuke.mock.calls.length, gameState.nukeCount, manager.isKeyPressed('a'), gameState.keys.a]).toEqual([1, 1, false, false]);
   });
 
-  test('stuck detection releases timed-out and over-repeated keys', () => {
+  test('stuck detection releases timed-out movement and action keys', () => {
     jest.spyOn(Date, 'now').mockReturnValue(2000);
-    manager.updateConfig({ stuckKeyTimeout: 100, maxRepeatCount: 2, repeatDelay: 10 });
-    manager.keyStates.set('ArrowRight', true);
-    manager.keyTimestamps.set('ArrowRight', 0);
-    manager.keyRepeatCounts.set('ArrowRight', 0);
-    manager.keyStates.set('w', true);
-    manager.keyTimestamps.set('w', 1990);
-    manager.keyRepeatCounts.set('w', 3);
+    manager.updateKeyTypeConfig('movement', { stuckTimeout: 100 });
+    manager.updateKeyTypeConfig('action', { stuckTimeout: 100 });
+    manager.keyStates.set('ArrowRight', {
+      isPressed: true,
+      lastKeyDownTime: 0,
+      lastActivityTime: 0,
+      pressCount: 1,
+      keyType: 'movement',
+      config: manager.keyConfig.movement,
+      isStuck: false
+    });
+    manager.keyStates.set('w', {
+      isPressed: true,
+      lastKeyDownTime: 0,
+      lastActivityTime: 0,
+      pressCount: 1,
+      keyType: 'action',
+      config: manager.keyConfig.action,
+      isStuck: false
+    });
     gameState.keys.ArrowRight = true;
     gameState.keys.w = true;
 
-    manager.detectStuckKeys();
+    manager.detectStuckKeysForType('movement');
+    manager.detectStuckKeysForType('action');
 
     expect([manager.isKeyPressed('ArrowRight'), manager.isKeyPressed('w'), gameState.keys.ArrowRight, gameState.keys.w]).toEqual([false, false, false, false]);
   });
 
   test('query helpers reset and report key stats', () => {
     jest.spyOn(Date, 'now').mockReturnValue(100);
-    manager.keyStates.set('a', true);
-    manager.keyTimestamps.set('a', 40);
-    manager.keyRepeatCounts.set('a', 2);
+    manager.keyStates.set('a', {
+      isPressed: true,
+      isStuck: false,
+      lastKeyDownTime: 40,
+      lastKeyUpTime: 0,
+      keyType: 'movement',
+      pressCount: 2
+    });
     expect([manager.isAnyKeyPressed(['a', 'd']), manager.areAllKeysPressed(['a', 'd']), manager.getKeyStats().a.duration]).toEqual([true, false, 60]);
     manager.resetKeys(['a']);
     expect(manager.isKeyPressed('a')).toBe(false);

@@ -12,6 +12,36 @@
     ctx.fillRect(0, 0, w, h);
   }
 
+  function drawNoExitVoid(ctx, state, camX, camY) {
+    const v = state.void;
+    if (!v || !v.active || v.radius <= 0) return;
+
+    const sx = v.x - camX;
+    const sy = v.y - camY;
+    const pulse = 1 + Math.sin(state.time * 4.2) * 0.018;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.shadowColor = '#ff4e38';
+    ctx.shadowBlur = 28;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.94)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, v.radius * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255, 78, 56, 0.86)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, v.radius * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 159, 28, 0.64)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, v.radius * pulse + 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawCellFloor(ctx, state, x, y, camX, camY) {
     const sx = x * em.CONFIG.cell - camX;
     const sy = y * em.CONFIG.cell - camY;
@@ -94,8 +124,10 @@
   }
 
   function drawCompass(ctx, state, w, h) {
-    const obj = state.objective || state.exitPortal;
+    const obj = state.exitPortal || (em.closestActiveAnchor ? em.closestActiveAnchor(state) : state.objective);
     if (!obj) return;
+    const signal = obj.type === 'anchor' && em.anchorSignalInfo ? em.anchorSignalInfo(state, obj) : null;
+    if (signal && !signal.detectable) return;
 
     const p = state.player;
     const tx = obj.x * em.CONFIG.cell + em.CONFIG.cell / 2;
@@ -103,14 +135,17 @@
     const angle = Math.atan2(ty - p.y, tx - p.x);
     const distCells = Math.hypot(tx - p.x, ty - p.y) / em.CONFIG.cell;
     const x = w / 2;
-    const y = h - 48;
+    const y = w < 760 || h < 620 ? 66 : 72;
     const color = obj.type === 'exit' ? '#8ef7a2' : '#ffe27a';
-    const precision = state.player.compassObjective > 0 ? ' precise' : '';
+    const clarity = state.player.compassObjective || 0;
+    const label = obj.type === 'anchor'
+      ? 'Anchor signal detected'
+      : obj.name + ': ' + Math.round(distCells) + ' cells';
 
     ctx.save();
     ctx.translate(x, y);
     ctx.fillStyle = 'rgba(4, 8, 13, 0.72)';
-    ctx.strokeStyle = em.alphaColor(color, 0.3);
+    ctx.strokeStyle = em.alphaColor(color, 0.3 + clarity * 0.08);
     ctx.lineWidth = 1;
     em.roundedRect(ctx, -138, -23, 276, 46, 8);
     ctx.fill();
@@ -118,7 +153,7 @@
     ctx.rotate(angle);
     ctx.fillStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 12 + state.player.compass * 2;
+    ctx.shadowBlur = 12 + state.player.compass * 2 + clarity * 4;
     ctx.beginPath();
     ctx.moveTo(22, 0);
     ctx.lineTo(-9, -10);
@@ -132,7 +167,7 @@
     ctx.textAlign = 'center';
     ctx.fillStyle = '#d8f3ff';
     ctx.font = '12px ui-sans-serif, system-ui';
-    ctx.fillText(obj.name + ': ' + Math.round(distCells) + precision + ' cells', x, y + 36);
+    ctx.fillText(label, x, y + 36);
     ctx.restore();
   }
 
@@ -174,13 +209,16 @@
     }
 
     drawMinimapWalls(ctx, state, pc, x0, y0, range, cell);
-    em.drawMinimapSignal(ctx, state, state.objective, pc, x0, y0, range, cell, '#ffe27a');
+    const objectives = state.objectives && state.objectives.length ? state.objectives : (state.objective ? [state.objective] : []);
+    for (const obj of objectives) {
+      em.drawMinimapSignal(ctx, state, obj, pc, x0, y0, range, cell, '#ffe27a');
+    }
     em.drawMinimapSignal(ctx, state, state.exitPortal, pc, x0, y0, range, cell, '#8ef7a2');
 
     if (state.warden) {
       const wc = em.cellOfWorld(state.warden.x, state.warden.y);
       if (state.revealed.has(em.keyOf(wc.x, wc.y)) || dangerPingVisible(state, pc, wc.x, wc.y)) {
-        em.drawMinimapDot(ctx, wc.x - pc.x, wc.y - pc.y, x0, y0, range, cell, '#ff6f9d', 4);
+        em.drawMinimapDot(ctx, wc.x - pc.x, wc.y - pc.y, x0, y0, range, cell, '#ff4e38', 4);
       }
     }
 
@@ -188,7 +226,7 @@
       for (const enemy of state.enemies) {
         const ec = em.cellOfWorld(enemy.x, enemy.y);
         if (dangerPingVisible(state, pc, ec.x, ec.y)) {
-          em.drawMinimapDot(ctx, ec.x - pc.x, ec.y - pc.y, x0, y0, range, cell, enemy.color || '#ff6f9d', 3.5);
+          em.drawMinimapDot(ctx, ec.x - pc.x, ec.y - pc.y, x0, y0, range, cell, enemy.color || '#ff4e38', 3.5);
         }
       }
     }
@@ -254,6 +292,7 @@
 
   Object.assign(em, {
     drawVoid,
+    drawNoExitVoid,
     drawCellFloor,
     drawCellWalls,
     drawFogVignette,

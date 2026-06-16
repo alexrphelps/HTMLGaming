@@ -29,7 +29,7 @@
 
 ### 1. Advanced Input Management System
 
-**File:** `SmartInputManager.js` (recommended) / `InputManager.js` (legacy)
+**File:** `SmartInputManager.js`
 
 **Key Improvements:**
 - Proper key state tracking with timestamps
@@ -163,32 +163,31 @@ if (inputManager.isKeyPressed('ArrowLeft') || inputManager.isKeyPressed('a')) {
 }
 ```
 
-### Step 2: Replace Game Loop
+### Step 2: Use the Cancellable Game Loop
 
-**Current Code (Lines 2289-2302):**
+**Live Code Pattern:**
 ```javascript
-function gameLoop(currentTime) {
-    const elapsed = currentTime - lastTime;
-    if (elapsed >= deltaTime) {
-        lastTime = currentTime - (elapsed % deltaTime);
-        if (!gameState.gameOver && !gameState.paused) {
-            update(deltaTime);
-        }
-        render();
+const miniInvadersLoop = new GameLoop();
+miniInvadersLoop.setUpdateCallback((dt) => {
+    if (!gameState.gameOver && !gameState.paused) {
+        update(dt);
     }
-    requestAnimationFrame(gameLoop);
+});
+miniInvadersLoop.setRenderCallback(render);
+
+function startGameLoop() {
+    if (miniInvadersLoop.isRunning) {
+        miniInvadersLoop.stop();
+    }
+    miniInvadersLoop.reset();
+    miniInvadersLoop.start();
 }
-```
 
-**Improved Code:**
-```javascript
-// Initialize game loop
-const gameLoop = new GameLoop();
-gameLoop.setUpdateCallback(updateGame);
-gameLoop.setRenderCallback(renderGame);
-
-// Start the improved game loop
-gameLoop.start();
+function stopGameLoop() {
+    if (miniInvadersLoop.isRunning) {
+        miniInvadersLoop.stop();
+    }
+}
 ```
 
 ### Step 3: Add Memory Management
@@ -233,17 +232,26 @@ memoryManager.addCleanupCallback(() => {
 
 ## 🔧 Integration Steps
 
-1. **Add the new files** to your project:
-   - `SmartInputManager.js` (recommended)
-   - `InputManager.js` (optional legacy)
+1. **Use the live module set** from `index.html`:
+   - `MiniInvadersConfig.js`
+   - `MiniInvadersState.js`
+   - `MiniInvadersCombat.js`
+   - `MiniInvadersFormations.js`
+   - `MiniInvadersTalents.js`
    - `GameLoop.js`
    - `MemoryManager.js`
+   - `SmartInputManager.js`
 
 2. **Include them in your HTML:**
    ```html
-   <script src="SmartInputManager.js"></script>
+   <script src="MiniInvadersConfig.js"></script>
+   <script src="MiniInvadersState.js"></script>
+   <script src="MiniInvadersCombat.js"></script>
+   <script src="MiniInvadersFormations.js"></script>
+   <script src="MiniInvadersTalents.js"></script>
    <script src="GameLoop.js"></script>
    <script src="MemoryManager.js"></script>
+   <script src="SmartInputManager.js"></script>
    ```
 
 3. **Replace the input handling section** (lines 3348-3474)

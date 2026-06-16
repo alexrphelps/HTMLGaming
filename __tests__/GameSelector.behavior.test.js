@@ -30,6 +30,7 @@ describe('GameSelector behavior', () => {
         setupDom();
         localStorage.clear();
         delete window.GAMEHUB_GAMES;
+        delete window.GAMEHUB_LIBRARY_SECTIONS;
         delete window.GameSelector;
         delete window.GameHubIframeGame;
         delete window.EventEmitter;
@@ -115,6 +116,46 @@ describe('GameSelector behavior', () => {
 
         const searchResult = selector.searchGames('speed');
         expect(searchResult.map(game => game.metadata.name)).toEqual(['Zeta Run']);
+    });
+
+    test('renders the configured library sections in config order', async () => {
+        window.GAMEHUB_LIBRARY_SECTIONS = [
+            { id: 'polished', label: 'Polished' },
+            { id: 'ai-slope', label: 'AI Slope' }
+        ];
+        window.GAMEHUB_GAMES = [
+            { folder: 'beta', name: 'Beta Blocks', libraryList: 'polished' },
+            { folder: 'alpha', name: 'Alpha Runner', libraryList: 'ai-slope' },
+            { folder: 'gamma', name: 'Gamma Grid', libraryList: 'ai-slope' }
+        ];
+        const GameSelector = loadSelector();
+        const selector = new GameSelector();
+
+        await selector.init();
+
+        expect(Array.from(document.querySelectorAll('.library-section-title')).map(node => node.textContent)).toEqual([
+            'Polished',
+            'AI Slope'
+        ]);
+        expect(Array.from(document.querySelectorAll('[data-library-section="polished"] [data-game-id]'))
+            .map(node => node.dataset.gameId)).toEqual(['beta']);
+        expect(Array.from(document.querySelectorAll('[data-library-section="ai-slope"] [data-game-id]'))
+            .map(node => node.dataset.gameId)).toEqual(['alpha', 'gamma']);
+    });
+
+    test('defaults unassigned games to the first configured section and warns', async () => {
+        window.GAMEHUB_LIBRARY_SECTIONS = [
+            { id: 'polished', label: 'Polished' },
+            { id: 'ai-slope', label: 'AI Slope' }
+        ];
+        window.GAMEHUB_GAMES = [{ folder: 'lonely', name: 'Lonely Game' }];
+        const GameSelector = loadSelector();
+        const selector = new GameSelector();
+
+        await selector.init();
+
+        expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('missing libraryList'));
+        expect(document.querySelector('[data-game-id="lonely"]').closest('.library-section').dataset.librarySection).toBe('polished');
     });
 
     test('applies saved order and ignores stale ids', async () => {

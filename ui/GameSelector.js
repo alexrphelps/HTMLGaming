@@ -9,6 +9,11 @@ const GameHubSafeStorage = (typeof window !== 'undefined' && window.SafeStorage)
     ? window.SafeStorage
     : (typeof require === 'function' ? require('../utils/SafeStorage') : null);
 
+const GAMEHUB_DEFAULT_LIBRARY_SECTIONS = [
+    { id: 'polished', label: 'Polished' },
+    { id: 'ai-slope', label: 'AI Slope' }
+];
+
 class GameHubIframeGame {
     constructor(folder, metadata = {}) {
         this.folder = folder;
@@ -85,6 +90,7 @@ class GameSelector {
     constructor() {
         this.games = new Map();
         this.filteredGames = [];
+        this.filteredGamesBySection = [];
         this.currentFilter = 'all';
         this.currentSort = 'original';
         this.searchTerm = '';
@@ -97,6 +103,9 @@ class GameSelector {
         this.userRatings = {};
         this.favoriteGames = {};
         this.recentlyPlayed = {};
+        this.librarySections = [];
+        this.librarySectionLookup = new Map();
+        this.defaultLibrarySectionId = GAMEHUB_DEFAULT_LIBRARY_SECTIONS[0].id;
 
         this.gamesGrid = null;
         this.searchInput = null;
@@ -120,6 +129,7 @@ class GameSelector {
         this.resetOrderButton = document.getElementById('games-reset-order');
 
         this.setupEventListeners();
+        this.loadLibrarySections();
         this.loadGames();
         this.updateGamesList();
 
@@ -191,6 +201,162 @@ class GameSelector {
         this.listenerCleanups.clear();
     }
 
+    loadLibrarySections() {
+        this.librarySections = this.getConfiguredLibrarySections();
+        this.librarySectionLookup = new Map(this.librarySections.map(section => [section.id, section]));
+        this.defaultLibrarySectionId = this.librarySections[0]?.id || GAMEHUB_DEFAULT_LIBRARY_SECTIONS[0].id;
+    }
+
+    getConfiguredLibrarySections() {
+        const rawSections = Array.isArray(window.GAMEHUB_LIBRARY_SECTIONS)
+            ? window.GAMEHUB_LIBRARY_SECTIONS
+            : [];
+        if (rawSections.length === 0) {
+            return GAMEHUB_DEFAULT_LIBRARY_SECTIONS.map(section => ({ ...section, description: '' }));
+        }
+
+        const sections = [];
+        const seenIds = new Set();
+
+        rawSections.forEach((section, index) => {
+            if (!section || typeof section !== 'object') {
+                console.warn('Game library section config must be an object', section);
+                return;
+            }
+
+            const idSource = section.id || section.label || section.name || GAMEHUB_DEFAULT_LIBRARY_SECTIONS[index]?.id;
+            const id = this.normalizeLibrarySectionId(idSource);
+            const label = GameHubGameMetadata.normalizeText(
+                section.label || section.name,
+                GAMEHUB_DEFAULT_LIBRARY_SECTIONS[index]?.label || id
+            );
+
+            if (seenIds.has(id)) {
+                console.warn(`Duplicate game library section id "${id}" in GAMEHUB_LIBRARY_SECTIONS`, section);
+                return;
+            }
+
+            seenIds.add(id);
+            sections.push({
+                id,
+                label,
+                description: GameHubGameMetadata.normalizeText(section.description, '')
+            });
+        });
+
+        GAMEHUB_DEFAULT_LIBRARY_SECTIONS.forEach(section => {
+            if (!sections.some(entry => entry.id === section.id)) {
+                console.warn(`Missing required game library section "${section.label}" in GAMEHUB_LIBRARY_SECTIONS; using default.`);
+                sections.push({ ...section, description: '' });
+            }
+        });
+
+        return sections.slice(0, 2);
+    }
+
+    normalizeLibrarySectionId(value) {
+        return GameHubGameMetadata.generateGameId(value || '');
+    }
+
+    resolveLibrarySectionId(value) {
+        const rawValue = typeof value === 'string' ? value.trim() : '';
+        if (!rawValue) {
+            return this.defaultLibrarySectionId;
+        }
+
+        const normalized = this.normalizeLibrarySectionId(rawValue);
+        if (this.librarySectionLookup.has(normalized)) {
+            return normalized;
+        }
+
+        const byLabel = this.librarySections.find(section =>
+            String(section.label).trim().toLowerCase() === rawValue.toLowerCase()
+        );
+
+        return byLabel ? byLabel.id : this.defaultLibrarySectionId;
+    }
+
+    getLibrarySectionLabel(sectionId) {
+        return this.librarySectionLookup.get(sectionId)?.label || sectionId;
+    }
+
+    getGameLibrarySectionId(game) {
+        return this.librarySectionLookup.has(game.libraryList) ? game.libraryList : this.defaultLibrarySectionId;
+    }
+
+    getGamesByLibrarySection() {
+        const grouped = new Map(this.librarySections.map(section => [section.id, []]));
+
+        Array.from(this.games.values())
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .forEach(game => {
+                const sectionId = this.getGameLibrarySectionId(game);
+                if (!grouped.has(sectionId)) {
+                    grouped.set(sectionId, []);
+                }
+                grouped.get(sectionId).push(game);
+            });
+
+        return grouped;
+    }
+
+    getSearchableText(game) {
+        return [
+            game.metadata.name,
+            game.metadata.description,
+            game.metadata.tags.join(' '),
+            game.metadata.author
+        ].join(' ').toLowerCase();
+    }
+
+    compareGames(a, b) {
+        const favoriteDiff = Number(this.isFavorite(b.id)) - Number(this.isFavorite(a.id));
+        if (favoriteDiff !== 0) return favoriteDiff;
+
+        switch (this.currentSort) {
+            case 'name':
+                return a.metadata.name.localeCompare(b.metadata.name);
+            case 'category':
+                return a.metadata.category.localeCompare(b.metadata.category);
+            case 'difficulty': {
+                const difficultyOrder = { Easy: 1, Medium: 2, Hard: 3 };
+                return (difficultyOrder[a.metadata.difficulty] || 99) - (difficultyOrder[b.metadata.difficulty] || 99);
+            }
+            case 'playtime':
+                return (a.metadata.estimatedPlayTime || 0) - (b.metadata.estimatedPlayTime || 0);
+            case 'rating': {
+                const ratingDiff = this.getEffectiveRating(b) - this.getEffectiveRating(a);
+                return ratingDiff || a.metadata.name.localeCompare(b.metadata.name);
+            }
+            case 'recent': {
+                const recentDiff = this.getRecentTimestamp(b.id) - this.getRecentTimestamp(a.id);
+                return recentDiff || a.metadata.name.localeCompare(b.metadata.name);
+            }
+            case 'original':
+            default:
+                return (a.order || 0) - (b.order || 0);
+        }
+    }
+
+    filterSectionGames(games) {
+        let filtered = Array.from(games);
+
+        if (this.currentFilter === '__favorites') {
+            filtered = filtered.filter(game => this.isFavorite(game.id));
+        } else if (this.currentFilter !== 'all') {
+            filtered = filtered.filter(game =>
+                game.metadata.category.toLowerCase() === this.currentFilter.toLowerCase()
+            );
+        }
+
+        if (this.searchTerm) {
+            filtered = filtered.filter(game => this.getSearchableText(game).includes(this.searchTerm));
+        }
+
+        filtered.sort((a, b) => this.compareGames(a, b));
+        return filtered;
+    }
+
     loadGames() {
         const configs = this.getConfiguredGames();
         const seenIds = new Set();
@@ -231,13 +397,13 @@ class GameSelector {
 
     getFallbackGameConfigs() {
         return [
-            { folder: 'snake', name: 'Snake!', category: 'Arcade', difficulty: 'Easy', icon: 'S' },
-            { folder: 'miniinvaders', name: 'Mini Invaders', category: 'Arcade', difficulty: 'Medium', icon: 'MI' },
-            { folder: 'Cellvive', name: 'Cellvive', category: 'Action', difficulty: 'Easy', icon: 'CV' },
-            { folder: 'cosmicdrifter', name: 'Cosmic Drifter', category: 'Exploration', difficulty: 'Medium', icon: 'CD' },
-            { folder: 'stickperson', name: 'Stickman Platformer', category: 'Platformer', difficulty: 'Easy', icon: 'SP' },
-            { folder: 'blockdodge', name: 'Block Dodge', category: 'Arcade', difficulty: 'Easy', icon: 'BD' },
-            { folder: 'gloomvault-extraction', name: 'Gloomvault Extraction', category: 'Action RPG', difficulty: 'Hard', icon: 'GE' }
+            { folder: 'snake', name: 'Snake!', category: 'Arcade', difficulty: 'Easy', icon: 'S', libraryList: 'ai-slope' },
+            { folder: 'miniinvaders', name: 'Mini Invaders', category: 'Arcade', difficulty: 'Medium', icon: 'MI', libraryList: 'ai-slope' },
+            { folder: 'Cellvive', name: 'Cellvive', category: 'Action', difficulty: 'Easy', icon: 'CV', libraryList: 'polished' },
+            { folder: 'cosmicdrifter', name: 'Cosmic Drifter', category: 'Exploration', difficulty: 'Medium', icon: 'CD', libraryList: 'polished' },
+            { folder: 'stickperson', name: 'Stickman Platformer', category: 'Platformer', difficulty: 'Easy', icon: 'SP', libraryList: 'ai-slope' },
+            { folder: 'blockdodge', name: 'Block Dodge', category: 'Arcade', difficulty: 'Easy', icon: 'BD', libraryList: 'ai-slope' },
+            { folder: 'gloomvault-extraction', name: 'Gloomvault Extraction', category: 'Action RPG', difficulty: 'Hard', icon: 'GE', libraryList: 'polished' }
         ];
     }
 
@@ -245,13 +411,31 @@ class GameSelector {
         const folder = String(config.folder);
         const metadata = GameHubGameMetadata.normalize(config);
         const gameClass = this.createIframeGameClass(folder, metadata);
+        const rawLibraryList = typeof config.libraryList === 'string' ? config.libraryList.trim() : '';
+        const libraryList = this.resolveLibrarySectionId(rawLibraryList);
+
+        if (!rawLibraryList) {
+            console.warn(`Game config "${folder}" is missing libraryList; defaulting to "${this.getLibrarySectionLabel(this.defaultLibrarySectionId)}".`);
+        } else {
+            const normalizedLibraryList = this.normalizeLibrarySectionId(rawLibraryList);
+            const matchedById = this.librarySectionLookup.has(normalizedLibraryList);
+            const matchedByLabel = this.librarySections.some(section =>
+                String(section.label).trim().toLowerCase() === rawLibraryList.toLowerCase()
+            );
+
+            if (!matchedById && !matchedByLabel) {
+                console.warn(`Game config "${folder}" has unknown libraryList "${rawLibraryList}"; defaulting to "${this.getLibrarySectionLabel(this.defaultLibrarySectionId)}".`);
+            }
+        }
 
         return {
             folder,
             name: metadata.name,
             gameClass,
             metadata,
-            order
+            order,
+            configOrder: order,
+            libraryList
         };
     }
 
@@ -282,7 +466,8 @@ class GameSelector {
         const game = {
             ...gameModule,
             id: GameHubGameMetadata.generateGameId(gameModule.folder || gameModule.name),
-            order: Number.isFinite(gameModule.order) ? gameModule.order : this.games.size
+            order: Number.isFinite(gameModule.order) ? gameModule.order : this.games.size,
+            libraryList: this.resolveLibrarySectionId(gameModule.libraryList)
         };
 
         this.games.set(game.id, game);
@@ -473,68 +658,34 @@ class GameSelector {
     }
 
     resetGameOrder() {
-        Array.from(this.games.values()).forEach((game, index) => {
-            game.order = index;
+        let nextOrder = 0;
+
+        this.librarySections.forEach(section => {
+            const sectionGames = Array.from(this.games.values())
+                .filter(game => this.getGameLibrarySectionId(game) === section.id)
+                .sort((a, b) => (a.configOrder ?? a.order ?? 0) - (b.configOrder ?? b.order ?? 0));
+
+            sectionGames.forEach(game => {
+                game.order = nextOrder++;
+            });
         });
+
         this.saveGameOrder();
         this.updateGamesList();
         this.showMessage('Game order reset', 'success');
     }
 
     filterGames() {
-        let filtered = Array.from(this.games.values());
-
-        if (this.currentFilter === '__favorites') {
-            filtered = filtered.filter(game => this.isFavorite(game.id));
-        } else if (this.currentFilter !== 'all') {
-            filtered = filtered.filter(game =>
-                game.metadata.category.toLowerCase() === this.currentFilter.toLowerCase()
-            );
-        }
-
-        if (this.searchTerm) {
-            filtered = filtered.filter(game => {
-                const searchableText = [
-                    game.metadata.name,
-                    game.metadata.description,
-                    game.metadata.tags.join(' '),
-                    game.metadata.author
-                ].join(' ').toLowerCase();
-
-                return searchableText.includes(this.searchTerm);
-            });
-        }
-
-        filtered.sort((a, b) => {
-            const favoriteDiff = Number(this.isFavorite(b.id)) - Number(this.isFavorite(a.id));
-            if (favoriteDiff !== 0) return favoriteDiff;
-
-            switch (this.currentSort) {
-                case 'name':
-                    return a.metadata.name.localeCompare(b.metadata.name);
-                case 'category':
-                    return a.metadata.category.localeCompare(b.metadata.category);
-                case 'difficulty': {
-                    const difficultyOrder = { Easy: 1, Medium: 2, Hard: 3 };
-                    return (difficultyOrder[a.metadata.difficulty] || 99) - (difficultyOrder[b.metadata.difficulty] || 99);
-                }
-                case 'playtime':
-                    return (a.metadata.estimatedPlayTime || 0) - (b.metadata.estimatedPlayTime || 0);
-                case 'rating': {
-                    const ratingDiff = this.getEffectiveRating(b) - this.getEffectiveRating(a);
-                    return ratingDiff || a.metadata.name.localeCompare(b.metadata.name);
-                }
-                case 'recent': {
-                    const recentDiff = this.getRecentTimestamp(b.id) - this.getRecentTimestamp(a.id);
-                    return recentDiff || a.metadata.name.localeCompare(b.metadata.name);
-                }
-                case 'original':
-                default:
-                    return (a.order || 0) - (b.order || 0);
-            }
+        const groupedGames = this.getGamesByLibrarySection();
+        this.filteredGamesBySection = this.librarySections.map(section => {
+            const games = groupedGames.get(section.id) || [];
+            return {
+                section,
+                games: this.filterSectionGames(games)
+            };
         });
 
-        return filtered;
+        return this.filteredGamesBySection.flatMap(group => group.games);
     }
 
     updateGamesList() {
@@ -560,14 +711,45 @@ class GameSelector {
 
         while (this.gamesGrid.firstChild) this.gamesGrid.removeChild(this.gamesGrid.firstChild);
 
-        if (this.filteredGames.length === 0) {
+        const visibleSections = this.filteredGamesBySection.filter(group => group.games.length > 0);
+
+        if (visibleSections.length === 0) {
             this.renderNoGamesMessage();
             return;
         }
 
-        this.filteredGames.forEach(game => {
-            const gameCard = this.createGameCard(game);
-            this.gamesGrid.appendChild(gameCard);
+        visibleSections.forEach(group => {
+            const section = document.createElement('section');
+            section.className = 'library-section';
+            section.dataset.librarySection = group.section.id;
+
+            const header = document.createElement('div');
+            header.className = 'library-section-header';
+
+            const title = document.createElement('h3');
+            title.className = 'library-section-title';
+            title.textContent = group.section.label;
+
+            header.appendChild(title);
+
+            if (group.section.description) {
+                const description = document.createElement('p');
+                description.className = 'library-section-description';
+                description.textContent = group.section.description;
+                header.appendChild(description);
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'games-grid-section';
+
+            group.games.forEach(game => {
+                const gameCard = this.createGameCard(game);
+                grid.appendChild(gameCard);
+            });
+
+            section.appendChild(header);
+            section.appendChild(grid);
+            this.gamesGrid.appendChild(section);
         });
     }
 
@@ -810,35 +992,69 @@ class GameSelector {
     }
 
     moveGame(gameId, direction) {
-        const orderedGames = Array.from(this.games.values()).sort((a, b) => a.order - b.order);
-        const index = orderedGames.findIndex(game => game.id === gameId);
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        const sectionId = this.getGameLibrarySectionId(game);
+        const orderedGames = Array.from(this.games.values())
+            .filter(entry => this.getGameLibrarySectionId(entry) === sectionId)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+        const index = orderedGames.findIndex(entry => entry.id === gameId);
         const targetIndex = index + direction;
 
         if (index < 0 || targetIndex < 0 || targetIndex >= orderedGames.length) return;
 
-        const [game] = orderedGames.splice(index, 1);
-        orderedGames.splice(targetIndex, 0, game);
-        this.persistNewOrder(orderedGames);
+        const [movedGame] = orderedGames.splice(index, 1);
+        orderedGames.splice(targetIndex, 0, movedGame);
+        this.persistNewOrder(sectionId, orderedGames);
     }
 
     reorderVisibleGames(sourceId, targetId) {
         if (!sourceId || sourceId === targetId) return;
 
-        const orderedGames = Array.from(this.games.values()).sort((a, b) => a.order - b.order);
+        const sourceGame = this.games.get(sourceId);
+        const targetGame = this.games.get(targetId);
+        if (!sourceGame || !targetGame) return;
+
+        const sourceSectionId = this.getGameLibrarySectionId(sourceGame);
+        const targetSectionId = this.getGameLibrarySectionId(targetGame);
+        if (sourceSectionId !== targetSectionId) return;
+
+        const orderedGames = Array.from(this.games.values())
+            .filter(game => this.getGameLibrarySectionId(game) === sourceSectionId)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
         const sourceIndex = orderedGames.findIndex(game => game.id === sourceId);
         const targetIndex = orderedGames.findIndex(game => game.id === targetId);
 
         if (sourceIndex < 0 || targetIndex < 0) return;
 
-        const [sourceGame] = orderedGames.splice(sourceIndex, 1);
-        orderedGames.splice(targetIndex, 0, sourceGame);
-        this.persistNewOrder(orderedGames);
+        const [movedGame] = orderedGames.splice(sourceIndex, 1);
+        orderedGames.splice(targetIndex, 0, movedGame);
+        this.persistNewOrder(sourceSectionId, orderedGames);
     }
 
-    persistNewOrder(orderedGames) {
-        orderedGames.forEach((game, index) => {
-            game.order = index;
+    persistNewOrder(sectionId, orderedSectionGames) {
+        const orderedBySection = new Map();
+
+        this.librarySections.forEach(section => {
+            if (section.id === sectionId) {
+                orderedBySection.set(section.id, orderedSectionGames);
+                return;
+            }
+
+            orderedBySection.set(section.id, Array.from(this.games.values())
+                .filter(game => this.getGameLibrarySectionId(game) === section.id)
+                .sort((a, b) => (a.order || 0) - (b.order || 0)));
         });
+
+        let nextOrder = 0;
+        this.librarySections.forEach(section => {
+            const games = orderedBySection.get(section.id) || [];
+            games.forEach(game => {
+                game.order = nextOrder++;
+            });
+        });
+
         this.saveGameOrder();
         this.updateGamesList();
     }

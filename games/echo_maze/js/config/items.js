@@ -14,14 +14,13 @@
       classicRollMax: 0.15,
       tutorial: {
         title: 'Lantern Core',
-        text: 'Lantern Cores restore fuel and push your light farther into the maze.',
-        stat: 'Watch Fuel and Vision. Fuel drains over time, and more fuel means you can see farther.'
+        text: 'Lantern Cores push your light farther into the maze.',
+        stat: 'Watch Vision. Lantern Cores brighten your view, but that extra reach slowly fades back to your minimum.'
       },
-      hudUnlocks: ['fuel', 'vision'],
+      hudUnlocks: ['vision'],
       effect: {
         type: 'lantern',
-        visionBonus: 0.62,
-        restoreFuel: 36,
+        visionBonus: 0.72,
         reveal: 'visionPlus1',
         floatingText: 'Vision Up'
       }
@@ -42,7 +41,8 @@
       hudUnlocks: ['speed'],
       effect: {
         type: 'boots',
-        speed: 10
+        speed: 10,
+        overflowFloatingText: 'Speed Boost'
       }
     },
     phase: {
@@ -74,8 +74,8 @@
       classicRollMax: 0.58,
       tutorial: {
         title: 'Compass Lens',
-        text: 'Compass Lenses sharpen distant signals and make objectives easier to track.',
-        stat: 'Watch Compass. More compass strength improves how confidently the HUD and minimap point you forward.'
+        text: 'Compass Lenses tune your Anchor signal. Each lens scans one more chunk for the next Anchor.',
+        stat: 'Watch Compass. More lenses expand the Anchor detection radius; eight lenses can read any Anchor direction.'
       },
       hudUnlocks: ['compass', 'coords'],
       effect: {
@@ -100,13 +100,13 @@
       hudUnlocks: ['revealed', 'depth'],
       effect: {
         type: 'map',
-        revealRadius: 11,
-        pathBurstRadius: 8
+        revealRadius: 7,
+        pathBurstRadius: 4
       }
     },
     shield: {
       label: 'Ward Shield',
-      color: '#ffffff',
+      color: '#d8f3ff',
       score: 120,
       message: 'Protection increased.',
       tutorialOrder: 5,
@@ -115,7 +115,7 @@
       tutorial: {
         title: 'Ward Shield',
         text: 'Ward Shields add protection before your health is harmed.',
-        stat: 'Watch Integrity. Shields absorb danger before health becomes the problem.'
+        stat: 'Watch the bottom vitals dock. Shields absorb danger before health becomes the problem.'
       },
       hudUnlocks: ['integrity'],
       effect: {
@@ -125,27 +125,27 @@
     },
     battery: {
       label: 'Echo Battery',
-      color: '#ff88c8',
+      color: '#6ee7d8',
       score: 125,
-      message: 'The Warden slows.',
+      message: 'Health and lantern stability restored.',
       tutorialOrder: 6,
       renderType: 'battery',
       classicRollMax: 0.95,
       tutorial: {
         title: 'Echo Battery',
-        text: 'Echo Batteries stabilize your lantern and push back the maze danger.',
-        stat: 'Watch Battery. Batteries help you recover now, and they will slow the maze danger once Classic mode begins.'
+        text: 'Echo Batteries repair one missing health, stabilize your lantern, and push back maze danger.',
+        stat: 'Watch Battery. Batteries help you recover health and slow the maze danger once Classic mode begins.'
       },
       hudUnlocks: ['battery'],
       effect: {
         type: 'battery',
         battery: 1,
-        restoreFuel: 22
+        heal: 1
       }
     },
     relic: {
       label: 'Lost Relic',
-      color: '#ffb86c',
+      color: '#c8f26a',
       score: 260,
       message: 'A rare relic hums with score.',
       tutorialOrder: 7,

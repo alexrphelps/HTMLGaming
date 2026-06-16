@@ -5,10 +5,10 @@
 
   em.UPGRADE_DATA = {
     compassObjective: {
-      label: 'Compass Objective',
+      label: 'Compass Clarity',
       color: '#7df9ff',
       max: 3,
-      text: 'Sharper Anchor tracking and objective range.'
+      text: 'Detected Anchor arrows glow steadier, without increasing scan range.'
     },
     compassItems: {
       label: 'Compass Items',
@@ -18,7 +18,7 @@
     },
     compassDanger: {
       label: 'Compass Danger',
-      color: '#ff6f9d',
+      color: '#ff4e38',
       max: 3,
       text: 'Earlier danger warnings and enemy pings.'
     },
@@ -29,16 +29,16 @@
       text: 'The minimap reaches deeper into known maze.'
     },
     lanternReservoir: {
-      label: 'Lantern Reservoir',
+      label: 'Lantern Glass',
       color: '#ffe27a',
       max: 3,
-      text: 'More maximum fuel and an immediate refill.'
+      text: 'Raises your minimum Vision so the maze can never dim quite as far.'
     },
     lanternFocus: {
-      label: 'Lantern Focus',
+      label: 'Lantern Wick',
       color: '#8ef7a2',
       max: 3,
-      text: 'Fuel drains slower and low-fuel sight stays safer.'
+      text: 'Raises your minimum Vision with a steadier, greener flame.'
     },
     phaseDuration: {
       label: 'Phase Duration',
@@ -48,7 +48,7 @@
     },
     phaseCooldown: {
       label: 'Phase Cooldown',
-      color: '#ff88c8',
+      color: '#9ad4ff',
       max: 3,
       text: 'Phase recovers faster between activations.'
     }
@@ -109,74 +109,78 @@
     else if (id === 'compassDanger') p.compassDanger = level;
     else if (id === 'compassRange') p.minimapBonus = level;
     else if (id === 'lanternReservoir') {
-      p.maxFuel += em.CONFIG.upgrades.lanternReservoirFuelMax;
-      restoreFuel(state, em.CONFIG.upgrades.lanternReservoirRestore, false);
+      p.minVision = Math.min(em.CONFIG.maxVision, p.minVision + em.CONFIG.upgrades.lanternReservoirMinVision);
     } else if (id === 'lanternFocus') {
-      restoreFuel(state, em.CONFIG.upgrades.lanternFocusRestore, false);
+      p.minVision = Math.min(em.CONFIG.maxVision, p.minVision + em.CONFIG.upgrades.lanternFocusMinVision);
     } else if (id === 'phaseDuration') {
       p.phaseDuration = em.CONFIG.phaseDuration + level * em.CONFIG.upgrades.phaseDurationPerLevel;
     } else if (id === 'phaseCooldown') {
       p.phaseCooldown = Math.max(em.CONFIG.upgrades.phaseCooldownFloor, em.CONFIG.phaseCooldown - level * em.CONFIG.upgrades.phaseCooldownPerLevel);
     }
 
-    updateLanternVision(state);
+    updateLanternVision(state, 0);
     em.addFloatingText(state, data.label, p.x, p.y - 26, data.color);
     em.addParticles(state, p.x, p.y, data.color, 22);
     em.addMessage(state, data.label + ' upgraded to level ' + level + '.');
   }
 
-  function restoreFuel(state, amount, showText = true) {
-    const p = state.player;
-    const before = p.fuel;
-    p.fuel = Math.min(p.maxFuel, p.fuel + amount);
-    updateLanternVision(state);
-
-    if (showText && p.fuel > before) {
-      em.addFloatingText(state, 'Fuel +' + Math.round(p.fuel - before), p.x, p.y - 20, '#ffe27a');
-    }
-  }
-
-  function updateLanternFuel(state, dt) {
+  function updateVisionAndDanger(state, dt) {
     const p = state.player;
     p.phaseCooldownTimer = Math.max(0, p.phaseCooldownTimer - dt);
 
     if (state.gameMode === 'beginner' && (!em.hasDiscoveredTutorial || !em.hasDiscoveredTutorial(state, 'lantern'))) {
       state.danger = 0;
-      updateLanternVision(state);
+      updateLanternVision(state, 0);
       return;
     }
 
-    const focus = state.upgrades.lanternFocus || 0;
-    const drain = em.CONFIG.fuelDrainPerSecond * (1 - focus * em.CONFIG.upgrades.lanternFocusDrainReduction);
-    p.fuel = Math.max(0, p.fuel - drain * dt);
+    updateLanternVision(state, dt);
 
     if (state.gameMode === 'beginner') {
       state.danger = 0;
-      updateLanternVision(state);
       return;
     }
 
-    if (p.fuel <= p.maxFuel * em.CONFIG.danger.lowFuelRatio) {
-      raiseDanger(state, dt * (em.CONFIG.danger.lowFuelBaseRise + state.anchors * em.CONFIG.danger.lowFuelAnchorRise));
-    } else {
-      state.danger = Math.max(0, state.danger - dt * em.CONFIG.danger.recoveryRate);
-    }
-
-    updateLanternVision(state);
+    updateDistanceDanger(state, dt);
   }
 
-  function updateLanternVision(state) {
+  function updateLanternVision(state, dt = 0) {
     const p = state.player;
-    const focus = state.upgrades?.lanternFocus || 0;
-    const minVision = em.CONFIG.baseVision + focus * em.CONFIG.upgrades.lanternFocusMinVision;
+    p.minVision = Math.max(em.CONFIG.baseVision, Math.min(em.CONFIG.maxVision, p.minVision || em.CONFIG.baseVision));
+    p.visionBonus = Math.max(0, p.visionBonus || 0);
+
+    if (dt > 0) {
+      p.visionBonus = Math.max(0, p.visionBonus - em.CONFIG.visionDecayPerSecond * dt);
+    }
+
+    const maxBonus = Math.max(0, Math.min(em.CONFIG.playerCaps.maxVisionBonus, em.CONFIG.maxVision - p.minVision));
+    p.visionBonus = Math.min(maxBonus, p.visionBonus);
+
     if (state.gameMode === 'beginner' && (!em.hasDiscoveredTutorial || !em.hasDiscoveredTutorial(state, 'lantern'))) {
-      p.vision = Math.min(em.CONFIG.maxVision, minVision + p.visionBonus);
+      p.vision = p.minVision;
       return;
     }
 
-    const fuelRatio = p.maxFuel > 0 ? p.fuel / p.maxFuel : 0;
-    const fuelBonus = em.CONFIG.fuelVisionBonus * Math.sqrt(Math.max(0, fuelRatio));
-    p.vision = Math.min(em.CONFIG.maxVision, minVision + p.visionBonus + fuelBonus);
+    p.vision = Math.max(p.minVision, Math.min(em.CONFIG.maxVision, p.minVision + p.visionBonus));
+  }
+
+  function updateDistanceDanger(state, dt) {
+    const pc = em.cellOfWorld(state.player.x, state.player.y);
+    const distanceTarget = em.dangerForCell ? em.dangerForCell(pc.x, pc.y) : 0;
+    const target = state.gameMode === 'noExit' ? noExitDangerTarget(state, distanceTarget) : distanceTarget;
+
+    if (state.danger < target) {
+      state.danger = Math.min(target, state.danger + em.CONFIG.danger.depthRiseRate * dt);
+    } else if (state.gameMode === 'noExit') {
+      state.danger = Math.max(state.danger, target);
+    } else {
+      state.danger = Math.max(target, state.danger - em.CONFIG.danger.recoveryRate * dt);
+    }
+  }
+
+  function noExitDangerTarget(state, distanceTarget) {
+    const timePressure = Math.max(0, state.time - em.CONFIG.noExit.voidDelay) * em.CONFIG.noExit.dangerRisePerSecond;
+    return Math.min(1, Math.max(distanceTarget, timePressure));
   }
 
   function raiseDanger(state, amount) {
@@ -186,8 +190,8 @@
 
     if (afterBucket > beforeBucket || (state.danger > em.CONFIG.danger.warningThreshold && state.dangerPulse <= 0)) {
       state.dangerPulse = em.CONFIG.danger.warningPulse;
-      em.addFloatingText(state, 'Danger Rising', state.player.x, state.player.y - 34, '#ff6f9d');
-      em.addMessage(state, 'Danger rising. Find fuel or stabilize an Anchor.');
+      em.addFloatingText(state, 'Danger Rising', state.player.x, state.player.y - 34, '#ff4e38');
+      em.addMessage(state, 'Danger rising. The outer maze is waking.');
       if (typeof em.addDangerSmoke === 'function') em.addDangerSmoke(state, state.player.x, state.player.y, 10);
     }
   }
@@ -203,9 +207,10 @@
     beginUpgradeSelection,
     chooseUpgrade,
     applyUpgrade,
-    restoreFuel,
-    updateLanternFuel,
+    updateVisionAndDanger,
     updateLanternVision,
+    updateDistanceDanger,
+    noExitDangerTarget,
     raiseDanger,
     tickDangerWarning
   });

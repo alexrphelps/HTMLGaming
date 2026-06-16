@@ -46,7 +46,7 @@
         size: 8 + em.rand01(state, i, Math.floor(x), 9504) * 10,
         ttl: 1.1 + em.rand01(state, i, Math.floor(y), 9505) * 0.75,
         maxTtl: 1.85,
-        color: '#ff6f9d'
+        color: '#ff4e38'
       });
     }
   }

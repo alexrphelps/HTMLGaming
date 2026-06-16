@@ -48,6 +48,10 @@
         <strong>Classic Run</strong>
         <span>Stabilize five Echo Anchors, escape through the Exit Portal, and keep ahead of the Warden.</span>
       </button>
+      <button class="menu-choice active" data-menu-mode="noExit" type="button">
+        <strong>No Exit</strong>
+        <span>Survive an endless Anchor chain as the void expands from the start.</span>
+      </button>
     `;
   }
 
@@ -78,7 +82,7 @@
   function resultStatsMarkup(finalStats) {
     return `
       <div>Score<strong>${em.escapeHtml(finalStats.score)}</strong></div>
-      <div>Anchors<strong>${em.escapeHtml(finalStats.anchors)}/${em.CONFIG.runAnchors}</strong></div>
+      <div>Anchors<strong>${em.escapeHtml(finalStats.gameMode === 'noExit' ? finalStats.anchors : finalStats.anchors + '/' + em.CONFIG.runAnchors)}</strong></div>
       <div>Items<strong>${em.escapeHtml(finalStats.items)}</strong></div>
       <div>Revealed<strong>${em.escapeHtml(finalStats.revealed)}</strong></div>
       <div>Time<strong>${em.escapeHtml(em.formatTime(finalStats.time))}</strong></div>

@@ -8,8 +8,19 @@
  *
  * Optional fields: name, description, category, difficulty, icon, tags,
  * version, author, estimatedPlayTime, aiEffortRating, defaultRating,
- * input, rendering, saveSupport.
+ * input, rendering, saveSupport, libraryList.
  */
+window.GAMEHUB_LIBRARY_SECTIONS = [
+    {
+        id: 'polished',
+        label: 'Polished'
+    },
+    {
+        id: 'ai-slope',
+        label: 'AI Slope'
+    }
+];
+
 window.GAMEHUB_GAMES = [
     {
         folder: 'snake',
@@ -20,9 +31,10 @@ window.GAMEHUB_GAMES = [
         icon: 'S',
         tags: ['2d', 'classic', 'arcade', 'ai'],
         author: 'GameHub Team',
-        estimatedPlayTime: 5,
+        estimatedPlayTime: 10,
         aiEffortRating: 4,
-        defaultRating: 3
+        defaultRating: 3,
+        libraryList: 'polished'
     },
     {
         folder: 'miniinvaders',
@@ -33,9 +45,10 @@ window.GAMEHUB_GAMES = [
         icon: 'MI',
         tags: ['2d', 'arcade', 'shooter', 'retro', 'classic'],
         author: 'GameHub Team',
-        estimatedPlayTime: 10,
+        estimatedPlayTime: 15,
         aiEffortRating: 4,
-        defaultRating: 5
+        defaultRating: 5,
+        libraryList: 'polished'
     },
     {
         folder: 'Cellvive',
@@ -48,7 +61,8 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub Team',
         estimatedPlayTime: 10,
         aiEffortRating: 3,
-        defaultRating: 2
+        defaultRating: 2,
+        libraryList: 'ai-slope'
     },
     {
         folder: 'cosmicdrifter',
@@ -59,9 +73,10 @@ window.GAMEHUB_GAMES = [
         icon: 'CD',
         tags: ['2d', 'exploration', 'survival', 'space', 'open-world', 'upgrades'],
         author: 'GameHub Team',
-        estimatedPlayTime: 20,
+        estimatedPlayTime: 10,
         aiEffortRating: 2,
-        defaultRating: 2
+        defaultRating: 1,
+        libraryList: 'ai-slope'
     },
     {
         folder: 'stickperson',
@@ -74,7 +89,8 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub Team',
         estimatedPlayTime: 10,
         aiEffortRating: 2,
-        defaultRating: 1
+        defaultRating: 1,
+        libraryList: 'ai-slope'
     },
     {
         folder: 'elemental-stickman',
@@ -86,11 +102,12 @@ window.GAMEHUB_GAMES = [
         tags: ['2d', 'platformer', 'fighting', 'elemental', 'gesture', 'canvas'],
         author: 'GameHub',
         estimatedPlayTime: 15,
-        aiEffortRating: 5,
-        defaultRating: 4,
+        aiEffortRating: 3,
+        defaultRating: 1,
         input: 'Keyboard + Mouse',
         rendering: 'Canvas',
-        saveSupport: 'None'
+        saveSupport: 'None',
+        libraryList: 'ai-slope'
     },
     {
         folder: 'stormline-runner',
@@ -101,12 +118,13 @@ window.GAMEHUB_GAMES = [
         icon: 'SR',
         tags: ['2d', 'platformer', 'arcade', 'endless', 'procedural', 'talents'],
         author: 'GameHub',
-        estimatedPlayTime: 12,
-        aiEffortRating: 4,
-        defaultRating: 4,
+        estimatedPlayTime: 10,
+        aiEffortRating: 3,
+        defaultRating: 1,
         input: 'Keyboard',
         rendering: 'Canvas',
-        saveSupport: 'None'
+        saveSupport: 'None',
+        libraryList: 'ai-slope'
     },
     {
         folder: 'echo_maze',
@@ -122,7 +140,8 @@ window.GAMEHUB_GAMES = [
         defaultRating: 4,
         input: 'Keyboard',
         rendering: 'Canvas',
-        saveSupport: 'None'
+        saveSupport: 'None',
+        libraryList: 'polished'
     },
     {
         folder: 'lanternfall',
@@ -135,10 +154,11 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub',
         estimatedPlayTime: 12,
         aiEffortRating: 3,
-        defaultRating: 3,
+        defaultRating: 2,
         input: 'Keyboard + Touch',
         rendering: 'Canvas',
-        saveSupport: 'None'
+        saveSupport: 'None',
+        libraryList: 'ai-slope'
     },
     {
         folder: 'blockdodge',
@@ -151,7 +171,8 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub Team',
         estimatedPlayTime: 5,
         aiEffortRating: 1,
-        defaultRating: 2
+        defaultRating: 3,
+        libraryList: 'polished'
     },
     {
         folder: 'color_stream_reactor',
@@ -164,7 +185,8 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub',
         estimatedPlayTime: 5,
         aiEffortRating: 2,
-        defaultRating: 3
+        defaultRating: 4,
+        libraryList: 'polished'
     },
     {
         folder: 'gloomvault-extraction',
@@ -175,9 +197,10 @@ window.GAMEHUB_GAMES = [
         icon: 'GE',
         tags: ['roguelite', 'action', 'loot', 'dungeon-crawler'],
         author: 'GameHub',
-        estimatedPlayTime: 15,
+        estimatedPlayTime: 35,
         aiEffortRating: 5,
-        defaultRating: 4
+        defaultRating: 4,
+        libraryList: 'polished'
     },
     {
         folder: 'never-south',
@@ -189,11 +212,12 @@ window.GAMEHUB_GAMES = [
         tags: ['2d', 'roguelite', 'deckbuilder', 'puzzle', 'grid', 'canvas'],
         author: 'GameHub',
         estimatedPlayTime: 15,
-        aiEffortRating: 5,
-        defaultRating: 4,
+        aiEffortRating: 3,
+        defaultRating: 2,
         input: 'Keyboard + Mouse',
         rendering: 'Canvas',
-        saveSupport: 'None'
+        saveSupport: 'None',
+        libraryList: 'ai-slope'
     },
     {
         folder: 'contraband-skies',
@@ -204,12 +228,13 @@ window.GAMEHUB_GAMES = [
         icon: 'CS',
         tags: ['2d', 'strategy', 'roguelite', 'campaign', 'routes', 'canvas'],
         author: 'GameHub',
-        estimatedPlayTime: 55,
-        aiEffortRating: 5,
-        defaultRating: 4,
+        estimatedPlayTime: 15,
+        aiEffortRating: 3,
+        defaultRating: 1,
         input: 'Mouse + Keyboard',
         rendering: 'Canvas',
-        saveSupport: 'Campaign'
+        saveSupport: 'Campaign',
+        libraryList: 'ai-slope'
     },
     {
         folder: 'void_signal',
@@ -217,7 +242,8 @@ window.GAMEHUB_GAMES = [
         category: 'Other',
         icon: 'VS',
         aiEffortRating: 1,
-        defaultRating: 2
+        defaultRating: 1,
+        libraryList: 'ai-slope'
     },
     {
         folder: 'reaction_diffusion_simulator',
@@ -230,7 +256,8 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub',
         estimatedPlayTime: 15,
         aiEffortRating: 3,
-        defaultRating: 3
+        defaultRating: 3,
+        libraryList: 'polished'
     },
     {
         folder: 'the_gravity_locksmith',
@@ -243,7 +270,8 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub Team',
         estimatedPlayTime: 15,
         aiEffortRating: 4,
-        defaultRating: 4
+        defaultRating: 4,
+        libraryList: 'polished'
     },
     {
         folder: 'castlefall_valley',
@@ -256,10 +284,11 @@ window.GAMEHUB_GAMES = [
         author: 'GameHub',
         estimatedPlayTime: 15,
         aiEffortRating: 3,
-        defaultRating: 3,
+        defaultRating: 1,
         input: 'Keyboard + Touch',
         rendering: 'Canvas',
-        saveSupport: 'None'
+        saveSupport: 'None',
+        libraryList: 'ai-slope'
     },
     {
         folder: 'skySquirrel',
@@ -271,10 +300,11 @@ window.GAMEHUB_GAMES = [
         tags: ['3d', 'wingsuit', 'flight', 'island', 'webgl', 'procedural'],
         author: 'GameHub',
         estimatedPlayTime: 12,
-        aiEffortRating: 5,
-        defaultRating: 4,
+        aiEffortRating: 4,
+        defaultRating: 1,
         input: 'Keyboard + Mouse',
         rendering: 'Native WebGL',
-        saveSupport: 'None'
+        saveSupport: 'None',
+        libraryList: 'ai-slope'
     }
 ];

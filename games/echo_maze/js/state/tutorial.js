@@ -42,6 +42,7 @@
       };
 
       state.objective = anchor;
+      state.objectives = [anchor];
       state.tutorialTarget = { kind: 'anchor', x: anchor.x, y: anchor.y };
       state.tutorialTargets = [state.tutorialTarget];
       em.revealAround(state, anchor.x, anchor.y, 3.5);
@@ -51,6 +52,7 @@
 
     const cells = findTutorialCells(state, 4 + (state.tutorialStep % 3), em.CONFIG.tutorial.targetCount);
     state.objective = null;
+    state.objectives = [];
     state.tutorialTargets = cells.map(cell => ({ kind: 'item', itemType: type, x: cell.x, y: cell.y }));
     state.tutorialTarget = state.tutorialTargets[0];
     for (const cell of cells) em.revealAround(state, cell.x, cell.y, 3);
@@ -130,7 +132,7 @@
     state.tutorialStep++;
     state.previousMode = 'playing';
     state.mode = 'tutorialInfo';
-    if (em.updateLanternVision) em.updateLanternVision(state);
+    if (em.updateLanternVision) em.updateLanternVision(state, 0);
   }
 
   function completeBeginnerAnchor(state, obj) {
@@ -139,7 +141,10 @@
     state.tier = 2;
     state.phaseUsesSinceAnchor = 0;
     state.anchorClock = 0;
+    state.lastAnchorRadius = em.objectiveRadius ? em.objectiveRadius(obj.x, obj.y) : Math.hypot(obj.x, obj.y);
+    state.anchorMinRadius = state.lastAnchorRadius;
     state.objective = null;
+    state.objectives = [];
     state.pendingAnchorAdvance = {
       complete: false,
       objName: obj.name,
@@ -153,7 +158,6 @@
     state.previousMode = 'playing';
     state.mode = 'tutorialInfo';
     state.screenPulse = 0.7;
-    em.restoreFuel(state, 45);
     em.revealAround(state, obj.x, obj.y, 8);
     em.addMessage(state, 'Training Anchor stabilized. Classic mode begins after this lesson.');
   }

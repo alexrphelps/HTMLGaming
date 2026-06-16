@@ -124,29 +124,52 @@
     return model;
   }
 
+  function anchorProgressText(state, next = false) {
+    const count = state.anchors + (next ? 1 : 0);
+    return state.gameMode === 'noExit' ? String(count) : count + '/' + em.CONFIG.runAnchors;
+  }
+
   function goalHtmlForState(state) {
     const p = state.player;
-    const obj = state.objective || state.exitPortal;
+    const obj = state.exitPortal || (em.closestActiveAnchor ? em.closestActiveAnchor(state) : state.objective);
     const objWorldX = obj ? obj.x * em.CONFIG.cell + em.CONFIG.cell / 2 : p.x;
     const objWorldY = obj ? obj.y * em.CONFIG.cell + em.CONFIG.cell / 2 : p.y;
     const objDist = obj ? Math.round(Math.hypot(objWorldX - p.x, objWorldY - p.y) / em.CONFIG.cell) : 0;
 
     if (state.mode === 'victory') return '<strong>Victory:</strong> The Anchor chain is stable.';
     if (state.mode === 'gameover') return '<strong>Run lost:</strong> Return to the main menu when you are ready.';
-    if (state.mode === 'mainMenu') return '<strong>Mode:</strong> Choose Beginner or Classic.';
+    if (state.mode === 'mainMenu') return '<strong>Mode:</strong> Choose Beginner, Classic, or No Exit.';
     if (state.mode === 'tutorialInfo') return '<strong>Lesson:</strong> Read the note, then continue.';
     if (state.gameMode === 'beginner' && state.tutorialTarget) return em.beginnerGoalText(state);
     if (state.mode === 'upgrade') return '<strong>Upgrade:</strong> Choose one Echo upgrade before the maze shifts.';
     if (state.exitPortal) return '<strong>Goal:</strong> Reach the Exit Portal | ' + objDist + ' cells away.';
     if (obj) {
+      const signal = em.anchorSignalInfo ? em.anchorSignalInfo(state, obj) : null;
+      if (signal && signal.lenses <= 0) {
+        return '<strong>Goal:</strong> Search for Compass Lenses to tune the next Anchor signal. Anchor ' +
+          anchorProgressText(state, true) +
+          '.';
+      }
+      if (signal && !signal.detectable) {
+        return '<strong>Goal:</strong> Anchor signal out of range. Compass scans ' +
+          signal.rangeChunks +
+          ' chunk' +
+          (signal.rangeChunks === 1 ? '' : 's') +
+          '. Anchor ' +
+          anchorProgressText(state, true) +
+          '.';
+      }
+      if (signal && signal.detectable) {
+        return '<strong>Goal:</strong> Anchor signal detected. Follow the compass bearing. Anchor ' +
+          anchorProgressText(state, true) +
+          '.';
+      }
       return '<strong>Goal:</strong> Stabilize ' +
         em.escapeHtml(obj.name) +
         ' | ' +
         objDist +
         ' cells away. Anchor ' +
-        (state.anchors + 1) +
-        '/' +
-        em.CONFIG.runAnchors +
+        anchorProgressText(state, true) +
         '.';
     }
     return '<strong>Goal:</strong> Signal stabilizing...';
@@ -184,7 +207,7 @@
   }
 
   function checkObjective(state, pc) {
-    const obj = state.objective;
+    const obj = objectiveAtCell(state, pc);
 
     if (obj && pc.x === obj.x && pc.y === obj.y) {
       if (state.gameMode === 'beginner' && obj.tutorialFinal && em.completeBeginnerAnchor) {
@@ -202,6 +225,16 @@
     }
   }
 
+  function objectiveAtCell(state, pc) {
+    if (!pc) return null;
+    if (state.objectives && state.objectives.length) {
+      const match = state.objectives.find(obj => obj && pc.x === obj.x && pc.y === obj.y);
+      if (match) return match;
+    }
+    const obj = state.objective;
+    return obj && pc.x === obj.x && pc.y === obj.y ? obj : null;
+  }
+
   function stabilizeAnchor(state, obj) {
     const elapsed = Math.max(1, state.time - obj.createdAt);
     const parTime = Math.max(em.CONFIG.anchorRewards.parTimeBase, obj.pathLength * em.CONFIG.anchorRewards.parTimePathScale);
@@ -212,14 +245,12 @@
 
     state.score += reward;
     state.bestAnchorBonus = Math.max(state.bestAnchorBonus, bonus);
+    state.lastAnchorRadius = Math.max(state.lastAnchorRadius || 0, obj.originRadius || (em.objectiveRadius ? em.objectiveRadius(obj.x, obj.y) : Math.hypot(obj.x, obj.y)));
     state.anchors++;
     state.tier = state.anchors + 1;
     state.phaseUsesSinceAnchor = 0;
     state.anchorClock = 0;
-    state.player.visionBonus = Math.min(em.CONFIG.playerCaps.maxVisionBonus, state.player.visionBonus + em.CONFIG.anchorRewards.visionBonus);
     state.player.phaseCharges = Math.min(em.CONFIG.playerCaps.maxPhaseCharges, state.player.phaseCharges + em.CONFIG.anchorRewards.phaseReward);
-    state.player.health = Math.min(em.CONFIG.playerCaps.maxHealth, state.player.health + (state.anchors % 2 === 0 ? 1 : 0));
-    em.restoreFuel(state, em.CONFIG.anchorRewards.fuelBase + state.anchors * em.CONFIG.anchorRewards.fuelPerAnchor);
     em.revealAround(state, obj.x, obj.y, em.CONFIG.anchorRewards.revealBase + Math.min(em.CONFIG.anchorRewards.revealAnchorCap, state.anchors) + state.player.minimapBonus);
 
     const wx = obj.x * em.CONFIG.cell + em.CONFIG.cell / 2;
@@ -231,17 +262,20 @@
     em.addFloatingText(state, '+' + reward, wx, wy - 8, '#ffe27a');
     state.screenPulse = 0.7;
     state.screenShake = Math.max(state.screenShake, 5);
-    state.danger = Math.max(0, state.danger - em.CONFIG.danger.anchorReduction);
+    if (state.gameMode !== 'noExit') {
+      state.danger = Math.max(0, state.danger - em.CONFIG.danger.anchorReduction);
+    }
 
     if (state.anchors === 1) em.spawnWarden(state);
     if (em.spawnAmbientEnemies) em.spawnAmbientEnemies(state);
 
     state.pendingAnchorAdvance = {
-      complete: state.anchors >= em.CONFIG.runAnchors,
+      complete: state.gameMode !== 'noExit' && state.anchors >= em.CONFIG.runAnchors,
       objName: obj.name,
       reward
     };
     state.objective = null;
+    state.objectives = [];
 
     if (em.beginUpgradeSelection && em.availableUpgradeIds(state).length > 0) {
       em.beginUpgradeSelection(state);
@@ -259,7 +293,13 @@
       em.revealAround(state, state.exitPortal.x, state.exitPortal.y, 4.5 + state.player.compass);
       em.addMessage(state, 'Anchor chain stabilized. The Exit Portal has opened.');
     } else {
-      state.objective = em.makeObjective(state, state.tier);
+      if (em.makeObjectives) {
+        state.objectives = em.makeObjectives(state, state.tier);
+        state.objective = em.closestActiveAnchor ? em.closestActiveAnchor(state) : (state.objectives[0] || null);
+      } else {
+        state.objective = em.makeObjective(state, state.tier);
+        state.objectives = state.objective ? [state.objective] : [];
+      }
       em.addMessage(state, pending.objName + ' stabilized. +' + pending.reward + '. Next signal is farther out.');
     }
 
@@ -270,6 +310,7 @@
     OVERLAY_MODES,
     ACTION_SLOTS,
     isOverlayMode,
+    anchorProgressText,
     runModeAction,
     runOverlayChoice,
     handleKeyboardAction,
@@ -280,6 +321,7 @@
     returnToMainMenu,
     endRun,
     checkObjective,
+    objectiveAtCell,
     stabilizeAnchor,
     completeAnchorAdvance
   });

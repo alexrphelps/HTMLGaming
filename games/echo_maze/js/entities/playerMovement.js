@@ -3,14 +3,14 @@
 
   const em = window.EchoMaze || {};
 
-  function usePhase(state) {
+  function activatePhase(state, options = {}) {
     if (!state || state.mode !== 'playing') return;
-    if (state.gameMode === 'beginner' && (!em.hasDiscoveredTutorial || !em.hasDiscoveredTutorial(state, 'phase'))) return;
+    if (!options.force && state.gameMode === 'beginner' && (!em.hasDiscoveredTutorial || !em.hasDiscoveredTutorial(state, 'phase'))) return;
 
     const p = state.player;
-    if (p.phaseTimer > 0) return;
+    if (!options.force && p.phaseTimer > 0) return;
 
-    if (p.phaseCooldownTimer > 0) {
+    if (!options.force && p.phaseCooldownTimer > 0) {
       em.addMessage(state, 'Phase recharging: ' + p.phaseCooldownTimer.toFixed(1) + 's.');
       return;
     }
@@ -27,7 +27,12 @@
     state.screenPulse = Math.max(state.screenPulse, 0.42);
     em.addPulse(state, p.x, p.y, em.CONFIG.cell * 2.8, 0.45, '#bd8cff');
     em.addParticles(state, p.x, p.y, '#bd8cff', 18);
-    em.addMessage(state, 'Phase active. Walls release you for ' + p.phaseDuration.toFixed(1) + ' seconds.');
+    em.addMessage(state, (options.force ? 'Phase Crystal overload. ' : '') + 'Phase active. Walls release you for ' + p.phaseDuration.toFixed(1) + ' seconds.');
+    return true;
+  }
+
+  function usePhase(state) {
+    return activatePhase(state);
   }
 
   function movePlayer(state, dx, dy) {
@@ -160,11 +165,80 @@
     return distanceToPlayerCell(state, x, y) <= state.player.vision;
   }
 
+  function effectivePlayerSpeed(state) {
+    const p = state.player;
+    const boost = p.speedBoostTimer > 0 ? (p.speedBoostMultiplier || em.CONFIG.upgrades.quickstepOverflowMultiplier) : 1;
+    return Math.min(em.CONFIG.playerCaps.maxBoostedSpeed, p.speed * boost);
+  }
+
+  function compassLensCount(state) {
+    const maxCompass = em.CONFIG.playerCaps.maxCompass;
+    return Math.max(0, Math.min(maxCompass, state.player.compass || 0));
+  }
+
+  function anchorSignalInfo(state, obj = null) {
+    const target = obj || (em.closestActiveAnchor ? em.closestActiveAnchor(state) : state.objective);
+    const lenses = compassLensCount(state);
+    const maxCompass = em.CONFIG.playerCaps.maxCompass;
+    const info = {
+      detectable: false,
+      lenses,
+      maxCompass,
+      rangeChunks: lenses,
+      distanceCells: Infinity,
+      distanceChunks: Infinity,
+      always: lenses >= maxCompass
+    };
+
+    if (!target || target.type !== 'anchor') return info;
+
+    const pc = em.cellOfWorld(state.player.x, state.player.y);
+    info.distanceCells = Math.hypot(target.x - pc.x, target.y - pc.y);
+    info.distanceChunks = info.distanceCells / em.CONFIG.chunk;
+    info.detectable = lenses > 0 && (info.always || info.distanceChunks <= lenses);
+    return info;
+  }
+
+  function isAnchorSignalDetected(state, obj = null) {
+    return anchorSignalInfo(state, obj).detectable;
+  }
+
   function isKnownSignal(state, obj) {
     if (!obj) return false;
+    if (obj.type === 'anchor') return state.revealed.has(em.keyOf(obj.x, obj.y));
+
     const pc = em.cellOfWorld(state.player.x, state.player.y);
     const dist = Math.hypot(obj.x - pc.x, obj.y - pc.y);
     return state.revealed.has(em.keyOf(obj.x, obj.y)) || dist <= 7 + state.player.compass * 5 + state.player.compassObjective * 8;
+  }
+
+  function updateNoExitVoid(state) {
+    if (!state || state.gameMode !== 'noExit' || !state.void) return false;
+
+    const cfg = em.CONFIG.noExit;
+    if (state.time < cfg.voidDelay) return false;
+
+    if (!state.void.active) {
+      state.void.active = true;
+      state.void.startedAt = state.time;
+      em.addMessage(state, 'The void opens at the start. Run outward.');
+    }
+
+    const elapsed = Math.max(0, state.time - cfg.voidDelay);
+    const acceleration = cfg.voidGrowthPerMinute / 60;
+    const radiusCells = cfg.voidStartRadiusCells +
+      cfg.voidBaseGrowthCellsPerSecond * elapsed +
+      0.5 * acceleration * elapsed * elapsed;
+
+    state.void.radius = radiusCells * em.CONFIG.cell;
+    if (em.ensureNoExitAnchors) em.ensureNoExitAnchors(state);
+
+    if (Math.hypot(state.player.x - state.void.x, state.player.y - state.void.y) <= state.void.radius) {
+      em.endRun(state, 'gameover', 'you were lost to the void');
+      return true;
+    }
+
+    return false;
   }
 
   function update(state, dt, input = { x: 0, y: 0 }) {
@@ -178,9 +252,14 @@
     state.anchorClock += dt;
     em.tickMessages(state, dt);
     em.tickDangerWarning(state, dt);
-    em.updateLanternFuel(state, dt);
+    em.updateVisionAndDanger(state, dt);
 
-    em.movePlayer(state, input.x * state.player.speed * dt, input.y * state.player.speed * dt);
+    state.player.speedBoostTimer = Math.max(0, (state.player.speedBoostTimer || 0) - dt);
+    if (state.player.speedBoostTimer <= 0) state.player.speedBoostMultiplier = 1;
+
+    const speed = em.effectivePlayerSpeed(state);
+    em.movePlayer(state, input.x * speed * dt, input.y * speed * dt);
+    if (em.updateNoExitVoid(state)) return;
 
     if (state.player.phaseTimer > 0) {
       state.player.phaseTimer = Math.max(0, state.player.phaseTimer - dt);
@@ -214,14 +293,20 @@
   }
 
   Object.assign(em, {
+    activatePhase,
     usePhase,
     movePlayer,
+    effectivePlayerSpeed,
     moveAxis,
     addCrumb,
     updateCamera,
     distanceToPlayerCell,
     isLitCell,
+    compassLensCount,
+    anchorSignalInfo,
+    isAnchorSignalDetected,
     isKnownSignal,
+    updateNoExitVoid,
     update
   });
 

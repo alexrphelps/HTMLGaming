@@ -13,18 +13,20 @@ Multiple overlapping input systems caused duplicate event listeners, duplicate i
 
 Files of Interest
 -----------------
-- SmartInputManager.js - recommended input system (contains stuck-key detection and cleanup)
-- InputManager.js - legacy alternative kept for reference or fallback
+- SmartInputManager.js - canonical input system (contains stuck-key detection and cleanup)
+- MiniInvadersConfig.js / MiniInvadersState.js / MiniInvadersTalents.js / MiniInvadersFormations.js / MiniInvadersCombat.js - extracted testable browser-script modules
+- GameLoop.js - canonical loop owner used by index.html to prevent stacked requestAnimationFrame loops
+- MemoryManager.js - loaded by index.html for managed audio/resource cleanup
+- InputManager.js - legacy reference only; do not load it or add new tests against it
 - STUCK_KEY_FIX.js.disabled - disabled to avoid duplication
- - ImprovedMiniInvaders.html was removed; main index.html now uses SmartInputManager
+- ImprovedMiniInvaders.html was removed; main index.html now uses SmartInputManager
 - CODE_IMPROVEMENTS_GUIDE.md - documentation updated
 
 Recommended Next Steps
 ----------------------
 1. Manual QA: open ImprovedMiniInvaders.html in a browser and validate controls and stuck-key behavior.
-2. Consolidate other game pages to use SmartInputManager where appropriate.
-3. Add unit tests for SmartInputManager stuck-key detection logic (simulate keydown/up and time progression). Use JSDOM or similar for DOM events.
-4. Consider merging InputManager/SmartInputManager into a single implementation file with a feature flag for compatibility modes.
+2. Continue extracting high-churn game rules from index.html into small browser-script modules.
+3. Keep tests pointed at the modules loaded by index.html; legacy InputManager coverage should not be expanded.
 
 Notes
 -----
