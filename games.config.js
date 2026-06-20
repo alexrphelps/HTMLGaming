@@ -246,6 +246,23 @@ window.GAMEHUB_GAMES = [
         libraryList: 'ai-slope'
     },
     {
+        folder: 'depthbound',
+        name: 'Depthbound',
+        description: 'Dive through an infinite gun dungeon of procedural rooms, talent branches, relics, curses, shops, elites, and boss gates.',
+        category: 'Action RPG',
+        difficulty: 'Hard',
+        icon: 'DB',
+        tags: ['2d', 'action', 'roguelite', 'dungeon-crawler', 'shooter', 'procedural'],
+        author: 'GameHub',
+        estimatedPlayTime: 20,
+        aiEffortRating: 3,
+        defaultRating: 2,
+        input: 'Keyboard + Mouse',
+        rendering: 'Canvas',
+        saveSupport: 'High Score',
+        libraryList: 'ai-slope'
+    },
+    {
         folder: 'reaction_diffusion_simulator',
         name: 'Reaction Diffusion Simulator',
         description: 'A hands-on Gray-Scott reaction-diffusion lab for painting, tuning, and studying generative patterns.',
@@ -305,6 +322,23 @@ window.GAMEHUB_GAMES = [
         input: 'Keyboard + Mouse',
         rendering: 'Native WebGL',
         saveSupport: 'None',
+        libraryList: 'ai-slope'
+    },
+    {
+        folder: 'lumenkin',
+        name: 'Lumenkin',
+        description: 'Raise one bioluminescent creature, guide its lineage through five changing genres, and carry a living civilization through the Great Bloom.',
+        category: 'Simulation',
+        difficulty: 'Medium',
+        icon: 'LK',
+        tags: ['2d', 'pixel-art', 'simulation', 'evolution', 'colony', 'strategy', 'campaign'],
+        author: 'GameHub',
+        estimatedPlayTime: 210,
+        aiEffortRating: 5,
+        defaultRating: 1,
+        input: 'Keyboard + Mouse',
+        rendering: 'Canvas',
+        saveSupport: 'Campaign',
         libraryList: 'ai-slope'
     }
 ];

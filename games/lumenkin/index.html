@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumenkin</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main id="lumenkin-shell" class="game-shell">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">LUMENKIN // LINEAGE <span id="lineageNumber">01</span></span>
+        <h1 id="chapterTitle">First Glow</h1>
+      </div>
+      <div class="top-actions">
+        <button id="historyButton" type="button">History</button>
+        <button id="saveButton" type="button">Save</button>
+        <button id="settingsButton" type="button">Settings</button>
+      </div>
+    </header>
+
+    <section class="play-layout">
+      <div id="viewport" class="viewport">
+        <canvas id="game" width="384" height="216" aria-label="Lumenkin game world"></canvas>
+        <div id="canvasHint" class="canvas-hint" aria-live="polite"></div>
+      </div>
+
+      <aside class="hud-panel" aria-live="polite">
+        <section class="objective-card">
+          <span class="eyebrow">CURRENT METAMORPHOSIS</span>
+          <strong id="objectiveTitle">Awaken the founder</strong>
+          <p id="objectiveText">Choose an egg to begin the lineage.</p>
+          <div class="progress-track"><div id="objectiveFill" class="progress-fill"></div></div>
+          <span id="objectiveValue" class="progress-value">0 / 100</span>
+        </section>
+        <section id="stats" class="stats-grid"></section>
+        <section>
+          <span class="eyebrow">COMMANDS</span>
+          <div id="actionBar" class="action-bar"></div>
+        </section>
+        <section class="event-card">
+          <span class="eyebrow">LIVING RECORD</span>
+          <ol id="eventLog" class="event-log"></ol>
+        </section>
+      </aside>
+    </section>
+
+    <footer class="statusbar">
+      <span id="controlHint">WASD move · Mouse interact</span>
+      <span id="saveStatus">World frozen while closed</span>
+    </footer>
+
+    <section id="startOverlay" class="overlay">
+      <div class="modal start-modal">
+        <span class="eyebrow">A FIVE-CHAPTER LIVING HISTORY</span>
+        <h2>Lumenkin</h2>
+        <p>Raise one glow. Guide its family. Grow a city. Shape a world. Carry life through the Great Bloom.</p>
+        <div id="eggChoices" class="egg-choices"></div>
+        <div class="start-actions">
+          <button id="continueButton" class="hidden" type="button">Continue Autosave</button>
+          <button id="newLineageButton" type="button">Choose This Egg</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="metamorphosisOverlay" class="overlay hidden">
+      <div class="modal">
+        <span class="eyebrow">PERMANENT METAMORPHOSIS</span>
+        <h2 id="metamorphosisTitle">The lineage remembers</h2>
+        <p id="metamorphosisText"></p>
+        <div id="legacyChoices" class="legacy-choices"></div>
+      </div>
+    </section>
+
+    <section id="panelOverlay" class="overlay hidden">
+      <div class="modal panel-modal">
+        <button id="closePanelButton" class="close-button" type="button" aria-label="Close panel">×</button>
+        <h2 id="panelTitle">Lineage</h2>
+        <div id="panelContent"></div>
+      </div>
+    </section>
+
+    <section id="endingOverlay" class="overlay hidden">
+      <div class="modal start-modal">
+        <span class="eyebrow">A NEW FIRST GLOW</span>
+        <h2>The lineage has taken root</h2>
+        <p id="endingSummary"></p>
+        <button id="continueEndlessButton" type="button">Continue the New World</button>
+        <button id="newGameButton" type="button">Begin Another Lineage</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/rng.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/lineage.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/chapters.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

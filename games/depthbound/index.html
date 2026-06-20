@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Depthbound: Infinite Gun Dungeon</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="startPanel">
+    <div class="modal">
+      <h1>Depthbound: Infinite Gun Dungeon</h1>
+      <p>
+        A fast rogue-like dungeon shooter with an infinite procedural room grid, deep run-based talent branches,
+        relics, curses, shops, shrines, forge rooms, rest rooms, treasure rooms, elites, bosses, secrets, and escalating chaos.
+      </p>
+      <div class="row start-controls">
+        <span class="pill">WASD move</span>
+        <span class="pill">Mouse aim + shoot</span>
+        <span class="pill">Space dash</span>
+        <span class="pill">F interact / enter gate</span>
+        <span class="pill">Q / E abilities</span>
+        <span class="pill">Tab codex</span>
+      </div>
+      <div class="twoCol">
+        <div>
+          <h3>Run Identity</h3>
+          <p>Every run gives the dungeon a personality: Hungry, Clockwork, Fungal, Mirror, Royal, or Abyssal. It changes enemy behavior, room rewards, hazards, and upgrade bias.</p>
+        </div>
+        <div>
+          <h3>Build Depth</h3>
+          <p>Level up into Gunner, Phantom, Occult, Engineer, and Alchemist branches. Stack passives, unlock actives, collect relics, and gamble with curses.</p>
+        </div>
+      </div>
+      <button class="mainBtn primary-action" id="startBtn">Start Run</button>
+      <p class="small">Tip: Click Start Run, then press F on the glowing Dungeon Gate or walk through any door to enter combat. Combat rooms lock until cleared.</p>
+    </div>
+  </div>
+
+  <div id="choicePanel">
+    <div class="modal">
+      <h2 id="choiceTitle">Choose</h2>
+      <p id="choiceText"></p>
+      <div class="choices" id="choices"></div>
+    </div>
+  </div>
+
+  <div id="codexPanel">
+    <div class="modal">
+      <h2>Run Codex</h2>
+      <div id="codexContent"></div>
+      <button class="mainBtn panel-action" id="closeCodex">Close</button>
+    </div>
+  </div>
+
+  <div id="gameOverPanel">
+    <div class="modal">
+      <h1>Depth Claimed You</h1>
+      <div id="gameOverStats"></div>
+      <button class="mainBtn primary-action" id="restartBtn">Restart Run</button>
+    </div>
+  </div>
+
+  <div class="hint">
+    WASD move &middot; Hold Mouse shoot &middot; Space dash &middot; F interact &middot; Q/E abilities &middot; Tab codex<br>
+    Click Start Run, then press F on the Dungeon Gate or walk through doors. Clear rooms, collect talents/relics, and survive boss gates.
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/progression.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/systems.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
