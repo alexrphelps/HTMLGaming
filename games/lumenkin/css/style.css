@@ -64,8 +64,18 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 .stat { min-width: 0; border-left: 3px solid var(--glow-2); padding-left: 6px; }
 .stat span { display: block; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .stat strong { display: block; margin-top: 2px; font-size: 13px; }
-.action-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 7px; }
-.action-bar button:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.action-bar { display: grid; gap: 7px; margin-top: 7px; }
+.plan-slot { display: grid; gap: 3px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
+.plan-slot select { width: 100%; min-height: 34px; border: 2px solid var(--line); border-radius: 0; background: #0d1029; color: var(--text); padding: 6px; font: 700 11px "Courier New", monospace; }
+.plan-slot select:focus-visible { border-color: var(--glow); outline: none; }
+.plan-target { min-height: 11px; color: var(--warm); font-size: 9px; }
+.plan-forecast, .plan-outcome { margin: 8px 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.plan-outcome { min-height: 28px; border-left: 3px solid var(--glow-2); padding-left: 7px; }
+.resolve-button { width: 100%; border-color: var(--warm); background: #302154; color: var(--warm); }
+.planning-card #transitionButton { width: 100%; margin-top: 6px; border-color: var(--glow); }
+.legacy-record { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
+.legacy-record dt { color: var(--glow); font-weight: 700; }
+.legacy-record dd { margin: 0; color: var(--muted); }
 .event-log { max-height: 120px; margin: 7px 0 0; padding-left: 19px; color: var(--muted); font-size: 10px; }
 .event-log li { margin-bottom: 4px; }
 .statusbar { min-height: 32px; color: var(--muted); font-size: 10px; }

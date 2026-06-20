@@ -35,9 +35,13 @@
           <span id="objectiveValue" class="progress-value">0 / 100</span>
         </section>
         <section id="stats" class="stats-grid"></section>
-        <section>
-          <span class="eyebrow">COMMANDS</span>
+        <section class="planning-card">
+          <span class="eyebrow">PLANNING // <span id="cycleLabel">Cycle 1</span></span>
           <div id="actionBar" class="action-bar"></div>
+          <p id="planForecast" class="plan-forecast">Fill all three commitments to preview the cycle.</p>
+          <button id="resolveCycleButton" class="resolve-button" type="button" disabled>Resolve Cycle</button>
+          <button id="transitionButton" class="hidden" type="button">Begin Metamorphosis</button>
+          <p id="planOutcome" class="plan-outcome" aria-live="polite"></p>
         </section>
         <section class="event-card">
           <span class="eyebrow">LIVING RECORD</span>
@@ -47,15 +51,15 @@
     </section>
 
     <footer class="statusbar">
-      <span id="controlHint">WASD move · Mouse interact</span>
-      <span id="saveStatus">World frozen while closed</span>
+      <span id="controlHint">Mouse plan and inspect - Tab and Enter navigate</span>
+      <span id="saveStatus">Simulation waits for Resolve Cycle</span>
     </footer>
 
     <section id="startOverlay" class="overlay">
       <div class="modal start-modal">
         <span class="eyebrow">A FIVE-CHAPTER LIVING HISTORY</span>
         <h2>Lumenkin</h2>
-        <p>Raise one glow. Guide its family. Grow a city. Shape a world. Carry life through the Great Bloom.</p>
+        <p>Plan one glow's days. Coordinate its family. Grow a city. Shape a world. Carry life through the Great Bloom.</p>
         <div id="eggChoices" class="egg-choices"></div>
         <div class="start-actions">
           <button id="continueButton" class="hidden" type="button">Continue Autosave</button>

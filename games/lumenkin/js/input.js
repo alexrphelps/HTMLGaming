@@ -11,7 +11,7 @@
         const key = event.key.toLowerCase();
         if (!this.keys.has(key)) this.pressed.add(key);
         this.keys.add(key);
-        if (['w', 'a', 's', 'd', 'q', 'e', ' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) event.preventDefault();
+        if (['enter', 'escape', ' '].includes(key)) event.preventDefault();
       };
       this.onKeyUp = event => this.keys.delete(event.key.toLowerCase());
       this.onPointer = event => {
@@ -29,7 +29,6 @@
     }
     held(key) { return this.keys.has(key); }
     consume(key) { const value = this.pressed.has(key); this.pressed.delete(key); return value; }
-    axis() { return { x: (this.held('d') || this.held('arrowright') ? 1 : 0) - (this.held('a') || this.held('arrowleft') ? 1 : 0), y: (this.held('s') || this.held('arrowdown') ? 1 : 0) - (this.held('w') || this.held('arrowup') ? 1 : 0) }; }
     endFrame() { this.pressed.clear(); this.pointer.clicked = false; }
     destroy() {
       window.removeEventListener('keydown', this.onKeyDown);

@@ -5,17 +5,17 @@
     width: 384,
     height: 216,
     fixedStep: 1 / 60,
-    schemaVersion: 1,
+    schemaVersion: 2,
     savePrefix: 'lumenkin.save.',
     autosaveKey: 'lumenkin.autosave',
     maxCreatures: 120,
     atlasPath: 'assets/lumenkin-atlas.png',
     chapters: [
-      { id: 'first-glow', title: 'First Glow', subtitle: 'Raise one light', target: 100 },
-      { id: 'brood', title: 'The Brood', subtitle: 'Survive as a family', target: 160 },
-      { id: 'city', title: 'Living City', subtitle: 'Grow a breathing settlement', target: 240 },
-      { id: 'worldroot', title: 'Worldroot', subtitle: 'Shape an island civilization', target: 300 },
-      { id: 'bloom', title: 'The Great Bloom', subtitle: 'Carry life to a new world', target: 360 }
+      { id: 'first-glow', title: 'First Glow', subtitle: 'Plan one creature\'s days', target: 4 },
+      { id: 'brood', title: 'The Brood', subtitle: 'Coordinate a living family', target: 4 },
+      { id: 'city', title: 'Living City', subtitle: 'Shape an autonomous settlement', target: 5 },
+      { id: 'worldroot', title: 'Worldroot', subtitle: 'Set a world council\'s mandates', target: 5 },
+      { id: 'bloom', title: 'The Great Bloom', subtitle: 'Plan each living-ark voyage', target: 4 }
     ],
     palettes: {
       cyan: ['#10132c', '#292557', '#6555a2', '#55f6e8', '#d8fff7'],

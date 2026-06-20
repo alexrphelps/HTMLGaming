@@ -36,18 +36,31 @@
 
   function eligibleBranches(chapterIndex, campaign) {
     const choices = BRANCHES[chapterIndex] || [];
-    return choices.map(choice => Object.assign({}, choice, {
-      earned: true,
-      reason: campaign.chapterState.actions && campaign.chapterState.actions[choice.id] ? 'Unlocked by repeated behavior' : 'Unlocked by completing the chapter'
-    }));
+    const actions = campaign.chapterState.actions || {};
+    const requirements = [
+      { 'grasping-limbs': ['forage', 'explore'], shellback: ['nest', 'rest', 'groom'], sailfin: ['play', 'social', 'explore'] },
+      { hearthbound: ['nurture', 'reinforce'], pathfinders: ['scout', 'forage'], wardens: ['guard'] },
+      { 'symbiotic-gardens': ['garden', 'nourish'], 'memory-chorus': ['remember', 'tower', 'festival'], 'brood-foundries': ['expand', 'nursery', 'reserve'] },
+      { 'restoration-pact': ['restore', 'research'], 'storm-harvest': ['harvest', 'prepare'], 'wild-covenant': ['diplomacy', 'settle'] }
+    ][chapterIndex] || {};
+    const scored = choices.map(choice => {
+      const score = (requirements[choice.id] || []).reduce((sum, id) => sum + (actions[id] || 0), 0);
+      return Object.assign({}, choice, { score, earned: score >= 2, reason: `${score} resolved commitments shaped this path` });
+    });
+    const earned = scored.filter(choice => choice.earned);
+    if (earned.length) return earned;
+    const highest = Math.max(0, ...scored.map(choice => choice.score));
+    return scored.filter(choice => choice.score === highest).slice(0, 1);
   }
 
   function commitBranch(campaign, branchId) {
-    const stage = BRANCHES[campaign.chapter];
-    const branch = stage && stage.find(item => item.id === branchId);
-    if (!branch) throw new Error('Branch is not eligible for this metamorphosis');
-    const conflicting = BRANCHES.flat().filter(item => item.group === branch.group).map(item => item.id);
+    const stage = BRANCHES[campaign.chapter] || [];
+    const requested = stage.find(item => item.id === branchId);
+    if (!requested) throw new Error('Branch is not eligible for this metamorphosis');
+    const conflicting = BRANCHES.flat().filter(item => item.group === requested.group).map(item => item.id);
     if (campaign.lineage.branches.some(id => conflicting.includes(id))) throw new Error('This permanent branch group is already committed');
+    const branch = eligibleBranches(campaign.chapter, campaign).find(item => item.id === branchId);
+    if (!branch) throw new Error('Branch is not eligible for this metamorphosis');
     campaign.lineage.branches.push(branch.id);
     campaign.lineage.portraits.push({ chapter: campaign.chapter, branch: branch.id, title: ns.CONFIG.chapters[campaign.chapter].title, appearance: Object.assign({}, campaign.lineage.founder), at: campaign.elapsed });
     campaign.history.unshift(`${branch.name} became part of every life that followed.`);
@@ -61,6 +74,7 @@
       seed,
       chapter: 0,
       elapsed: 0,
+      totalCycles: 0,
       score: 0,
       status: 'playing',
       lineage: {

@@ -12,11 +12,11 @@ This document describes both the player experience and the implementation contra
 
 One lineage moves through five chapters:
 
-1. **First Glow** - side-view creature care and exploration.
-2. **The Brood** - top-down family squad survival.
+1. **First Glow** - side-view care-schedule management.
+2. **The Brood** - top-down family expedition management.
 3. **Living City** - three-quarter colony management.
 4. **Worldroot** - island-scale ecological statecraft.
-5. **The Great Bloom** - side-view living-ark migration.
+5. **The Great Bloom** - living-ark voyage planning.
 
 Players choose when to trigger each metamorphosis after completing the chapter objective. A metamorphosis commits a permanent branch to the lineage and retires the previous chapter's active simulation.
 
@@ -27,7 +27,7 @@ The current GameHub metadata describes Lumenkin as:
 - Input: `Keyboard + Mouse`
 - Rendering: `Canvas`
 - Save support: `Campaign`
-- Estimated campaign length: 210 minutes
+- Estimated campaign length: 75-100 minutes
 
 ## Core Design Pillars
 
@@ -54,9 +54,9 @@ Avoid branches that only add an isolated percentage bonus.
 
 Failure should emerge from understandable pressures and usually provide a recovery opportunity. Extinction remains possible, but ordinary setbacks should create stories rather than abruptly erase a healthy campaign.
 
-### Unbroken Life
+### Decision-Dense Life
 
-Normal gameplay continues in real time. Save management, settings, metamorphosis, and terminal overlays may pause. Avoid adding frequent modal interruptions to ordinary colony decisions.
+The world remains animated in real time, but gameplay time advances only when the player resolves a complete three-commitment plan. Inspection and plan editing are free. Every resolved cycle must create a meaningful outcome; never require idling for resources, cooldowns, threats, or objective progress.
 
 ### Pixel-Art Continuity
 
@@ -64,34 +64,31 @@ The camera and sprite scale change between chapters, but the founder's body fami
 
 ## Controls
 
-Controls vary by chapter.
+Every chapter is led with the mouse and remains keyboard navigable with Tab and Enter. Canvas clicks inspect or select targets; they never directly move creatures.
 
 ### First Glow
 
-- `WASD` or arrow keys: explore the habitat
-- Walk through light-motes: gather food
-- Mouse: use care and habitat actions
+- Plan morning, afternoon, and dusk care commitments
+- Resolve the day to see autonomous needs, discoveries, and relationships develop
 
 ### The Brood
 
-- `WASD` or arrow keys: possess and move the family leader
-- `Q`: toggle family rally behavior
-- Mouse: deposit food, fortify, defend, and raise offspring
+- Assign founder, adult kin, and young kin to expedition roles
+- Resolve the expedition to gather, defend, nurture, scout, or reinforce
 
 ### Living City
 
-- Mouse: inspect structures and use colony actions
-- Creatures perform routine work autonomously
+- Set one civic priority and two seasonal projects
+- Citizens perform routine work autonomously from their aptitudes and needs
 
 ### Worldroot
 
-- Mouse: select regions and perform ecological, diplomatic, settlement, and ark-preparation actions
+- Select regions, commit three council mandates, and resolve the season
 
 ### The Great Bloom
 
-- `WASD` or arrow keys: steer the living ark
-- Fly through seed-lights: gather viable life
-- Mouse: repair, cultivate stores, open storm sails, and reinforce cohesion
+- Choose a route, ark-organ duty, and crew posture for each voyage leg
+- Resolve seeded encounters while preserving hull, stores, cohesion, and the seedbank
 
 ## Technical Architecture
 
@@ -190,16 +187,20 @@ Owns chapter-specific simulation and actions. Every chapter extends `BaseChapter
 
 ```javascript
 enter()
-update(dt, input)
+update(dt)
+planModel()
+assignOrder(slotId, orderId, targetId)
+clearOrder(slotId)
+canResolve()
+resolveCycle()
 objective()
 stats()
-actions()
 ready()
 serialize()
 cleanup()
 ```
 
-Keep renderer-specific frame coordinates out of chapter state. Chapter state should represent gameplay truth.
+`update()` may advance presentation time only. All gameplay mutation belongs to `resolveCycle()`. Keep renderer-specific frame coordinates out of chapter state; chapter state should represent gameplay truth.
 
 ### `js/render.js`
 
@@ -245,12 +246,12 @@ checkpoint
 
 `lineage` contains the founder appearance, mate appearance, permanent branches, portraits, generation count, and peak population.
 
-`chapterState` belongs exclusively to the active chapter. Completed chapters are reduced to lineage history, portraits, branch choices, and other explicit legacy data.
+`chapterState` belongs exclusively to the active chapter and includes its cycle index, draft plan, stable entity IDs, deterministic encounter history, milestones, and resolved behavior counts. Completed chapters are reduced to lineage history, portraits, branch choices, and other explicit legacy data.
 
 ### Save Compatibility Rules
 
 - Increment `CONFIG.schemaVersion` when the persisted shape changes incompatibly.
-- Add a migration before releasing a schema change if old campaigns should remain playable.
+- Schema-1 real-time campaigns are extracted into safe, read-only legacy records. They are never approximated into the cycle simulation.
 - Never silently reinterpret an existing branch ID.
 - Do not persist DOM nodes, Canvas objects, image objects, functions, or event listeners.
 - Treat malformed or partially missing saves as recoverable errors.
@@ -260,12 +261,12 @@ checkpoint
 
 ### First Glow
 
-The player should form an attachment to one creature through care and direct movement. Habitat quality attracts a mate; reproduction is not a generic menu button.
+The player should form an attachment to one autonomous creature by planning its daily care. Habitat quality and resolved behavior attract a mate; reproduction is not a generic menu button.
 
 The chapter must preserve:
 
 - readable needs,
-- tactile care actions,
+- meaningful care schedules and visible autonomous reactions,
 - habitat improvement,
 - mate attraction and bonding,
 - founder appearance and temperament,
@@ -273,7 +274,7 @@ The chapter must preserve:
 
 ### The Brood
 
-The player possesses one living family member while coordinating the group. Individual health, inherited appearance, and family survival matter.
+The player assigns living family groups to expedition roles rather than possessing an individual. Individual health, inherited appearance, aptitudes, and family survival matter.
 
 Dead creatures must not move, act, attract predators, reproduce, or count toward objectives.
 
@@ -291,7 +292,7 @@ Every repeatable action requires a limiting factor such as time, capacity, regio
 
 ### The Great Bloom
 
-The game becomes a moving-city survival journey. The ark must visibly and mechanically inherit morphology, culture, civic development, alliances, and ecological history.
+The game becomes a moving-city voyage-planning journey. Each leg combines a route, ark organ, crew posture, and deterministic seeded encounter. The ark must visibly and mechanically inherit morphology, culture, civic development, alliances, and ecological history.
 
 Victory requires:
 
@@ -390,18 +391,11 @@ Browser verification should include:
 
 These are existing issues, not intended behavior. Address them before layering large new systems on top:
 
-1. Save-slot names are rendered through `innerHTML` and must be converted to safe DOM construction.
-2. Storage failures are not safely contained and can interrupt the animation loop.
-3. Dead Brood creatures remain in movement, targeting, population, and objective calculations.
-4. Evolution branches are currently all available; action history changes text but not eligibility.
-5. Only one checkpoint is stored, it is overwritten at the next transition, and checkpoint branching is not exposed in the UI.
-6. HUD command buttons are destroyed and recreated five times per second, causing focus loss and unnecessary DOM churn.
-7. Worldroot storm harvesting and Great Bloom storm sails can be spammed without adequate limits.
-8. Most inherited anatomy fields are stored but not rendered by `SpriteAssembler`.
-9. Living City uses a scalar population instead of preserving bounded individual lineage records.
-10. Later chapters do not yet carry enough founder appearance and cultural symbolism into citizens, settlements, and architecture.
-11. The interface uses a system monospace font rather than a bundled bitmap font.
-12. `AnimationPlayer` and `PixelCamera` are currently exported but unused.
+1. Only one checkpoint is stored, it is overwritten at the next transition, and checkpoint branching is not exposed in the UI.
+2. Most inherited anatomy fields are stored but not rendered by `SpriteAssembler`.
+3. Later chapters do not yet carry enough founder appearance and cultural symbolism into citizens, settlements, and architecture.
+4. The interface uses a system monospace font rather than a bundled bitmap font.
+5. `AnimationPlayer` and `PixelCamera` are currently exported but unused.
 
 When fixing these, add regression tests that fail against the old behavior.
 
