@@ -14,6 +14,7 @@
         newCareer() { ns.Save.remove(); this.useState(ns.State.createState()); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('WAYFARER ONLINE // FREE PILOT LICENSE ISSUED'); }
         continueCareer() { const state = ns.Save.load(); if (!state) return this.newCareer(); this.useState(state); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('CAREER RESTORED'); }
         useState(state) {
+            if (!('customWaypoint' in state)) state.customWaypoint = null;
             this.state = state; this.world = new ns.World.WorldService(state.worldSeed, state.consumedEntityIds); this.region = this.world.update(state.ship.x, state.ship.y);
             this.camera.x = state.ship.x; this.camera.y = state.ship.y; this.camera.zoom = 1; this.lightSpeed = ns.LightSpeed.createState(); this.bullets = []; this.enemies = []; this.effects = []; this.collisionGuards.clear(); this.impactShake = 0; this.interactionCast = null;
             const stats = ns.Progression.calculateShipStats(state); state.ship.hull = clamp(state.ship.hull, 0, stats.hull); state.ship.shield = clamp(state.ship.shield, 0, stats.shield); state.ship.energy = clamp(state.ship.energy, 0, stats.reactor);
@@ -63,6 +64,7 @@
                 if (!this.state.visitedRegions.includes(this.region.id)) this.state.visitedRegions.push(this.region.id);
                 this.notify(`ENTERING ${this.region.name.toUpperCase()}`);
             }
+            this.updateCustomWaypoint();
             this.camera.zoom = travel.zoom; this.camera.x += (this.state.ship.x - this.camera.x) * Math.min(1, dt * (ns.LightSpeed.isShifted(this) ? 12 : 5)); this.camera.y += (this.state.ship.y - this.camera.y) * Math.min(1, dt * (ns.LightSpeed.isShifted(this) ? 12 : 5));
             if (this.autosaveTimer >= 120 && this.enemies.length === 0) { this.save('AUTOSAVE COMPLETE'); this.autosaveTimer = 0; }
             this.encounterTimer -= dt;
@@ -72,6 +74,18 @@
             }
             if (this.encounterTimer <= 0) this.encounterTimer = 24 + Math.random() * 18;
             if (this.uiTimer >= .2) { this.ui.renderContext(this); this.uiTimer = 0; }
+        }
+        setCustomWaypoint(point) {
+            const bounds = ns.World.WORLD_BOUNDS;
+            this.state.customWaypoint = { x: clamp(point.x, bounds.minX, bounds.maxX), y: clamp(point.y, bounds.minY, bounds.maxY) };
+            this.save(); this.notify('CUSTOM WAYPOINT SET'); return this.state.customWaypoint;
+        }
+        clearCustomWaypoint(message) {
+            if (!this.state.customWaypoint) return false;
+            this.state.customWaypoint = null; this.save(); if (message) this.notify(message); return true;
+        }
+        updateCustomWaypoint() {
+            if (this.state.customWaypoint && distance(this.state.ship, this.state.customWaypoint) <= 220) this.clearCustomWaypoint('CUSTOM WAYPOINT REACHED');
         }
         updateShip(dt) {
             const s = this.state.ship, stats = ns.Progression.calculateShipStats(this.state); const overweight = stats.mass > stats.massLimit ? .5 : 1;

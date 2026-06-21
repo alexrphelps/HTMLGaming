@@ -119,8 +119,8 @@
             if (equipped.includes('heat_sink') && game.state.ship.heat > 1) { const intensity = clamp(game.state.ship.heat / 100, .15, 1); c.strokeStyle = '#55d7ff'; c.globalAlpha = .25 + intensity * .6; [-1, 1].forEach(side => { for (let i = 0; i < 3; i++) { const drift = (time * (24 + i * 4) + i * 9) % 30; c.beginPath(); c.moveTo(side * 18, 5 + i * 4); c.lineTo(side * (22 + drift), 8 + i * 4 + Math.sin(time * 5 + i) * 3); c.stroke(); } }); c.globalAlpha = 1; }
             if (equipped.includes('cargo_pods')) { c.strokeStyle = '#ffbd59'; c.globalAlpha = .35 + Math.sin(time * 4) * .15; [-1, 1].forEach(side => { c.beginPath(); c.moveTo(side * 24, 10); c.lineTo(side * 24, 30 + Math.sin(time * 3 + side) * 5); c.stroke(); c.fillStyle = '#ffbd59'; c.fillRect(side * 24 - 1.5, 8, 3, 3); }); c.globalAlpha = 1; }
         }
-        drawShip(game) {
-            const c = this.ctx, s = game.state.ship, scale = ns.MathUtil.shipScale(s), p = this.screen(s, game.camera); c.save(); c.translate(p.x, p.y); c.rotate(s.angle + Math.PI / 2); c.scale(scale, scale); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
+        drawShipModel(game, options) {
+            const c = this.ctx, s = game.state.ship, config = options || {}, scale = (config.scale || 1) * ns.MathUtil.shipScale(s); c.save(); c.translate(config.x, config.y); c.rotate(config.rotation ?? s.angle + Math.PI / 2); c.scale(scale, scale); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
             c.shadowColor = '#55f0ad'; c.shadowBlur = 12; c.fillStyle = '#08181e'; c.strokeStyle = '#55f0ad'; c.lineWidth = 2;
             this.shipPath([[0,-31],[8,-18],[13,-8],[28,13],[20,20],[8,14],[0,22],[-8,14],[-20,20],[-28,13],[-13,-8],[-8,-18]]); c.fill(); c.stroke();
             c.shadowBlur = 0; c.fillStyle = '#112a32'; c.strokeStyle = '#3e7180'; this.shipPath([[0,-23],[7,-10],[8,10],[0,17],[-8,10],[-7,-10]]); c.fill(); c.stroke();
@@ -128,9 +128,16 @@
             c.fillStyle = '#ffbd59'; c.shadowColor = '#ffbd59'; c.shadowBlur = 8; c.beginPath(); c.arc(0, 7, 3.5, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0;
             this.drawFittedStructures(game);
             this.drawUtilityEffects(game);
-            const thrusting = game.input.down('w', 'W') || ns.Abilities.isActive(game.state, 'afterburner'); c.fillStyle = ns.Abilities.isActive(game.state, 'afterburner') ? '#ffbd59' : '#55d7ff'; [-1, 1].forEach(side => { c.beginPath(); c.moveTo(side * 8 - 3, 17); c.lineTo(side * 8, 22 + (thrusting ? 12 : 4) + Math.random() * 5); c.lineTo(side * 8 + 3, 17); c.fill(); });
+            const thrusting = !config.static && (game.input.down('w', 'W') || ns.Abilities.isActive(game.state, 'afterburner')), flame = config.static ? 5 : (thrusting ? 12 : 4) + Math.random() * 5; c.fillStyle = ns.Abilities.isActive(game.state, 'afterburner') ? '#ffbd59' : '#55d7ff'; [-1, 1].forEach(side => { c.beginPath(); c.moveTo(side * 8 - 3, 17); c.lineTo(side * 8, 22 + flame); c.lineTo(side * 8 + 3, 17); c.fill(); });
             if (s.shield > 0 || s.overshield > 0) { c.globalAlpha = .18 + (s.overshield > 0 ? .18 : 0); c.strokeStyle = s.overshield > 0 ? '#ce75ff' : '#55d7ff'; c.lineWidth = 1.5; c.beginPath(); c.ellipse(0, 0, 35, 40, 0, 0, Math.PI * 2); c.stroke(); }
             c.restore();
+        }
+        drawShip(game) {
+            const s = game.state.ship, p = this.screen(s, game.camera); this.drawShipModel(game, { x: p.x, y: p.y });
+        }
+        drawShipPreview(game) {
+            const c = this.ctx; c.clearRect(0, 0, this.w, this.h); const glow = c.createRadialGradient(this.w / 2, this.h * .48, 20, this.w / 2, this.h * .48, Math.min(this.w, this.h) * .48); glow.addColorStop(0, '#17404b66'); glow.addColorStop(1, '#06131800'); c.fillStyle = glow; c.fillRect(0, 0, this.w, this.h);
+            this.drawShipModel(game, { x: this.w / 2, y: this.h * .5, rotation: 0, scale: Math.max(3.2, Math.min(this.w / 105, this.h / 125)), static: true });
         }
         drawNebulaPuff(x, y, radius, alpha, color) {
             const c = this.ctx, glow = c.createRadialGradient(x, y, radius * .06, x, y, radius);
@@ -201,18 +208,28 @@
         drawContractWaypoint(game) {
             ns.Contracts.targetsFor(game.state.contracts.active).forEach((target, index) => this.drawOneContractWaypoint(game, target, index));
         }
-        drawOneContractWaypoint(game, target, index) {
+        drawCustomWaypoint(game) {
+            if (game.state.customWaypoint) this.drawOneContractWaypoint(game, { x: game.state.customWaypoint.x, y: game.state.customWaypoint.y, label: 'Custom Waypoint' }, 0, '#55d7ff');
+        }
+        drawOneContractWaypoint(game, target, index, color) {
             const waypoint = this.contractWaypoint(game, target); if (!waypoint) return;
-            const c = this.ctx; c.save(); c.translate(waypoint.x, waypoint.y); c.strokeStyle = '#ffbd59'; c.fillStyle = '#ffbd59'; c.lineWidth = 2;
+            const c = this.ctx, waypointColor = color || '#ffbd59'; c.save(); c.translate(waypoint.x, waypoint.y); c.strokeStyle = waypointColor; c.fillStyle = waypointColor; c.lineWidth = 2;
             if (waypoint.onScreen && target.stage?.search && !target.stage.search.revealed) { c.globalAlpha = .25; c.setLineDash?.([8, 8]); c.beginPath(); c.arc(0, 0, target.stage.search.radius * (game.camera.zoom || 1), 0, Math.PI * 2); c.stroke(); c.setLineDash?.([]); c.globalAlpha = 1; }
             if (waypoint.onScreen) {
                 c.beginPath(); c.arc(0, 0, 18, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.moveTo(-26, 0); c.lineTo(-12, 0); c.moveTo(12, 0); c.lineTo(26, 0); c.moveTo(0, -26); c.lineTo(0, -12); c.moveTo(0, 12); c.lineTo(0, 26); c.stroke();
             } else {
                 c.rotate(waypoint.angle); c.beginPath(); c.moveTo(12, 0); c.lineTo(-8, -7); c.lineTo(-4, 0); c.lineTo(-8, 7); c.closePath(); c.fill();
             }
-            c.restore(); c.fillStyle = '#ffbd59'; c.font = '10px "Courier New"'; c.textAlign = waypoint.x > this.w / 2 ? 'right' : 'left';
+            c.restore(); c.fillStyle = waypointColor; c.font = '10px "Courier New"'; c.textAlign = waypoint.x > this.w / 2 ? 'right' : 'left';
             const textX = waypoint.x + (waypoint.x > this.w / 2 ? -18 : 18), textY = (waypoint.onScreen ? waypoint.y + 39 : waypoint.y - 10) + index * 14;
             c.fillText(`${waypoint.label.toUpperCase()} // ${ns.MathUtil.formatDistance(waypoint.distance)}`, textX, textY);
+        }
+        drawInteractionCast(game) {
+            const cast = game.interactionCast; if (!cast) return;
+            const c = this.ctx, zoom = game.camera.zoom || 1, x = this.w / 2 + (game.state.ship.x - game.camera.x) * zoom, y = this.h / 2 + (game.state.ship.y - game.camera.y) * zoom + 48;
+            const width = Math.min(220, this.w * .36), ratio = Math.max(0, Math.min(1, cast.progress / cast.duration)), remaining = Math.max(0, cast.duration - cast.progress);
+            c.save(); c.textAlign = 'center'; c.font = '9px "Courier New"'; c.fillStyle = '#d7e9ed'; c.fillText(`LINK // ${String(cast.name).toUpperCase()} // ${remaining.toFixed(1)}S`, x, y);
+            c.fillStyle = '#142a31dd'; c.fillRect(x - width / 2, y + 7, width, 5); c.fillStyle = '#ffbd59'; c.fillRect(x - width / 2, y + 7, width * ratio, 5); c.strokeStyle = '#8d7441'; c.strokeRect(x - width / 2, y + 7, width, 5); c.restore();
         }
         drawLightSpeed(game) {
             const c = this.ctx, travel = ns.LightSpeed.ensure(game), shake = game.state.settings.screenShake ? 2.2 : 0, cx = this.w / 2, cy = this.h / 2, decel = travel.phase === 'decelerating' ? Math.max(0, 1 - travel.timer / ns.LightSpeed.CONFIG.decelerationDuration) : 1;
@@ -238,11 +255,11 @@
         }
         render(game) {
             const shake = game.state?.settings?.screenShake ? game.impactShake || 0 : 0; this.shakeX = shake ? (Math.random() * 2 - 1) * shake : 0; this.shakeY = shake ? (Math.random() * 2 - 1) * shake : 0;
-            if (ns.LightSpeed.isShifted(game)) { this.drawLightSpeed(game); this.drawContractWaypoint(game); return; }
+            if (ns.LightSpeed.isShifted(game)) { this.drawLightSpeed(game); this.drawContractWaypoint(game); this.drawCustomWaypoint(game); return; }
             this.clear(game.region, game.camera); const c = this.ctx, zoom = game.camera.zoom || 1;
             c.save(); c.translate(this.w / 2, this.h / 2); c.scale(zoom, zoom); c.translate(-this.w / 2, -this.h / 2); this.drawWorld(game); this.drawNebula(game); this.drawContractContact(game); this.drawShip(game); c.restore();
             if (ns.LightSpeed.ensure(game).phase === 'charging') this.drawPhaseOverlay(game);
-            this.drawRadar(game); this.drawContractWaypoint(game);
+            this.drawInteractionCast(game); this.drawRadar(game); this.drawContractWaypoint(game); this.drawCustomWaypoint(game);
         }
     }
     ns.Renderer = Renderer;

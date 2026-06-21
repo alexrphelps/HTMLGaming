@@ -57,6 +57,8 @@ describe('Frontier Wayfarer integration contract', () => {
     expect(html).toContain('id="headerUndock"');
     expect(read('css/style.css')).toContain('repeat(auto-fit');
     expect(read('css/style.css')).toContain('@media (max-width: 620px)');
+    expect(read('css/style.css')).toContain('.panel-header .wallet-credit { gap: 9px; padding: 12px 16px; font-size: 15px;');
+    expect(read('css/style.css')).toContain('.map-custom-target { position: absolute; width: 12px;');
     expect(read('css/style.css')).not.toContain('min-width: 960px');
     expect(fs.existsSync(path.join(gameDir, 'assets/aim-reticle.svg'))).toBe(true);
   });
@@ -104,6 +106,7 @@ describe('Frontier Wayfarer integration contract', () => {
     expect(dom.window.document.getElementById('headerUndock').textContent).toContain('UNDOCK');
     const driveHudStyle = read('css/style.css');
     expect(driveHudStyle).toContain('.light-drive-hud { position: absolute; right: 24px; bottom: 162px;');
+    expect(dom.window.document.getElementById('lightDriveHud').textContent).toContain('5 SS + 5 HE');
     dom.window.miniInvadersV2Game.destroy(); dom.window.close();
   });
 
@@ -132,6 +135,19 @@ describe('Frontier Wayfarer integration contract', () => {
     expect(game.ui.activeTab).toBe('station'); expect(game.ui.panel.classList.contains('active')).toBe(true);
     game.ui.openPanel(game, 'traits'); game.input.pressed.add('Escape'); game.update(1 / 60);
     expect(game.ui.activeTab).toBe('station'); expect(game.state.dockedAt).toBe('waypoint_zero');
+    dom.window.close();
+  });
+
+  test('sets, replaces, persists, reaches, and removes one custom map waypoint', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game;
+    game.newCareer(); game.ui.openPanel(game, 'navigation');
+    const map = dom.window.document.querySelector('.galaxy-map'); map.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500 });
+    map.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, clientX: 250, clientY: 300 }));
+    const first = { ...game.state.customWaypoint }; expect(first).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) })); expect(game.ui.panelBody.querySelectorAll('.map-custom-target')).toHaveLength(1);
+    const replacementMap = game.ui.panelBody.querySelector('.galaxy-map'); replacementMap.getBoundingClientRect = map.getBoundingClientRect; replacementMap.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, clientX: 750, clientY: 100 })); expect(game.state.customWaypoint).not.toEqual(first); expect(game.ui.panelBody.querySelectorAll('.map-custom-target')).toHaveLength(1);
+    const saved = JSON.parse(dom.window.localStorage.getItem(dom.window.MiniInvadersV2.SAVE_KEY)); expect(saved.customWaypoint).toEqual(game.state.customWaypoint);
+    game.ui.panelBody.querySelector('.map-custom-target').click(); expect(game.state.customWaypoint).toBeNull();
+    game.setCustomWaypoint({ x: game.state.ship.x + 200, y: game.state.ship.y }); game.updateCustomWaypoint(); expect(game.state.customWaypoint).toBeNull();
     dom.window.close();
   });
 
@@ -200,6 +216,13 @@ describe('Frontier Wayfarer integration contract', () => {
     game.interact(); expect(game.state.pilot.wallet.unbanked.aetherium).toBe(before + 35); expect(game.state.consumedEntityIds).toContain(salvage.id); dom.window.close();
   });
 
+  test('renders interaction progress beneath the ship instead of in the footer', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.undock();
+    game.interactionCast = { name: 'Test Signal', duration: 5, progress: 2 };
+    game.ui.renderContext(game); expect(dom.window.document.getElementById('contextPrompt').textContent).toContain('F // LINKING TEST SIGNAL'); expect(dom.window.document.querySelector('#contextPrompt .interaction-progress')).toBeNull();
+    expect(() => game.renderer.drawInteractionCast(game)).not.toThrow(); game.interactionCast = null; expect(() => game.renderer.drawInteractionCast(game)).not.toThrow(); dom.window.close();
+  });
+
   test('retains cast progress during grace and cancels after range or damage interruption', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.undock(); const chunk = Array.from(game.world.chunks.values())[0];
     const signal = { id: 'signal:cast:test', kind: 'signal', name: 'Test Signal', x: game.state.ship.x + 10, y: game.state.ship.y, radius: 18 }; chunk.entities.push(signal);
@@ -207,10 +230,12 @@ describe('Frontier Wayfarer integration contract', () => {
     game.state.ship.x += 300; game.updateInteraction(.8); expect(game.interactionCast).toBeNull(); game.state.ship.x -= 300; game.interact(); game.state.ship.damageSerial++; game.updateInteraction(.1); expect(game.interactionCast).toBeNull(); dom.window.close();
   });
 
-  test('renders three ship panels with a static fitted profile and module details', () => {
-    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.ui.openPanel(game, 'ship');
-    expect(game.ui.panelBody.querySelectorAll('.ship-console > section')).toHaveLength(3); expect(game.ui.panelBody.querySelector('.ship-portrait svg')).not.toBeNull(); expect(game.ui.panelBody.textContent).toContain('CORE SHIP AREAS'); expect(game.ui.panelBody.textContent).toContain('WEAPONS AND UTILITY'); expect(game.ui.panelBody.textContent).toContain('Reliable short-cycle pulse weapon');
-    const css = read('css/style.css'); expect(css).toContain('.ship-console { display: grid; grid-template-columns:'); expect(css).toContain('.header-undock { min-width:'); dom.window.close();
+  test('renders the exact fitted ship path in a static compact three-panel console', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, drawModel = jest.spyOn(dom.window.MiniInvadersV2.Renderer.prototype, 'drawShipModel'); game.newCareer(); game.ui.openPanel(game, 'ship');
+    expect(game.ui.panelBody.querySelectorAll('.ship-console > section')).toHaveLength(3); expect(game.ui.panelBody.querySelector('.ship-portrait svg')).toBeNull(); expect(game.ui.panelBody.querySelector('#shipPreviewCanvas')).not.toBeNull(); expect(drawModel).toHaveBeenCalledWith(game, expect.objectContaining({ rotation: 0, static: true }));
+    expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('ENGINE'); expect(game.ui.panelBody.querySelectorAll('.ship-area-hotspot')).toHaveLength(4); expect(game.ui.panelBody.querySelector('.mission-system-grid')).not.toBeNull(); expect(game.ui.panelBody.textContent).toContain('WEAPONS AND UTILITY');
+    game.ui.panelBody.querySelector('[data-action="select-ship-area"][data-id="cargo"]').click(); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('CARGO'); expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1);
+    const css = read('css/style.css'); expect(css).toContain('.mission-system-grid { display: grid; grid-template-columns: repeat(2'); expect(css).toContain('.panel-body.ship-view { overflow: hidden;'); expect(css).toContain('.header-undock { min-width:'); drawModel.mockRestore(); dom.window.close();
   });
 
   test('hides undiscovered region names and exposes station and player map tooltips', () => {
@@ -471,6 +496,14 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     expect(state.contracts.active).toBeNull(); expect(state.reputations.concord).toBe(11); expect(state.reputations.independents).toBe(5);
   });
 
+  test('keeps board offers pristine for abandonment and removes only genuinely failed offers', () => {
+    const ns = runtime(), state = ns.State.createState(408), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'); state.progression.tutorialStep = 2;
+    const offer = ns.Contracts.generateAdvanced(state, station, 0, () => .31, 'deep_survey'); state.contracts.board = [offer]; expect(ns.Contracts.accept(state, offer.id)).toBe(true);
+    expect(state.contracts.active).not.toBe(offer); expect(offer.status).toBe('offered'); state.contracts.active.stages[0].progress = .5;
+    ns.Contracts.abandon(state); expect(state.contracts.board).toEqual([offer]); expect(ns.Contracts.accept(state, offer.id)).toBe(true); expect(state.contracts.active.stages[0]).toMatchObject({ progress: 0, status: 'active' });
+    ns.Contracts.fail(state, 'TEST FAILURE'); expect(state.contracts.active).toBeNull(); expect(state.contracts.board).toHaveLength(0);
+  });
+
   test('computes safe waypoint presentation for visible, off-screen, shifted, and cleared targets', () => {
     const ns = runtime(), state = ns.State.createState(407), renderer = Object.create(ns.Renderer.prototype);
     state.ship.x = 0; state.ship.y = 0;
@@ -509,12 +542,17 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
   });
 
   test('migrates legacy diamonds, weapons, shields, coordinates, and loadouts into schema v4', () => {
-    const ns = runtime(); const legacy = ns.State.createState(31); legacy.schemaVersion = 1; legacy.pilot.diamonds = 777; delete legacy.pilot.wallet;
+    const ns = runtime(); const legacy = ns.State.createState(31); legacy.schemaVersion = 1; legacy.pilot.diamonds = 777; delete legacy.pilot.wallet; delete legacy.customWaypoint;
     legacy.ship.x = 100; legacy.ship.y = 200;
     legacy.ship.slots.secondary = 'seeker_rack'; legacy.ship.slots.defense = 'shield_mk1'; legacy.ship.ownedModules.push('shield_mk1');
     const migrated = ns.Save.migrate(legacy);
-    expect(migrated.schemaVersion).toBe(4); expect(migrated.ship).toMatchObject({ x: 150, y: 300 }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull();
+    expect(migrated.schemaVersion).toBe(4); expect(migrated.ship).toMatchObject({ x: 150, y: 300 }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull(); expect(migrated.customWaypoint).toBeNull();
     expect(migrated.ship.slots.primary2).toBe('seeker_rack'); expect(migrated.ship.slots.defense).toBe('shield_balanced'); expect(migrated.ship.ownedModules).toContain('afterburner');
+  });
+
+  test('normalizes stale active and failed station-board offers on load', () => {
+    const ns = runtime(), state = ns.State.createState(311); state.contracts.board = [{ id: 'stale:active', status: 'active' }, { id: 'stale:failed', status: 'failed' }, { id: 'done', status: 'complete' }];
+    const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(migrated.contracts.board.map(contract => ({ id: contract.id, status: contract.status }))).toEqual([{ id: 'stale:active', status: 'offered' }, { id: 'stale:failed', status: 'offered' }]);
   });
 
   test('active modules require unlocked slots and consume energy with cooldowns', () => {
@@ -526,13 +564,13 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
 
   test('charges, interrupts on damage, cruises with bounded steering, and rematerializes', () => {
     const ns = runtime(), state = ns.State.createState(73); state.pilot.level = 4; state.contracts.completed = 5; state.dockedAt = null;
-    state.ship.ownedModules.push('light_drive'); state.ship.slots.engine = 'light_drive'; state.ship.energy = 70; state.ship.angle = 0;
+    state.ship.ownedModules.push('light_drive'); state.ship.slots.engine = 'light_drive'; state.ship.energy = 70; state.ship.angle = 0; state.pilot.wallet.banked.sunshards = 10; state.pilot.wallet.banked.helionite = 10;
     const world = new ns.World.WorldService(73); world.update(state.ship.x, state.ship.y);
     const game = { state, world, region: ns.World.regionAt(state.ship.x, state.ship.y), camera: { x: state.ship.x, y: state.ship.y }, enemies: [{}], bullets: [{}], effects: [{}], notify: jest.fn(), input: { mouse: { hasPosition: false } }, renderer: { w: 1280, h: 720 }, ui: { panel: { classList: { contains: () => false } } } };
     expect(ns.LightSpeed.beginCharge(game)).toBe(true); ns.LightSpeed.update(game, .4); state.ship.hull -= 1; ns.LightSpeed.update(game, .01);
     expect(game.lightSpeed).toMatchObject({ phase: 'idle', cooldown: expect.any(Number) }); expect(game.lightSpeed.cooldown).toBeGreaterThan(2.9); expect(state.ship.energy).toBe(70);
     game.lightSpeed.cooldown = 0; expect(ns.LightSpeed.beginCharge(game)).toBe(true); ns.LightSpeed.update(game, 2.25);
-    expect(game.lightSpeed.phase).toBe('cruising'); expect(state.ship.energy).toBe(35); expect(game.enemies).toHaveLength(0); expect(game.bullets).toHaveLength(0);
+    expect(game.lightSpeed.phase).toBe('cruising'); expect(state.ship.energy).toBe(70); expect(state.pilot.wallet.banked).toMatchObject({ sunshards: 5, helionite: 5 }); expect(game.enemies).toHaveLength(0); expect(game.bullets).toHaveLength(0);
     const angle = state.ship.angle; game.input.mouse = { x: 640, y: 0, hasPosition: true }; ns.LightSpeed.update(game, .5);
     expect(Math.abs(state.ship.angle - angle)).toBeLessThanOrEqual(.55 * .5 + .0001); expect(Math.hypot(state.ship.vx, state.ship.vy)).toBeCloseTo(3200, 5);
     expect(ns.LightSpeed.toggle(game)).toBe(true); ns.LightSpeed.update(game, 1.5);
@@ -542,11 +580,21 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
   test('rejects invalid Light Drive casts and forces exit before the expanded boundary', () => {
     const ns = runtime(), state = ns.State.createState(74), world = new ns.World.WorldService(74);
     const game = { state, world, region: ns.Data.REGIONS[0], camera: {}, enemies: [], bullets: [], effects: [], notify: jest.fn(), input: { mouse: { hasPosition: false } }, renderer: { w: 1280, h: 720 }, ui: { panel: { classList: { contains: () => false } } } };
-    expect(ns.LightSpeed.canCharge(game)).toBe(false); state.pilot.level = 4; state.contracts.completed = 5; state.ship.ownedModules.push('light_drive'); state.ship.slots.engine = 'light_drive'; state.dockedAt = null; state.ship.energy = 34;
-    expect(ns.LightSpeed.canCharge(game)).toBe(false); state.ship.energy = 70; expect(ns.LightSpeed.canCharge(game)).toBe(true);
+    expect(ns.LightSpeed.canCharge(game)).toBe(false); state.pilot.level = 4; state.contracts.completed = 5; state.ship.ownedModules.push('light_drive'); state.ship.slots.engine = 'light_drive'; state.dockedAt = null; state.ship.energy = 70;
+    expect(ns.LightSpeed.canCharge(game)).toBe(false); state.pilot.wallet.banked.sunshards = 5; state.pilot.wallet.banked.helionite = 5; expect(ns.LightSpeed.canCharge(game)).toBe(true);
     game.lightSpeed = ns.LightSpeed.createState(); game.lightSpeed.phase = 'cruising'; state.ship.x = ns.World.WORLD_BOUNDS.maxX - 3700; state.ship.y = 0; state.ship.angle = 0;
     ns.LightSpeed.update(game, .01); expect(game.lightSpeed.phase).toBe('decelerating'); expect(game.lightSpeed.forcedExit).toBe(true);
     ns.LightSpeed.update(game, 1.5); expect(state.ship.x).toBeLessThanOrEqual(ns.World.WORLD_BOUNDS.maxX - 300);
+  });
+
+  test('cancels Asterion charge for free and forces deceleration after twenty seconds of full reserves', () => {
+    const ns = runtime(), state = ns.State.createState(741); state.dockedAt = null; state.ship.slots.engine = 'light_drive'; state.ship.ownedModules.push('light_drive'); state.ship.energy = 100; state.ship.heat = 0; state.pilot.wallet.banked.sunshards = 10; state.pilot.wallet.banked.helionite = 10;
+    const game = { state, world: new ns.World.WorldService(741), region: ns.Data.REGIONS[0], camera: {}, enemies: [], bullets: [], effects: [], notify: jest.fn(), input: { mouse: { hasPosition: false } }, renderer: { w: 1280, h: 720 }, ui: { panel: { classList: { contains: () => false } } } }; game.world.update(state.ship.x, state.ship.y);
+    expect(ns.LightSpeed.beginCharge(game)).toBe(true); expect(ns.LightSpeed.toggle(game)).toBe(true); expect(game.lightSpeed).toMatchObject({ phase: 'idle', cooldown: 3 }); expect(state.pilot.wallet.banked).toMatchObject({ sunshards: 10, helionite: 10 });
+    game.lightSpeed.cooldown = 0; ns.LightSpeed.beginCharge(game); ns.LightSpeed.update(game, ns.LightSpeed.CONFIG.chargeDuration); const speed = ns.LightSpeed.CONFIG.cruiseSpeed; ns.LightSpeed.CONFIG.cruiseSpeed = 0;
+    for (let second = 0; second < 19; second++) ns.LightSpeed.update(game, 1);
+    expect(game.lightSpeed.phase).toBe('cruising'); expect(state.ship).toMatchObject({ energy: 5, heat: 95 });
+    ns.LightSpeed.update(game, 1); expect(game.lightSpeed).toMatchObject({ phase: 'decelerating', forcedExit: true }); expect(state.ship).toMatchObject({ energy: 0, heat: 100 }); ns.LightSpeed.CONFIG.cruiseSpeed = speed;
   });
 
   test('blink can cross into the nebula and shield overcharge requires a fitted generator', () => {
@@ -673,6 +721,21 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     dom.window.close();
   });
 
+  test('keeps the undocked ship panel readable but prevents loadout changes', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game;
+    game.newCareer(); game.state.ship.ownedModules.push('drive_mk2'); game.state.dockedAt = null; game.ui.openPanel(game, 'ship');
+    expect(game.ui.panelBody.textContent).toContain('DOCK AT A STATION TO MODIFY LOADOUT');
+    expect([...game.ui.panelBody.querySelectorAll('[data-action="equip"]')].every(button => button.disabled)).toBe(true);
+    const before = game.state.ship.slots.engine; const button = [...game.ui.panelBody.querySelectorAll('[data-action="equip"]')].find(item => item.dataset.id === 'drive_mk2'); button.disabled = false; button.click();
+    expect(game.state.ship.slots.engine).toBe(before); expect(game.ui.message.textContent).toContain('DOCK AT A STATION'); dom.window.close();
+  });
+
+  test('labels mission-system slots with their behavior and keybinds', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.state.progression.tutorialStep = 2; game.state.contracts.completed = 3; game.state.discoveries.push('signal:test'); game.state.pilot.allegiance = 'concord'; game.state.ship.ownedModules.push('light_drive'); game.state.ship.slots.engine = 'light_drive'; game.ui.openPanel(game, 'ship');
+    const text = game.ui.panelBody.textContent; ['Primary weapon 1 (Left Click)', 'Primary weapon 2 (Right Click)', 'Passive Utility 1', 'Passive Utility 4', 'Triggered Ability 1 (Space)', 'Triggered Ability 2 (Q)', 'Triggered Ability 3 (E)', 'Triggered Ability 4 (Shift)'].forEach(label => expect(text).toContain(label));
+    expect(text).toContain('ACTIVATION COST'); dom.window.close();
+  });
+
   test('explains when a purchased Asterion Light Drive would exceed the mass limit', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2;
     game.newCareer(); game.state.progression.tutorialStep = 2; game.state.pilot.level = 4; game.state.contracts.completed = 5;
@@ -689,13 +752,18 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
   });
 
   test('generates and advances all advanced contract templates with plural objectives', () => {
-    const ns = runtime(), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'), make = template => { const state = ns.State.createState(83); state.progression.tutorialStep = 2; state.contracts.completed = 3; const contract = ns.Contracts.generateAdvanced(state, station, 0, () => .31, template); state.contracts.board = [contract]; ns.Contracts.accept(state, contract.id); return { state, contract }; };
+    const ns = runtime(), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'), make = template => { const state = ns.State.createState(83); state.progression.tutorialStep = 2; state.contracts.completed = 3; const offer = ns.Contracts.generateAdvanced(state, station, 0, () => .31, template); state.contracts.board = [offer]; ns.Contracts.accept(state, offer.id); return { state, offer, contract: state.contracts.active }; };
     const multi = make('multi_haul'); expect(multi.contract.stageMode).toBe('parallel'); expect(ns.Contracts.targetsFor(multi.contract).length).toBeGreaterThanOrEqual(2); multi.contract.stages.forEach((stage, index) => { const destination = ns.Data.LANDMARKS.find(item => item.id === stage.destination); expect(ns.Contracts.recordProgress(multi.state, 'dock', 1, destination)).toBe(index === multi.contract.stages.length - 1); });
-    const survey = make('deep_survey'); expect(survey.contract.stages).toHaveLength(3); const firstSurvey = ns.Contracts.contactFor(survey.contract); expect(ns.Contracts.recordProgress(survey.state, firstSurvey.event, 1, firstSurvey)).toBe(false); expect(ns.Contracts.activeStages(survey.contract)[0].name).toContain('2');
-    const search = make('area_search'); expect(ns.Contracts.contactFor(search.contract)).toBeNull(); const area = search.contract.stages[0].search.center; expect(ns.Contracts.revealSearches(search.state, area)).toHaveLength(1); const found = ns.Contracts.contactFor(search.contract); expect(found).not.toBeNull(); expect(ns.Contracts.recordProgress(search.state, 'search', 1, found)).toBe(true);
+    const survey = make('deep_survey'); expect(survey.contract.stages).toHaveLength(3); expect(new Set(survey.contract.stages.map(stage => stage.region)).size).toBe(3); survey.contract.stages.slice(1).forEach((stage, index) => { const previous = ns.Data.REGIONS.find(region => region.id === survey.contract.stages[index].region), current = ns.Data.REGIONS.find(region => region.id === stage.region), gap = Math.max(Math.abs(previous.column - current.column), Math.abs(previous.row - current.row)); expect(gap).toBeGreaterThanOrEqual(1); expect(gap).toBeLessThanOrEqual(2); }); const firstSurvey = ns.Contracts.contactFor(survey.contract); expect(ns.Contracts.recordProgress(survey.state, firstSurvey.event, 1, firstSurvey)).toBe(false); expect(ns.Contracts.activeStages(survey.contract)[0].name).toContain('2');
+    const search = make('area_search'); expect(ns.Contracts.contactFor(search.contract)).toBeNull(); expect(search.contract.stages[0].search.radius).toBe(1800); const area = search.contract.stages[0].search.center; expect(ns.Contracts.revealSearches(search.state, area)).toHaveLength(1); const found = ns.Contracts.contactFor(search.contract); expect(found).not.toBeNull(); expect(ns.Contracts.recordProgress(search.state, 'search', 1, found)).toBe(true);
     const recovery = make('cargo_recovery'); const cargo = ns.Contracts.contactFor(recovery.contract); expect(ns.Contracts.recordProgress(recovery.state, 'pickup', 1, cargo)).toBe(false); expect(ns.Contracts.activeStages(recovery.contract)[0].event).toBe('dock'); expect(recovery.contract.missionPayload.kind).toBe('recovered-cargo');
-    const lost = make('lost_ship_escort'); ns.Contracts.revealSearches(lost.state, lost.contract.stages[0].search.center); const ship = ns.Contracts.contactFor(lost.contract); expect(ns.Contracts.recordProgress(lost.state, 'search', 1, ship)).toBe(false); expect(ns.Contracts.activeStages(lost.contract)[0].escort).toBeTruthy(); expect(ns.Contracts.startEscort(lost.state)).toMatchObject({ hull: 220 });
+    const lost = make('lost_ship_escort'); expect(lost.contract.stages[0].search.radius).toBe(1800); ns.Contracts.revealSearches(lost.state, lost.contract.stages[0].search.center); const ship = ns.Contracts.contactFor(lost.contract); expect(ns.Contracts.recordProgress(lost.state, 'search', 1, ship)).toBe(false); expect(ns.Contracts.activeStages(lost.contract)[0].escort).toBeTruthy(); expect(ns.Contracts.startEscort(lost.state)).toMatchObject({ hull: 220 });
     const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(lost.state))); expect(restored.contracts.active.stages[1].escort.convoy.hull).toBe(220);
+  });
+
+  test('generates deterministic Survey Chains across distinct accessible sectors one or two cells apart', () => {
+    const ns = runtime(), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'), build = seed => { const state = ns.State.createState(seed); state.progression.tutorialStep = 2; state.contracts.completed = 3; return ns.Contracts.generateAdvanced(state, station, 0, ns.MathUtil.seeded(seed), 'deep_survey'); };
+    [91, 92, 93, 94].forEach(seed => { const contract = build(seed), regions = contract.stages.map(stage => ns.Data.REGIONS.find(region => region.id === stage.region)); expect(new Set(regions.map(region => region.id)).size).toBe(3); expect(regions.every(region => !region.travelTier)).toBe(true); regions.slice(1).forEach((region, index) => { const gap = Math.max(Math.abs(region.column - regions[index].column), Math.abs(region.row - regions[index].row)); expect(gap).toBeGreaterThanOrEqual(1); expect(gap).toBeLessThanOrEqual(2); }); expect(JSON.stringify(build(seed))).toBe(JSON.stringify(contract)); });
   });
 
   test('varies deterministic board size and persists station-specialty market rotations', () => {

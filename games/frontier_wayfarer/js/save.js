@@ -18,7 +18,7 @@
             stages.forEach(stage => {
                 const destination = ns.Data.LANDMARKS.find(item => item.id === stage.destination);
                 if (stage.event === 'dock' && destination) stage.target = { x: destination.x, y: destination.y };
-                if (stage.search) stage.target = { x: (stage.search.revealed ? stage.search.exact : stage.search.center).x, y: (stage.search.revealed ? stage.search.exact : stage.search.center).y };
+                if (stage.search) { if (!stage.search.revealed) stage.search.radius = 1800; stage.target = { x: (stage.search.revealed ? stage.search.exact : stage.search.center).x, y: (stage.search.revealed ? stage.search.exact : stage.search.center).y }; }
                 if (stage.escort) { if (destination) stage.escort.end = { x: destination.x, y: destination.y }; const tracked = stage.escort.convoy || stage.escort.start; if (tracked) stage.target = { x: tracked.x, y: tracked.y }; }
             });
             if (ns.Contracts?.syncContract) ns.Contracts.syncContract(contract);
@@ -96,7 +96,9 @@
         }
         if (data.schemaVersion === 4) {
             ns.Wallet.ensure(data);
+            data.customWaypoint = data.customWaypoint && Number.isFinite(data.customWaypoint.x) && Number.isFinite(data.customWaypoint.y) ? data.customWaypoint : null;
             data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
             data.marketInventories = data.marketInventories || {};
             data.ship.slots = data.ship.slots || {};
             if (!('utility4' in data.ship.slots)) data.ship.slots.utility4 = null;

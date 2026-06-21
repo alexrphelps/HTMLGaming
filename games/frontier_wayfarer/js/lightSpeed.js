@@ -1,6 +1,6 @@
 (function (ns) {
     const CONFIG = {
-        energyCost: 35, chargeDuration: 2.25, cruiseSpeed: 3200, turnRate: .55,
+        activationCost: { sunshards: 5, helionite: 5 }, energyPerSecond: 5, heatPerSecond: 5, chargeDuration: 2.25, cruiseSpeed: 3200, turnRate: .55,
         decelerationDuration: 1.5, retryDelay: 3, cooldown: 6, boundaryLookahead: 3800, boundaryInset: 300
     };
     const shiftedPhases = ['cruising', 'decelerating'];
@@ -15,7 +15,7 @@
     function integrity(ship) { return (ship.hull || 0) + (ship.shield || 0) + (ship.overshield || 0); }
     function canCharge(game) {
         const travel = ensure(game), panelOpen = Boolean(game.ui?.panel?.classList?.contains('active'));
-        return Boolean(game.state && fitted(game) && !game.state.dockedAt && !panelOpen && travel.phase === 'idle' && travel.cooldown <= 0 && game.state.ship.energy >= CONFIG.energyCost);
+        return Boolean(game.state && fitted(game) && !game.state.dockedAt && !panelOpen && travel.phase === 'idle' && travel.cooldown <= 0 && game.state.ship.energy > 0 && game.state.ship.heat < 100 && ns.Wallet.canAfford(game.state, CONFIG.activationCost));
     }
     function beginCharge(game) {
         if (!canCharge(game)) return false;
@@ -23,14 +23,15 @@
         const travel = ensure(game); travel.phase = 'charging'; travel.timer = 0; travel.distance = 0; travel.integrity = integrity(game.state.ship); travel.damageSerial = game.state.ship.damageSerial || 0; travel.zoom = 1; travel.forcedExit = false;
         game.notify('ASTERION DRIVE // PHASE CAST STARTED'); return true;
     }
-    function beginDeceleration(game, forced) {
+    function beginDeceleration(game, forced, message) {
         const travel = ensure(game); if (travel.phase !== 'cruising') return false;
         travel.phase = 'decelerating'; travel.timer = 0; travel.forcedExit = Boolean(forced);
-        game.notify(forced ? 'SECTOR EDGE // FORCED REMATERIALIZATION' : 'LIGHT SPEED // DECELERATING'); return true;
+        game.notify(message || (forced ? 'SECTOR EDGE // FORCED REMATERIALIZATION' : 'LIGHT SPEED // DECELERATING')); return true;
     }
     function toggle(game) {
         const phase = ensure(game).phase;
         if (phase === 'cruising') return beginDeceleration(game, false);
+        if (phase === 'charging') { interrupt(game, 'PHASE CAST CANCELLED // DRIVE RECALIBRATING'); return true; }
         if (phase === 'idle') return beginCharge(game);
         return false;
     }
@@ -54,13 +55,15 @@
         if (dy > .0001) distances.push((b.maxY - ship.y) / dy); else if (dy < -.0001) distances.push((b.minY - ship.y) / dy);
         return Math.min(...distances.filter(value => value >= 0));
     }
-    function interrupt(game) {
+    function interrupt(game, message) {
         const travel = ensure(game); travel.phase = 'idle'; travel.timer = 0; travel.cooldown = CONFIG.retryDelay; travel.zoom = 1;
-        game.notify('PHASE CAST INTERRUPTED // DRIVE RECALIBRATING');
+        game.notify(message || 'PHASE CAST INTERRUPTED // DRIVE RECALIBRATING');
     }
     function enter(game) {
         const travel = ensure(game), ship = game.state.ship;
-        ship.energy -= CONFIG.energyCost; travel.phase = 'cruising'; travel.timer = 0; travel.zoom = .68;
+        if (!ns.Wallet.debit(game.state, CONFIG.activationCost)) return interrupt(game, 'ASTERION DRIVE // ACTIVATION RESOURCES LOST');
+        game.save?.();
+        travel.phase = 'cruising'; travel.timer = 0; travel.zoom = .68;
         game.enemies = []; game.bullets = []; game.effects = [];
         move(game, CONFIG.cruiseSpeed, 0, false); game.notify('LIGHT SPEED // VECTOR CONTROL ONLINE');
     }
@@ -91,8 +94,10 @@
             return;
         }
         if (travel.phase === 'cruising') {
+            ship.energy = Math.max(0, ship.energy - CONFIG.energyPerSecond * dt); ship.heat = Math.min(100, ship.heat + CONFIG.heatPerSecond * dt);
             move(game, CONFIG.cruiseSpeed, dt, true); travel.zoom = .68;
-            if (distanceToBoundary(ship) <= CONFIG.boundaryLookahead) beginDeceleration(game, true);
+            if (ship.energy <= 0 || ship.heat >= 100) beginDeceleration(game, true, 'DRIVE RESERVES EXHAUSTED // FORCED REMATERIALIZATION');
+            else if (distanceToBoundary(ship) <= CONFIG.boundaryLookahead) beginDeceleration(game, true);
             return;
         }
         if (travel.phase === 'decelerating') {
@@ -109,7 +114,8 @@
         if (travel.phase === 'cruising') return { label: 'R // DECELERATE', className: 'active' };
         if (travel.phase === 'decelerating') return { label: 'REMATERIALIZING', className: 'charging' };
         if (travel.cooldown > 0) return { label: `COOLDOWN ${travel.cooldown.toFixed(1)}S`, className: 'cooling' };
-        if (game.state.ship.energy < CONFIG.energyCost) return { label: `NEED ${CONFIG.energyCost} ENERGY`, className: 'locked' };
+        if (!ns.Wallet.canAfford(game.state, CONFIG.activationCost)) return { label: 'NEED 5 SS + 5 HE', className: 'locked' };
+        if (game.state.ship.energy <= 0 || game.state.ship.heat >= 100) return { label: 'DRIVE RESERVES EXHAUSTED', className: 'locked' };
         return { label: 'R // LIGHT SPEED', className: 'ready' };
     }
     ns.LightSpeed = { CONFIG, createState, ensure, fitted, isShifted, isTraveling, isLocked, canCharge, beginCharge, beginDeceleration, toggle, update, status, distanceToBoundary };

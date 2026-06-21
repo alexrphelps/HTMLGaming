@@ -12,6 +12,7 @@
     const BOARD_COOLDOWN_MS = 120000;
     const ESCORT_CONFIG = { rendezvousDistance: 1800, activationRange: 220, escortRange: 760, graceSeconds: 8, speed: 58, hull: 220, enemySpawnDistance: 760 };
     const ADVANCED_TEMPLATES = ['lost_ship_escort', 'multi_haul', 'deep_survey', 'area_search', 'cargo_recovery'];
+    function clone(value) { return JSON.parse(JSON.stringify(value)); }
     function point(item) { return { x: item.x, y: item.y }; }
     function stationById(id) { return LANDMARKS.find(item => item.id === id && item.type === 'station'); }
     function stageId(contractId, index) { return `${contractId}:stage:${index}`; }
@@ -99,6 +100,17 @@
         const angle = rand() * Math.PI * 2, offset = (radius || 420) * (.35 + rand() * .65);
         return { x: destination.x + Math.cos(angle) * offset, y: destination.y + Math.sin(angle) * offset };
     }
+    function accessibleRegions(state) { const hasLightDrive = state.ship.ownedModules.includes('light_drive'); return REGIONS.filter(region => hasLightDrive || !region.travelTier); }
+    function sectorDistance(a, b) { return Math.max(Math.abs(a.column - b.column), Math.abs(a.row - b.row)); }
+    function pointInRegion(region, rand) { const inset = 900; return { x: region.x + inset + rand() * (region.w - inset * 2), y: region.y + inset + rand() * (region.h - inset * 2) }; }
+    function surveyChainRegions(state, first, rand, count) {
+        const pool = accessibleRegions(state), selected = [first];
+        while (selected.length < count) {
+            const previous = selected[selected.length - 1], candidates = pool.filter(region => !selected.includes(region) && sectorDistance(previous, region) >= 1 && sectorDistance(previous, region) <= 2), fallback = pool.filter(region => !selected.includes(region));
+            const choices = candidates.length ? candidates : fallback; if (!choices.length) break; selected.push(choices[Math.floor(rand() * choices.length)]);
+        }
+        return selected;
+    }
     function generateAdvanced(state, station, index, rand, template) {
         const id = `advanced:${template}:${station.id}:${state.contracts.completed}:${state.contracts.boardRevision}:${index}`;
         const stations = uniqueStations(state, station, 3, rand), fields = accessibleLandmarks(state, item => item.type !== 'station');
@@ -110,13 +122,14 @@
             contract.stages = stops.map((stop, i) => makeStage(id, i, { status: 'active', type: 'haul', event: 'dock', name: `Delivery ${i + 1}`, instruction: `Dock at ${stop.name}.`, destination: stop.id, target: point(stop) }));
         } else if (template === 'deep_survey') {
             contract.name = 'Deep Survey Chain'; contract.description = 'Calibrate a sequence of remote survey checkpoints.';
-            contract.stages = Array.from({ length: 3 }, (_, i) => { const target = fieldPoint(field, rand, 700 + i * 170); return makeStage(id, i, { type: 'survey', event: 'scan', name: `Survey Checkpoint ${i + 1}`, instruction: `Scan checkpoint ${i + 1} of 3.`, destination: field.id, target }); });
+            const firstRegion = REGIONS.find(region => region.id === field.region) || accessibleRegions(state)[0], sectors = surveyChainRegions(state, firstRegion, rand, 3);
+            contract.stages = sectors.map((region, i) => makeStage(id, i, { type: 'survey', event: 'scan', name: `Survey Checkpoint ${i + 1}`, instruction: `Scan checkpoint ${i + 1} of 3 in ${region.name}.`, destination: null, region: region.id, sector: region.grid, target: pointInRegion(region, rand) }));
         } else if (template === 'lost_ship_escort') {
             const exact = fieldPoint(field, rand, 520), area = fieldPoint(exact, rand, 330); contract.name = 'Lost Flight'; contract.description = 'Locate a missing ship, establish contact, then escort it to safety.';
-            contract.stages = [makeStage(id, 0, { type: 'search', event: 'search', name: 'Locate Lost Ship', instruction: CONTACT_TYPES.search.instruction, destination: field.id, target: area, search: { center: area, radius: 520, exact, revealed: false } }), makeStage(id, 1, { type: 'escort', event: 'escort', name: 'Escort Lost Ship', instruction: 'Protect the recovered ship en route to safety.', destination: destination.id, target: exact, escort: escortState(exact, destination) })];
+            contract.stages = [makeStage(id, 0, { type: 'search', event: 'search', name: 'Locate Lost Ship', instruction: CONTACT_TYPES.search.instruction, destination: field.id, target: area, search: { center: area, radius: 1800, exact, revealed: false } }), makeStage(id, 1, { type: 'escort', event: 'escort', name: 'Escort Lost Ship', instruction: 'Protect the recovered ship en route to safety.', destination: destination.id, target: exact, escort: escortState(exact, destination) })];
         } else if (template === 'area_search') {
             const exact = fieldPoint(field, rand, 500), area = fieldPoint(exact, rand, 360); contract.name = 'Blind Search'; contract.description = 'Sweep a broad sensor area and recover the unidentified contact.';
-            contract.stages = [makeStage(id, 0, { type: 'search', event: 'search', name: 'Search Area', instruction: CONTACT_TYPES.search.instruction, destination: field.id, target: area, search: { center: area, radius: 560, exact, revealed: false } })];
+            contract.stages = [makeStage(id, 0, { type: 'search', event: 'search', name: 'Search Area', instruction: CONTACT_TYPES.search.instruction, destination: field.id, target: area, search: { center: area, radius: 1800, exact, revealed: false } })];
         } else {
             const cargo = fieldPoint(field, rand, 420), delivery = rand() < .35 ? station : destination; contract.name = 'Recovery Run'; contract.description = `Recover lost cargo and deliver it to ${delivery.name}.`; contract.missionPayload = { kind: 'recovered-cargo', quantity: 1 };
             contract.stages = [makeStage(id, 0, { type: 'pickup', event: 'pickup', name: 'Recover Lost Cargo', instruction: CONTACT_TYPES.pickup.instruction, destination: field.id, target: cargo }), makeStage(id, 1, { type: 'haul', event: 'dock', name: 'Deliver Recovered Cargo', instruction: `Dock at ${delivery.name}.`, destination: delivery.id, target: point(delivery) })];
@@ -147,8 +160,8 @@
         if (tutorial || remaining > 0) return { ok: false, tutorial, remaining, board: state.contracts.board };
         state.contracts.lastManualRefreshAt = time; return { ok: true, tutorial: false, remaining: BOARD_COOLDOWN_MS, board: refreshBoard(state, station) };
     }
-    function accept(state, id) { if (state.contracts.active) return false; const contract = state.contracts.board.find(c => c.id === id); if (!contract || contract.status !== 'offered') return false; contract.status = 'active'; syncContract(contract); state.contracts.active = contract; return true; }
-    function destinationName(contract, stage) { const current = stage || activeStages(contract)[0]; return LANDMARKS.find(item => item.id === current?.destination || item.id === contract?.destination)?.name || current?.name || 'Unknown Contact'; }
+    function accept(state, id) { if (state.contracts.active) return false; const offer = state.contracts.board.find(c => c.id === id); if (!offer || offer.status !== 'offered') return false; const contract = clone(offer); contract.status = 'active'; syncContract(contract); state.contracts.active = contract; return true; }
+    function destinationName(contract, stage) { const current = stage || activeStages(contract)[0], stageLandmark = LANDMARKS.find(item => item.id === current?.destination), region = REGIONS.find(item => item.id === current?.region), contractLandmark = LANDMARKS.find(item => item.id === contract?.destination); return stageLandmark?.name || region?.name || contractLandmark?.name || current?.name || 'Unknown Contact'; }
     function objectiveInstructionLegacy(contract) {
         if (CONTACT_TYPES[contract.type]) return CONTACT_TYPES[contract.type].instruction;
         if (['haul', 'smuggle'].includes(contract.type)) return `Dock at ${LANDMARKS.find(item => item.id === contract.destination)?.name || 'the marked station'} to complete delivery.`;
@@ -183,8 +196,9 @@
         });
         if (changed) syncContract(contract); return isComplete(contract);
     }
-    function abandon(state) { const c = state.contracts.active; if (!c) return null; c.status = 'failed'; if (c.issuer in state.reputations) state.reputations[c.issuer] = clamp(state.reputations[c.issuer] - 1, -100, 100); state.contracts.active = null; return c; }
-    function fail(state, reason) { const c = abandon(state); if (c) c.failureReason = reason || 'failed'; return c; }
+    function penalizeFailure(state, contract) { if (contract.issuer in state.reputations) state.reputations[contract.issuer] = clamp(state.reputations[contract.issuer] - 1, -100, 100); }
+    function abandon(state) { const c = state.contracts.active; if (!c) return null; c.status = 'failed'; penalizeFailure(state, c); state.contracts.active = null; return c; }
+    function fail(state, reason) { const c = state.contracts.active; if (!c) return null; c.status = 'failed'; c.failureReason = reason || 'failed'; penalizeFailure(state, c); state.contracts.active = null; state.contracts.board = state.contracts.board.filter(offer => offer.id !== c.id); return c; }
     function startEscort(state) {
         const c = state.contracts.active, stage = activeStages(c).find(item => item.escort), escort = stage?.escort || c?.escort;
         if (!escort || escort.phase !== 'rendezvous') return null;

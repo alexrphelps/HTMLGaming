@@ -27,6 +27,7 @@
             quests: { independents: 0, concord: 0, corsairs: 0 },
             progression: { tutorialStep: 0, legacyCareer: false, legacyShield: false },
             discoveries: ['waypoint_zero'],
+            customWaypoint: null,
             consumedEntityIds: [],
             visitedRegions: ['trade_belt'],
             dockedAt: 'waypoint_zero',
