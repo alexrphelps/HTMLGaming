@@ -3,15 +3,16 @@
     function effectState(state) { state.ship.abilityEffects = state.ship.abilityEffects || {}; return state.ship.abilityEffects; }
     function cooldowns(state) { state.ship.abilityCooldowns = state.ship.abilityCooldowns || {}; return state.ship.abilityCooldowns; }
     function safeBlinkDestination(game, distance) {
-        const ship = game.state.ship, bounds = ns.World.WORLD_BOUNDS;
+        const ship = game.state.ship;
         for (let offset = distance; offset >= 70; offset -= 35) {
-            const candidate = { x: ns.MathUtil.clamp(ship.x + Math.cos(ship.angle) * offset, bounds.minX, bounds.maxX), y: ns.MathUtil.clamp(ship.y + Math.sin(ship.angle) * offset, bounds.minY, bounds.maxY) };
+            const candidate = { x: ship.x + Math.cos(ship.angle) * offset, y: ship.y + Math.sin(ship.angle) * offset };
             const blocked = game.world.nearbyEntities(candidate.x, candidate.y, 55).some(entity => entity.kind === 'asteroid');
             if (!blocked) return candidate;
         }
         return { x: ship.x, y: ship.y };
     }
     function activate(game, slot) {
+        if (ns.LightSpeed?.isTraveling(game)) return false;
         const state = game.state, unlocked = ns.Unlocks.evaluate(state).abilitySlots;
         const moduleId = state.ship.slots[slot], module = ns.Data.MODULES[moduleId];
         if (!unlocked[slot] || !module?.ability) return false;

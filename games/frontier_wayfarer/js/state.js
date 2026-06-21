@@ -15,6 +15,7 @@
             ship: {
                 name: 'Wayfarer', x: 260, y: 80, vx: 0, vy: 0, angle: -Math.PI / 2,
                 hull: 140, shield: 0, overshield: 0, shieldRechargeDelay: 0, energy: 70, heat: 0,
+                damageSerial: 0,
                 chassis: { level: 1, integrity: 140, reactorBonus: 0, cargoBonus: 0, massLimit: 52 },
                 slots: Object.assign({}, DEFAULT_SLOTS), ownedModules: ['pulse_mk1', 'reactor_mk1', 'drive_mk1', 'cargo_mk1'],
                 moduleDamage: {}, abilityCooldowns: {}, abilityEffects: {}, cargo: {}, insured: false

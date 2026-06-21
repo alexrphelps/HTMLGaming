@@ -13,7 +13,7 @@ This game is the open-universe evolution of Mini Invaders: a single-player top-d
 
 The intended player fantasy is:
 
-1. Fly one personal ship across a handcrafted five-region universe.
+1. Fly one personal ship across a handcrafted twenty-region universe.
 2. Aim directly with the mouse while managing inertia, heat, energy, shields, cargo, and module loadout.
 3. Progress through contracts, discoveries, combat, factions, trade, salvaging, and ship upgrades.
 4. Grow a long-lived career that survives defeat, with losses focused on unbanked rewards, cargo risk, and repairable module damage.
@@ -51,6 +51,7 @@ Out of scope unless explicitly requested:
   - Mouse 1: fire `primary1`
   - Mouse 2: fire `primary2` when equipped
   - `F`: interact / dock
+  - `R`: charge or disengage the fitted Asterion Light Drive
   - `Space`, `Q`, `E`, `Shift`: active module slots
   - `Tab`: cycle target
   - `M`, `T`, `C`: open key panels
@@ -59,15 +60,12 @@ Out of scope unless explicitly requested:
 
 ### World Structure
 
-- The universe is composed of five dense authored regions:
-  - Meridian Trade Belt
-  - Helion Core
-  - Shatterline Frontier
-  - Null Expanse
-  - Violet Anomaly Rim
+- The universe is a 5-by-4 chart of twenty dense authored regions. The original Meridian, Helion, Shatterline, Null, and Violet regions form its central career space; fifteen larger frontier regions surround them.
+- Each region occupies a 9,000-by-7,200 sector inside the finite 45,000-by-28,800 world envelope.
 - World streaming is deterministic around a saved world seed.
 - Chunk generation and floating-origin behavior are part of the technical contract and should not be casually removed.
 - Region traversal is seamless; this is not an encounter-map structure.
+- The mid-game Asterion Light Drive shifts travel into a separate interaction-free visual layer while preserving the ship's real world coordinates.
 
 ### Economy
 
@@ -205,11 +203,24 @@ Do not regress into:
 Current UI contract:
 
 - Sparse world HUD during flight
+- Responsive start command layout and cockpit workspace that scale from wide desktop views down to narrow embedded frames
+- Desktop cockpit navigation uses a dedicated system rail; compact layouts convert it to a horizontal strip
+- The Station header always includes an Undock button when docked, regardless of which cockpit tab is open
 - Bottom-center systems dock for hull, shield, energy, and heat
 - Ability HUD aligned with the systems dock
 - Currency visible in world HUD, start screen, pause/panel header, station screens, and defeat flow
 - Distinct full-screen cockpit panels for contracts, trade, ship, traits, factions, navigation, and settings
 - Code-drawn or asset-based non-emoji iconography, including the custom reticle cursor
+- The Wayfarer silhouette visibly reflects fitted weapons, defenses, cargo, utilities, drives, and active modules
+- Primary and secondary fire should emit from the visible weapon tip for every ship orientation, not from the ship centerline
+
+## World Hazards
+
+- Asteroids drift and rotate in three size tiers. Weapon damage splits large rocks into medium fragments, medium rocks into small fragments, and destroys small rocks for a modest unbanked Aetherium reward.
+- The starting Trade Belt sector should remain comparatively sparse so the opening route reads clearly.
+- Asteroid mutations persist while a career remains loaded, including across chunk unloads, but are intentionally not written into the save file.
+- The sector perimeter is a visible nebula rather than a collision wall. Flight and Blink may cross it, but escalating nebula exposure damages hull directly and rapidly becomes lethal.
+- Nebula gas should extend visibly into the end zones, with a thicker and denser layered presentation well beyond the practical boundary so the hazard reads as a region, not a line.
 
 ## Code Architecture
 
@@ -230,11 +241,12 @@ Current script order:
 11. `js/save.js`
 12. `js/combat.js`
 13. `js/abilities.js`
-14. `js/input.js`
-15. `js/renderer.js`
-16. `js/game.js`
-17. `js/ui.js`
-18. `js/main.js`
+14. `js/lightSpeed.js`
+15. `js/input.js`
+16. `js/renderer.js`
+17. `js/game.js`
+18. `js/ui.js`
+19. `js/main.js`
 
 High-level ownership map:
 
@@ -250,6 +262,7 @@ High-level ownership map:
 - `save.js`: schema migration and localStorage persistence
 - `combat.js`: damage, defeat, repair consequences
 - `abilities.js`: active-module behavior and cooldowns
+- `lightSpeed.js`: Asterion charge, shifted travel, steering, boundary exit, and rematerialization state
 - `input.js`: keyboard and mouse state
 - `renderer.js`: canvas rendering and HUD-space drawing support
 - `game.js`: main runtime loop and cross-system orchestration

@@ -1,4 +1,11 @@
 (function (ns) {
+    function refreshContractTargets(data) {
+        const contracts = [data.contracts?.active, ...(data.contracts?.board || []), ...(data.contracts?.history || [])].filter(Boolean);
+        contracts.forEach(contract => {
+            const landmark = ns.Data.LANDMARKS.find(item => item.id === contract.destination);
+            if (landmark) contract.target = { x: landmark.x, y: landmark.y };
+        });
+    }
     function serialize(state) {
         const clean = JSON.parse(JSON.stringify(state)); clean.lastSaveAt = Date.now(); return JSON.stringify(clean);
     }
@@ -29,6 +36,8 @@
             ns.Wallet.ensure(data);
             data.progression = Object.assign({ tutorialStep: 0, legacyCareer: false, legacyShield: false }, data.progression);
             data.ship.abilityCooldowns = data.ship.abilityCooldowns || {}; data.ship.abilityEffects = data.ship.abilityEffects || {};
+            data.ship.damageSerial = Number.isFinite(data.ship.damageSerial) ? data.ship.damageSerial : 0;
+            delete data.ship.lightSpeed; refreshContractTargets(data);
             ['abilitySpace', 'abilityQ', 'abilityE', 'abilityShift'].forEach(slot => { if (!(slot in data.ship.slots)) data.ship.slots[slot] = null; });
             return data;
         }
@@ -48,5 +57,5 @@
         } catch (error) { console.warn('Frontier Wayfarer ignored a corrupt save.'); return null; }
     }
     function remove(storage) { try { (storage || localStorage).removeItem(ns.SAVE_KEY); return true; } catch (_) { return false; } }
-    ns.Save = { serialize, migrate, validate, save, load, remove };
+    ns.Save = { serialize, migrate, validate, save, load, remove, refreshContractTargets };
 })(window.MiniInvadersV2);

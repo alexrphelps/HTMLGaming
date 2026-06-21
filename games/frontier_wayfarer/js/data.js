@@ -5,12 +5,39 @@
         independents: { id: 'independents', name: 'Frontier Guilds', short: 'GUILDS', color: '#55f0ad', hostileTo: null, description: 'Mechanics, traders, salvagers, and settlers keeping the frontier alive.' }
     };
 
+    const REGION_W = 9000, REGION_H = 7200;
+    const ECONOMIES = {
+        belt: { food: .9, alloys: 1, medicine: 1.05, relics: 1.3 },
+        core: { food: .8, alloys: .9, medicine: .82, relics: 1.5 },
+        frontier: { food: 1.2, alloys: .86, medicine: 1.28, relics: 1.05 },
+        null: { food: 1.16, alloys: 1.08, medicine: 1.4, relics: .88 },
+        anomaly: { food: 1.45, alloys: 1.3, medicine: 1.5, relics: .65 }
+    };
+    const R = (id, name, x, y, color, danger, faction, backdrop, travelTier) => ({
+        id, name, x, y, w: REGION_W, h: REGION_H, color, danger, faction,
+        economy: Object.assign({}, ECONOMIES[backdrop]), backdrop, travelTier: travelTier || 0
+    });
     const REGIONS = [
-        { id: 'trade_belt', name: 'Meridian Trade Belt', x: -3600, y: -2400, w: 7200, h: 4800, color: '#55f0ad', danger: 1, faction: 'independents', economy: { food: .85, alloys: 1, medicine: 1.05, relics: 1.35 }, backdrop: 'belt' },
-        { id: 'lawful_core', name: 'Helion Core', x: 3600, y: -3000, w: 7600, h: 6000, color: '#55d7ff', danger: 2, faction: 'concord', economy: { food: .8, alloys: .9, medicine: .8, relics: 1.5 }, backdrop: 'core' },
-        { id: 'frontier', name: 'Shatterline Frontier', x: -3600, y: 2400, w: 7200, h: 6200, color: '#ffbd59', danger: 3, faction: 'independents', economy: { food: 1.2, alloys: .85, medicine: 1.3, relics: 1.05 }, backdrop: 'frontier' },
-        { id: 'outlaw_expanse', name: 'Null Expanse', x: -11200, y: -3000, w: 7600, h: 7200, color: '#ff4f91', danger: 4, faction: 'corsairs', economy: { food: 1.15, alloys: 1.1, medicine: 1.4, relics: .9 }, backdrop: 'null' },
-        { id: 'anomaly_rim', name: 'Violet Anomaly Rim', x: 3600, y: 3000, w: 7600, h: 5600, color: '#ce75ff', danger: 5, faction: 'independents', economy: { food: 1.45, alloys: 1.3, medicine: 1.5, relics: .65 }, backdrop: 'anomaly' }
+        R('frostglass_reach', 'Frostglass Reach', -22500, -12000, '#80c9e8', 4, 'independents', 'anomaly', 1),
+        R('corsairs_crown', "Corsair's Crown", -13500, -12000, '#ff557f', 5, 'corsairs', 'null', 1),
+        R('zenith_grave', 'Zenith Grave', -4500, -12000, '#94a8c9', 5, 'independents', 'frontier', 1),
+        R('helion_vanguard', 'Helion Vanguard', 4500, -12000, '#68e3ff', 4, 'concord', 'core', 1),
+        R('luminous_verge', 'Luminous Verge', 13500, -12000, '#dc83ff', 5, 'independents', 'anomaly', 1),
+        R('redshift_march', 'Redshift March', -22500, -4800, '#e94d72', 4, 'corsairs', 'null', 1),
+        R('outlaw_expanse', 'Null Expanse', -13500, -4800, '#ff4f91', 4, 'corsairs', 'null'),
+        R('trade_belt', 'Meridian Trade Belt', -4500, -4800, '#55f0ad', 1, 'independents', 'belt'),
+        R('lawful_core', 'Helion Core', 4500, -4800, '#55d7ff', 2, 'concord', 'core'),
+        R('concordat_reach', 'Concordat Reach', 13500, -4800, '#70bdf5', 3, 'concord', 'core', 1),
+        R('smugglers_wake', "Smuggler's Wake", -22500, 2400, '#f05b99', 4, 'corsairs', 'null', 1),
+        R('cinder_drift', 'Cinder Drift', -13500, 2400, '#de7652', 4, 'corsairs', 'frontier', 1),
+        R('frontier', 'Shatterline Frontier', -4500, 2400, '#ffbd59', 3, 'independents', 'frontier'),
+        R('anomaly_rim', 'Violet Anomaly Rim', 4500, 2400, '#ce75ff', 5, 'independents', 'anomaly'),
+        R('prism_wilds', 'Prism Wilds', 13500, 2400, '#b56cff', 5, 'independents', 'anomaly', 1),
+        R('deadstar_shoals', 'Deadstar Shoals', -22500, 9600, '#d54473', 5, 'corsairs', 'null', 1),
+        R('iron_pilgrim_belt', 'Iron Pilgrim Belt', -13500, 9600, '#c5a76b', 4, 'independents', 'belt', 1),
+        R('far_meridian', 'Far Meridian', -4500, 9600, '#63d9b3', 3, 'independents', 'belt', 1),
+        R('sunfall_expanse', 'Sunfall Expanse', 4500, 9600, '#ffae58', 5, 'concord', 'core', 1),
+        R('eventide_scar', 'Eventide Scar', 13500, 9600, '#a66bdf', 5, 'independents', 'anomaly', 1)
     ];
 
     const LANDMARKS = [
@@ -24,7 +51,22 @@
         { id: 'black_market', type: 'station', name: 'The Black Relay', x: -9800, y: -1900, region: 'outlaw_expanse', faction: 'corsairs' },
         { id: 'rim_observatory', type: 'station', name: 'Rim Observatory', x: 6900, y: 5200, region: 'anomaly_rim', faction: 'independents', major: true },
         { id: 'glass_wake', type: 'anomaly', name: 'The Glass Wake', x: 9400, y: 6800, region: 'anomaly_rim', faction: 'independents' },
-        { id: 'silent_crown', type: 'anomaly', name: 'Silent Crown', x: 1800, y: 6900, region: 'frontier', faction: 'independents' }
+        { id: 'silent_crown', type: 'anomaly', name: 'Silent Crown', x: 1800, y: 6900, region: 'frontier', faction: 'independents' },
+        { id: 'frostglass_relay', type: 'anomaly', name: 'Frostglass Relay', x: -18000, y: -8400, region: 'frostglass_reach', faction: 'independents' },
+        { id: 'crown_anchorage', type: 'station', name: 'Crown Anchorage', x: -9000, y: -8400, region: 'corsairs_crown', faction: 'corsairs', major: true },
+        { id: 'zenith_grave_signal', type: 'anomaly', name: 'Zenith Grave Signal', x: 0, y: -8400, region: 'zenith_grave', faction: 'independents' },
+        { id: 'vanguard_gate', type: 'station', name: 'Vanguard Gate', x: 9000, y: -8400, region: 'helion_vanguard', faction: 'concord', major: true },
+        { id: 'luminous_prism', type: 'anomaly', name: 'Luminous Prism', x: 18000, y: -8400, region: 'luminous_verge', faction: 'independents' },
+        { id: 'redshift_haven', type: 'station', name: 'Redshift Haven', x: -18000, y: -1200, region: 'redshift_march', faction: 'corsairs' },
+        { id: 'concordat_reach_station', type: 'station', name: 'Concordat Reach Station', x: 18000, y: -1200, region: 'concordat_reach', faction: 'concord' },
+        { id: 'smugglers_lantern', type: 'station', name: "Smuggler's Lantern", x: -18000, y: 6000, region: 'smugglers_wake', faction: 'corsairs' },
+        { id: 'cinder_foundry', type: 'station', name: 'Cinder Foundry', x: -9000, y: 6000, region: 'cinder_drift', faction: 'corsairs' },
+        { id: 'prism_lens', type: 'anomaly', name: 'Prism Lens', x: 18000, y: 6000, region: 'prism_wilds', faction: 'independents' },
+        { id: 'deadstar_anchorage', type: 'station', name: 'Deadstar Anchorage', x: -18000, y: 13200, region: 'deadstar_shoals', faction: 'corsairs', major: true },
+        { id: 'pilgrim_exchange', type: 'station', name: 'Pilgrim Exchange', x: -9000, y: 13200, region: 'iron_pilgrim_belt', faction: 'independents' },
+        { id: 'far_meridian_beacon', type: 'anomaly', name: 'Far Meridian Beacon', x: 0, y: 13200, region: 'far_meridian', faction: 'independents' },
+        { id: 'sunfall_citadel', type: 'station', name: 'Sunfall Citadel', x: 9000, y: 13200, region: 'sunfall_expanse', faction: 'concord', major: true },
+        { id: 'eventide_scar', type: 'anomaly', name: 'Eventide Scar', x: 18000, y: 13200, region: 'eventide_scar', faction: 'independents' }
     ];
 
     const COMMODITIES = {
@@ -46,6 +88,7 @@
         reactor_mk2: { id: 'reactor_mk2', name: 'Arc Reactor II', slot: 'reactor', mass: 7, reactor: 100, cost: C(400, 8, 0), tier: 2, unlock: 'contracts3' },
         drive_mk1: { id: 'drive_mk1', name: 'Vector Drive I', slot: 'engine', mass: 6, thrust: 225, cost: C(0), tier: 1, unlock: 'starter' },
         drive_mk2: { id: 'drive_mk2', name: 'Vector Drive II', slot: 'engine', mass: 8, thrust: 285, cost: C(450, 0, 8), tier: 2, unlock: 'contracts3' },
+        light_drive: { id: 'light_drive', name: 'Asterion Light Drive', slot: 'engine', mass: 10, thrust: 300, cost: C(900, 20, 12), tier: 3, unlock: 'lightDrive', majorOnly: true },
         shield_scout: { id: 'shield_scout', name: 'Aegis Scout Screen', slot: 'defense', mass: 6, shield: 55, shieldRecharge: 12, shieldDelay: 2, cost: C(140, 0, 4), tier: 1, unlock: 'shield' },
         shield_balanced: { id: 'shield_balanced', name: 'Aegis Balanced Screen', slot: 'defense', mass: 9, shield: 95, shieldRecharge: 8, shieldDelay: 3, cost: C(300, 6, 10), tier: 2, unlock: 'shield' },
         shield_bulwark: { id: 'shield_bulwark', name: 'Bulwark Screen', slot: 'defense', mass: 13, shield: 165, shieldRecharge: 4, shieldDelay: 5, cost: C(520, 0, 30), tier: 3, unlock: 'faction25' },

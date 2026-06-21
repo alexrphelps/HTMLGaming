@@ -39,9 +39,9 @@
         }
         state.stats.trades++; return true;
     }
-    function buyModule(state, moduleId) {
+    function buyModule(state, moduleId, station) {
         const module = MODULES[moduleId];
-        if (!module || !ns.Unlocks.moduleVisible(state, module) || state.ship.ownedModules.includes(moduleId) || !ns.Wallet.debit(state, module.cost)) return false;
+        if (!module || (module.majorOnly && !station?.major) || !ns.Unlocks.moduleVisible(state, module) || state.ship.ownedModules.includes(moduleId) || !ns.Wallet.debit(state, module.cost)) return false;
         state.ship.ownedModules.push(moduleId); return true;
     }
     function driftMarkets(state) {

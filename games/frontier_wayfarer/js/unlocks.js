@@ -10,6 +10,7 @@
             tutorial, guildBoard: tutorial >= 1, shields: tutorial >= 2 || Boolean(state.progression?.legacyShield),
             tradeTier: rim ? 3 : state.contracts.completed >= 3 ? 2 : tutorial >= 1 ? 1 : 0,
             anomaly, combat, factionStanding: Boolean(factionStanding), rim,
+            lightDrive: state.pilot.level >= 4 && state.contracts.completed >= 5,
             contractTypes: {
                 haul: tutorial >= 1, salvage: tutorial >= 1, rescue: tutorial >= 1,
                 escort: state.contracts.completed >= 3, survey: anomaly, bounty: combat,
@@ -29,7 +30,7 @@
         return {
             trade1: u.tradeTier >= 1, contracts3: state.contracts.completed >= 3,
             anomaly: u.anomaly, combat: u.combat, shield: u.shields,
-            faction25: u.factionStanding, rim: u.rim, mechanic: Boolean(state.pilot.achievements.master_mechanic)
+            faction25: u.factionStanding, rim: u.rim, lightDrive: u.lightDrive, mechanic: Boolean(state.pilot.achievements.master_mechanic)
         }[requirement] || false;
     }
     function moduleVisible(state, module) { return state.ship.ownedModules.includes(module.id) || requirementMet(state, module.unlock); }
@@ -42,6 +43,7 @@
         if (u.tutorial === 0) return 'Complete COLD START to unlock contracts, trade, and Afterburner.';
         if (u.tutorial === 1) return 'Complete PARTS RUN to unlock shield generators.';
         if (state.contracts.completed < 3) return `Complete ${3 - state.contracts.completed} more contract(s) to unlock Trade II and Space ability.`;
+        if (!u.lightDrive) return `Reach level 4 and complete ${Math.max(0, 5 - state.contracts.completed)} more contract(s) to license the Asterion Light Drive.`;
         if (!u.anomaly) return 'Discover an anomaly to unlock surveys, Sunshard technology, and Q ability.';
         if (!u.combat) return 'Reach level 3 and destroy 10 hostiles to unlock bounties and combat hardware.';
         if (!u.abilitySlots.abilityE) return 'Join a faction or complete 10 independent contracts to unlock E ability.';

@@ -2,12 +2,18 @@
     const { clamp } = ns.MathUtil;
     function applyDamage(state, amount) {
         let remaining = Math.max(0, amount);
+        if (remaining > 0) state.ship.damageSerial = (state.ship.damageSerial || 0) + 1;
         const overshieldHit = Math.min(state.ship.overshield || 0, remaining);
         state.ship.overshield = Math.max(0, (state.ship.overshield || 0) - overshieldHit); remaining -= overshieldHit;
         const shieldHit = Math.min(state.ship.shield, remaining);
         state.ship.shield -= shieldHit; remaining -= shieldHit;
         if (shieldHit > 0 || remaining > 0) state.ship.shieldRechargeDelay = ns.Progression.calculateShipStats(state).shieldDelay;
         state.ship.hull = Math.max(0, state.ship.hull - remaining);
+        return state.ship.hull <= 0;
+    }
+    function applyHullDamage(state, amount) {
+        const damage = Math.max(0, amount); if (damage > 0) state.ship.damageSerial = (state.ship.damageSerial || 0) + 1;
+        state.ship.hull = Math.max(0, state.ship.hull - damage);
         return state.ship.hull <= 0;
     }
     function defeatConsequences(state, world) {
@@ -35,5 +41,5 @@
         state.ship.moduleDamage = {}; state.ship.hull = stats.hull; state.ship.shield = stats.shield;
         ns.Progression.updateAchievements(state); return true;
     }
-    ns.Combat = { applyDamage, defeatConsequences, repairAll };
+    ns.Combat = { applyDamage, applyHullDamage, defeatConsequences, repairAll };
 })(window.MiniInvadersV2);

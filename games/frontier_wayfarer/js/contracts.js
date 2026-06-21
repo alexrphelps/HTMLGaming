@@ -24,7 +24,8 @@
         const types = eligibleTypes(state, station.faction);
         const type = types[Math.floor(rand() * types.length)];
         const fieldContract = ['survey', 'salvage', 'rescue'].includes(type.id);
-        const destinations = LANDMARKS.filter(l => l.id !== station.id && (fieldContract || l.type === 'station'));
+        const hasLightDrive = state.ship.ownedModules.includes('light_drive');
+        const destinations = LANDMARKS.filter(l => l.id !== station.id && (fieldContract || l.type === 'station') && (hasLightDrive || !(REGIONS.find(r => r.id === l.region)?.travelTier)));
         const destination = destinations[Math.floor(rand() * destinations.length)] || station;
         const region = REGIONS.find(r => r.id === destination.region) || REGIONS[0];
         const levelScale = 1 + (state.pilot.level - 1) * .08;
