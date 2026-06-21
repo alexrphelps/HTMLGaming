@@ -39,6 +39,13 @@
         });
         return effects;
     }
+    function traitTotalLabel(trait, rank) {
+        if (!trait?.display || rank <= 0) return '';
+        if (trait.display.unit === 'capstone') return 'CAPSTONE ACTIVE';
+        const value = Math.abs(Object.values(trait.effect)[0] * rank);
+        const amount = trait.display.unit === 'percent' ? `${Math.round(value * 100)}%` : `${Math.round(value)}`;
+        return trait.display.direction === 'less' ? `${amount} LESS ${trait.display.label}` : `+${amount} ${trait.display.label}`;
+    }
     function equippedModules(state) {
         return Object.values(state.ship.slots).filter(Boolean).map(id => MODULES[id]).filter(Boolean);
     }
@@ -64,7 +71,8 @@
             shieldRecharge: defense.shieldRecharge || 0,
             shieldDelay: defense.shieldDelay || 0,
             cargo: (cargo.cargo || 6) + state.ship.chassis.cargoBonus + utility('cargo') + (effects.cargo || 0),
-            cooling: 13 + utility('cooling'), repair: utility('repair') * (1 + (effects.repair || 0)),
+            energyRecharge: 16,
+            cooling: 15 + utility('cooling'), repair: utility('repair') * (1 + (effects.repair || 0)),
             sensor: 850 + utility('sensor') + (effects.sensor || 0),
             effects
         };
@@ -76,11 +84,13 @@
         if (slot.startsWith('ability')) return module.slot === 'ability';
         return slot === module.slot;
     }
-    function equipModule(state, slot, moduleId) {
+    function checkEquipModule(state, slot, moduleId) {
         const module = MODULES[moduleId];
         const unlocks = ns.Unlocks.evaluate(state);
-        if (!module || !state.ship.ownedModules.includes(moduleId) || !slotAccepts(slot, module)) return false;
-        if (slot.startsWith('ability') && !unlocks.abilitySlots[slot]) return false;
+        if (!module) return { ok: false, reason: 'missing' };
+        if (!state.ship.ownedModules.includes(moduleId)) return { ok: false, reason: 'unowned' };
+        if (!slotAccepts(slot, module)) return { ok: false, reason: 'slot' };
+        if (slot.startsWith('ability') && !unlocks.abilitySlots[slot]) return { ok: false, reason: 'locked' };
         const old = state.ship.slots[slot];
         const previousSlot = Object.keys(state.ship.slots).find(key => key !== slot && state.ship.slots[key] === moduleId);
         if (previousSlot) state.ship.slots[previousSlot] = null;
@@ -88,8 +98,18 @@
         if (calculateShipStats(state).mass > state.ship.chassis.massLimit) {
             state.ship.slots[slot] = old;
             if (previousSlot) state.ship.slots[previousSlot] = moduleId;
-            return false;
+            return { ok: false, reason: 'mass' };
         }
+        state.ship.slots[slot] = old;
+        if (previousSlot) state.ship.slots[previousSlot] = moduleId;
+        return { ok: true };
+    }
+    function equipModule(state, slot, moduleId) {
+        const check = checkEquipModule(state, slot, moduleId);
+        if (!check.ok) return false;
+        const previousSlot = Object.keys(state.ship.slots).find(key => key !== slot && state.ship.slots[key] === moduleId);
+        if (previousSlot) state.ship.slots[previousSlot] = null;
+        state.ship.slots[slot] = moduleId;
         return true;
     }
     function cargoUsed(state) { return Object.values(state.ship.cargo).reduce((sum, qty) => sum + qty, 0); }
@@ -102,5 +122,5 @@
         return a;
     }
 
-    ns.Progression = { getTraitRank, getDisciplineSpend, canBuyTrait, buyTrait, respecCost, respec, traitEffects, calculateShipStats, equipModule, cargoUsed, updateAchievements };
+    ns.Progression = { getTraitRank, getDisciplineSpend, canBuyTrait, buyTrait, respecCost, respec, traitEffects, traitTotalLabel, calculateShipStats, checkEquipModule, equipModule, cargoUsed, updateAchievements };
 })(window.MiniInvadersV2);

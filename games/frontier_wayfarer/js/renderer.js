@@ -17,19 +17,20 @@
             const glow = c.createRadialGradient(this.w * .5, this.h * .5, 50, this.w * .5, this.h * .5, Math.max(this.w, this.h) * .7);
             glow.addColorStop(0, `${region.color}0b`); glow.addColorStop(1, '#00000000'); c.fillStyle = glow; c.fillRect(0, 0, this.w, this.h);
         }
-        screen(entity, camera) { return { x: this.w / 2 + entity.x - camera.x, y: this.h / 2 + entity.y - camera.y }; }
+        screen(entity, camera) { return { x: this.w / 2 + entity.x - camera.x + (this.shakeX || 0), y: this.h / 2 + entity.y - camera.y + (this.shakeY || 0) }; }
         drawWorld(game) {
             const c = this.ctx, camera = game.camera;
             game.world.loadedEntities().forEach(entity => {
                 const p = this.screen(entity, camera); if (p.x < -150 || p.x > this.w + 150 || p.y < -150 || p.y > this.h + 150) return;
                 if (entity.kind === 'asteroid') this.drawAsteroid(entity, p);
-                else if (entity.kind === 'station') this.drawStation(entity, p);
+                else if (entity.kind === 'station') this.drawStation(entity, p, game.time);
                 else if (entity.kind === 'anomaly') this.drawAnomaly(entity, p, game.time);
                 else this.drawSignal(entity, p, game.time);
             });
             game.enemies.forEach(e => this.drawEnemy(e, this.screen(e, camera), game.time));
+            const convoy = game.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0) this.drawConvoy(convoy, this.screen(convoy, camera), game.time);
             game.bullets.forEach(b => { const p = this.screen(b, camera); c.strokeStyle = b.enemy ? '#ff597f' : '#55f0ad'; c.lineWidth = b.enemy ? 2 : 3; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - b.vx * .025, p.y - b.vy * .025); c.stroke(); });
-            game.effects.forEach(effect => { const p = this.screen(effect, camera); c.globalAlpha = clamp(effect.life / effect.maxLife, 0, 1); c.fillStyle = '#b8d5dc'; c.fillRect(p.x, p.y, effect.size, effect.size); }); c.globalAlpha = 1;
+            game.effects.forEach(effect => { const p = this.screen(effect, camera); c.globalAlpha = clamp(effect.life / effect.maxLife, 0, 1); if (effect.flash) { c.strokeStyle = '#f2f7ff'; c.lineWidth = 3; c.beginPath(); c.arc(p.x, p.y, effect.size * (1 - effect.life / effect.maxLife * .65), 0, Math.PI * 2); c.stroke(); } else { c.fillStyle = '#b8d5dc'; c.fillRect(p.x, p.y, effect.size, effect.size); } }); c.globalAlpha = 1;
         }
         drawAsteroid(e, p) {
             const c = this.ctx; c.save(); c.translate(p.x, p.y); c.rotate(e.rotation || 0); c.fillStyle = e.tier === 'large' ? '#101b22' : e.tier === 'medium' ? '#132029' : '#172630'; c.strokeStyle = '#476474'; c.lineWidth = e.tier === 'small' ? 1.4 : 2; c.beginPath();
@@ -39,11 +40,27 @@
             if (e.hull < e.maxHull) { c.globalAlpha = .7; c.strokeStyle = '#ffbd59'; c.beginPath(); c.moveTo(-e.radius * .08, -e.radius * .65); c.lineTo(e.radius * .08, -.15 * e.radius); c.lineTo(-e.radius * .28, e.radius * .25); c.stroke(); }
             c.restore();
         }
-        drawStation(e, p) {
-            const c = this.ctx, color = ns.Data.FACTIONS[e.faction].color; c.save(); c.translate(p.x, p.y); c.strokeStyle = color; c.fillStyle = '#061117'; c.lineWidth = 3;
-            c.beginPath(); c.arc(0, 0, e.radius || 95, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(0, 0, 52, 0, Math.PI * 2); c.fill(); c.stroke();
-            c.globalAlpha = .45; c.beginPath(); c.moveTo(-125, 0); c.lineTo(125, 0); c.moveTo(0, -125); c.lineTo(0, 125); c.stroke(); c.globalAlpha = 1;
-            c.fillStyle = color; c.font = '11px "Courier New"'; c.textAlign = 'center'; c.fillText(e.name.toUpperCase(), 0, (e.radius || 95) + 22); c.restore();
+        drawStation(e, p, time) {
+            const c = this.ctx, color = ns.Data.FACTIONS[e.faction].color, radius = e.radius || 95, phase = hash(e.x, e.y, e.name.length, 7) * Math.PI * 2, t = (time || 0) + phase;
+            const arms = e.faction === 'concord' ? 4 : e.faction === 'corsairs' ? 3 : 6, core = e.major ? 36 : 29;
+            c.save(); c.translate(p.x, p.y); c.fillStyle = '#061117'; c.strokeStyle = color; c.lineWidth = 2;
+            c.globalAlpha = .22; c.beginPath(); c.arc(0, 0, radius + 10 + Math.sin(t * 1.7) * 4, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
+            c.save(); c.rotate(t * (e.faction === 'corsairs' ? -.08 : .055));
+            for (let i = 0; i < arms; i++) {
+                c.save(); c.rotate(i / arms * Math.PI * 2); c.fillStyle = '#0b2028'; c.strokeStyle = color; c.fillRect(core - 3, -7, radius - core + 2, 14); c.strokeRect(core - 3, -7, radius - core + 2, 14);
+                c.fillStyle = '#102e38'; c.fillRect(radius - 18, -13, 20, 26); c.strokeRect(radius - 18, -13, 20, 26);
+                c.fillStyle = i % 2 ? '#ffbd59' : color; c.globalAlpha = .55 + Math.sin(t * 4 + i) * .25; c.fillRect(radius - 5, -2, 5, 4); c.restore();
+            }
+            c.restore(); c.globalAlpha = 1;
+            c.save(); c.rotate(t * -.11); c.setLineDash?.([10, 7]); c.lineWidth = e.major ? 3 : 2; c.beginPath(); c.arc(0, 0, radius * .72, 0, Math.PI * 2); c.stroke(); c.setLineDash?.([]); c.restore();
+            c.fillStyle = '#07151c'; c.lineWidth = 3; c.beginPath();
+            if (e.faction === 'concord') { for (let i = 0; i < 8; i++) { const a = Math.PI / 8 + i * Math.PI / 4, x = Math.cos(a) * core, y = Math.sin(a) * core; i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); }
+            else if (e.faction === 'corsairs') { for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, r = i % 2 ? core * .72 : core; const x = Math.cos(a) * r, y = Math.sin(a) * r; i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); }
+            else c.arc(0, 0, core, 0, Math.PI * 2);
+            c.fill(); c.stroke();
+            c.globalAlpha = .35; c.fillStyle = color; c.beginPath(); c.arc(0, 0, 15 + Math.sin(t * 2.5) * 3, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; c.strokeStyle = '#d7f5ff'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, 8, 0, Math.PI * 2); c.stroke();
+            c.strokeStyle = color; c.globalAlpha = .6; c.beginPath(); c.moveTo(-radius - 18, 0); c.lineTo(-radius + 3, 0); c.moveTo(radius - 3, 0); c.lineTo(radius + 18, 0); c.stroke(); c.globalAlpha = 1;
+            c.fillStyle = color; c.font = '11px "Courier New"'; c.textAlign = 'center'; c.fillText(e.name.toUpperCase(), 0, radius + 24); c.font = '8px "Courier New"'; c.fillText(`${e.major ? 'MAJOR ' : ''}${ns.Data.FACTIONS[e.faction].short} FACILITY`, 0, radius + 37); c.restore();
         }
         drawAnomaly(e, p, time) {
             const c = this.ctx; c.save(); c.translate(p.x, p.y); c.rotate(time * .18); c.strokeStyle = '#ce75ff'; c.lineWidth = 2;
@@ -51,18 +68,31 @@
             c.restore(); c.globalAlpha = 1;
         }
         drawSignal(e, p, time) { const c = this.ctx; c.strokeStyle = e.kind === 'salvage' ? '#ffbd59' : '#ce75ff'; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 12 + Math.sin(time * 4) * 4, 0, Math.PI * 2); c.stroke(); c.fillStyle = c.strokeStyle; c.fillRect(p.x - 2, p.y - 2, 4, 4); }
+        drawContractContact(game) {
+            ns.Contracts.contactsFor(game.state.contracts.active).forEach(contact => {
+                const p = this.screen(contact, game.camera); if (p.x < -100 || p.x > this.w + 100 || p.y < -100 || p.y > this.h + 100) return;
+                const c = this.ctx, pulse = 18 + Math.sin(game.time * 5) * 4; c.save(); c.translate(p.x, p.y); c.rotate(Math.PI / 4);
+                c.strokeStyle = '#ffbd59'; c.fillStyle = '#ffbd5922'; c.lineWidth = 2; c.strokeRect(-pulse / 2, -pulse / 2, pulse, pulse); c.fillRect(-5, -5, 10, 10); c.restore();
+                c.fillStyle = '#ffbd59'; c.font = '10px "Courier New"'; c.textAlign = 'center'; c.fillText(contact.name.toUpperCase(), p.x, p.y + 34);
+            });
+        }
         drawEnemy(e, p, time) {
             const c = this.ctx; c.save(); c.translate(p.x, p.y); c.rotate(e.angle + Math.PI / 2); c.strokeStyle = e.faction === 'concord' ? '#55d7ff' : '#ff4f91'; c.fillStyle = '#080b10'; c.lineWidth = 2;
             c.beginPath(); c.moveTo(0, -16); c.lineTo(13, 13); c.lineTo(0, 8); c.lineTo(-13, 13); c.closePath(); c.fill(); c.stroke(); c.restore();
             c.fillStyle = '#281018'; c.fillRect(p.x - 16, p.y + 20, 32, 3); c.fillStyle = '#ff597f'; c.fillRect(p.x - 16, p.y + 20, 32 * clamp(e.hull / e.maxHull, 0, 1), 3);
         }
+        drawConvoy(convoy, p, time) {
+            const c = this.ctx, color = ns.Data.FACTIONS[convoy.faction]?.color || '#55d7ff'; c.save(); c.translate(p.x, p.y); c.rotate(convoy.angle + Math.PI / 2); c.strokeStyle = color; c.fillStyle = '#07161c'; c.lineWidth = 2;
+            this.shipPath([[0,-20],[12,-9],[15,14],[6,19],[-6,19],[-15,14],[-12,-9]]); c.fill(); c.stroke(); c.fillStyle = color; c.globalAlpha = .55 + Math.sin(time * 6) * .2; c.fillRect(-4, -10, 8, 18); c.restore();
+            c.fillStyle = '#102830'; c.fillRect(p.x - 22, p.y + 25, 44, 4); c.fillStyle = color; c.fillRect(p.x - 22, p.y + 25, 44 * clamp(convoy.hull / convoy.maxHull, 0, 1), 4); c.fillStyle = color; c.font = '9px "Courier New"'; c.textAlign = 'center'; c.fillText('CONVOY', p.x, p.y + 42);
+        }
         shipPath(points) { const c = this.ctx; c.beginPath(); points.forEach(([x, y], index) => index ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); }
         drawWeapon(moduleId, side) {
-            if (!moduleId) return; const c = this.ctx, x = side * 15;
+            if (!moduleId) return; const c = this.ctx, mount = ns.MathUtil.weaponMount(moduleId), x = side * mount.lateral, tip = mount.forward;
             c.fillStyle = '#122c34'; c.strokeStyle = '#6db8c4'; c.lineWidth = 1.4;
-            if (moduleId.includes('seeker')) { c.fillRect(x - 5, -12, 10, 17); c.strokeRect(x - 5, -12, 10, 17); c.fillStyle = '#ffbd59'; [-2, 2].forEach(dx => { c.beginPath(); c.arc(x + dx, -8, 1.3, 0, Math.PI * 2); c.fill(); }); }
+            if (moduleId.includes('seeker')) { c.fillRect(x - 5, -tip, 10, tip + 5); c.strokeRect(x - 5, -tip, 10, tip + 5); c.fillStyle = '#ffbd59'; [-2, 2].forEach(dx => { c.beginPath(); c.arc(x + dx, -tip, 1.3, 0, Math.PI * 2); c.fill(); }); }
             else if (moduleId.includes('rail')) { c.fillRect(x - 2.5, -29, 5, 31); c.strokeRect(x - 2.5, -29, 5, 31); c.fillStyle = '#ce75ff'; c.fillRect(x - 1, -31, 2, 18); }
-            else { const twin = moduleId.includes('mk2'); [-2, twin ? 2 : -2].filter((v, i, all) => all.indexOf(v) === i).forEach(dx => { c.fillRect(x + dx - 1.5, -23, 3, 24); c.strokeRect(x + dx - 1.5, -23, 3, 24); }); }
+            else { const twin = moduleId.includes('mk2'); [-2, twin ? 2 : -2].filter((v, i, all) => all.indexOf(v) === i).forEach(dx => { c.fillRect(x + dx - 1.5, -tip, 3, tip + 1); c.strokeRect(x + dx - 1.5, -tip, 3, tip + 1); }); }
         }
         drawFittedStructures(game) {
             const c = this.ctx, slots = game.state.ship.slots, equipped = Object.values(slots).filter(Boolean);
@@ -82,14 +112,22 @@
             if (equipped.includes('shield_overcharger')) { c.strokeStyle = '#55d7ff'; c.beginPath(); c.arc(0, 3, 12, .2, Math.PI - .2); c.stroke(); }
             if (equipped.includes('phase_cloak')) { c.fillStyle = '#ce75ff'; [-1, 1].forEach(side => { c.beginPath(); c.arc(side * 10, -2, 2, 0, Math.PI * 2); c.fill(); }); }
         }
+        drawUtilityEffects(game) {
+            const c = this.ctx, equipped = Object.values(game.state.ship.slots), time = game.time, stats = ns.Progression.calculateShipStats(game.state);
+            if (equipped.includes('repair_drones')) [-1, 1].forEach((side, index) => { const a = time * 1.8 * side + index * Math.PI, x = Math.cos(a) * 34, y = Math.sin(a) * 18; c.fillStyle = '#55f0ad'; c.fillRect(x - 2, y - 2, 4, 4); if (game.state.ship.hull < stats.hull) { c.globalAlpha = .35 + Math.sin(time * 9) * .2; c.strokeStyle = '#55f0ad'; c.beginPath(); c.moveTo(x, y); c.lineTo(0, 3); c.stroke(); c.globalAlpha = 1; } });
+            if (equipped.includes('sensor_array')) { const pulse = (time * 42) % 70; c.globalAlpha = 1 - pulse / 70; c.strokeStyle = '#ce75ff'; c.beginPath(); c.arc(0, 0, 18 + pulse, 0, Math.PI * 2); c.stroke(); c.globalAlpha = .65; c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(time * 1.7) * 56, Math.sin(time * 1.7) * 56); c.stroke(); c.globalAlpha = 1; }
+            if (equipped.includes('heat_sink') && game.state.ship.heat > 1) { const intensity = clamp(game.state.ship.heat / 100, .15, 1); c.strokeStyle = '#55d7ff'; c.globalAlpha = .25 + intensity * .6; [-1, 1].forEach(side => { for (let i = 0; i < 3; i++) { const drift = (time * (24 + i * 4) + i * 9) % 30; c.beginPath(); c.moveTo(side * 18, 5 + i * 4); c.lineTo(side * (22 + drift), 8 + i * 4 + Math.sin(time * 5 + i) * 3); c.stroke(); } }); c.globalAlpha = 1; }
+            if (equipped.includes('cargo_pods')) { c.strokeStyle = '#ffbd59'; c.globalAlpha = .35 + Math.sin(time * 4) * .15; [-1, 1].forEach(side => { c.beginPath(); c.moveTo(side * 24, 10); c.lineTo(side * 24, 30 + Math.sin(time * 3 + side) * 5); c.stroke(); c.fillStyle = '#ffbd59'; c.fillRect(side * 24 - 1.5, 8, 3, 3); }); c.globalAlpha = 1; }
+        }
         drawShip(game) {
-            const c = this.ctx, s = game.state.ship, scale = 1 + Math.min(4, s.chassis.level - 1) * .035; c.save(); c.translate(this.w / 2, this.h / 2); c.rotate(s.angle + Math.PI / 2); c.scale(scale, scale); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
+            const c = this.ctx, s = game.state.ship, scale = ns.MathUtil.shipScale(s), p = this.screen(s, game.camera); c.save(); c.translate(p.x, p.y); c.rotate(s.angle + Math.PI / 2); c.scale(scale, scale); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
             c.shadowColor = '#55f0ad'; c.shadowBlur = 12; c.fillStyle = '#08181e'; c.strokeStyle = '#55f0ad'; c.lineWidth = 2;
             this.shipPath([[0,-31],[8,-18],[13,-8],[28,13],[20,20],[8,14],[0,22],[-8,14],[-20,20],[-28,13],[-13,-8],[-8,-18]]); c.fill(); c.stroke();
             c.shadowBlur = 0; c.fillStyle = '#112a32'; c.strokeStyle = '#3e7180'; this.shipPath([[0,-23],[7,-10],[8,10],[0,17],[-8,10],[-7,-10]]); c.fill(); c.stroke();
             c.fillStyle = '#55d7ff'; c.globalAlpha *= .8; this.shipPath([[0,-19],[5,-8],[0,-2],[-5,-8]]); c.fill(); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
             c.fillStyle = '#ffbd59'; c.shadowColor = '#ffbd59'; c.shadowBlur = 8; c.beginPath(); c.arc(0, 7, 3.5, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0;
             this.drawFittedStructures(game);
+            this.drawUtilityEffects(game);
             const thrusting = game.input.down('w', 'W') || ns.Abilities.isActive(game.state, 'afterburner'); c.fillStyle = ns.Abilities.isActive(game.state, 'afterburner') ? '#ffbd59' : '#55d7ff'; [-1, 1].forEach(side => { c.beginPath(); c.moveTo(side * 8 - 3, 17); c.lineTo(side * 8, 22 + (thrusting ? 12 : 4) + Math.random() * 5); c.lineTo(side * 8 + 3, 17); c.fill(); });
             if (s.shield > 0 || s.overshield > 0) { c.globalAlpha = .18 + (s.overshield > 0 ? .18 : 0); c.strokeStyle = s.overshield > 0 ? '#ce75ff' : '#55d7ff'; c.lineWidth = 1.5; c.beginPath(); c.ellipse(0, 0, 35, 40, 0, 0, Math.PI * 2); c.stroke(); }
             c.restore();
@@ -134,13 +172,47 @@
             c.beginPath(); c.moveTo(-radius, 0); c.lineTo(radius, 0); c.moveTo(0, -radius); c.lineTo(0, radius); c.stroke();
             const drawBlip = (e, color, size) => { const dx = (e.x - game.state.ship.x) / range * radius, dy = (e.y - game.state.ship.y) / range * radius; if (Math.hypot(dx, dy) > radius) return; c.fillStyle = color; c.fillRect(dx - size / 2, dy - size / 2, size, size); };
             game.world.nearbyEntities(game.state.ship.x, game.state.ship.y, range).forEach(e => drawBlip(e, e.kind === 'station' ? ns.Data.FACTIONS[e.faction].color : e.kind === 'asteroid' ? '#56707d' : '#ce75ff', e.kind === 'station' ? 5 : 3));
-            game.enemies.forEach(e => drawBlip(e, '#ff4f91', 4)); c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 3, 0, Math.PI * 2); c.fill(); c.restore();
+            game.enemies.forEach(e => drawBlip(e, '#ff4f91', 4)); const convoy = game.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0) drawBlip(convoy, '#55d7ff', 5); c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 3, 0, Math.PI * 2); c.fill(); c.restore();
         }
         drawPhaseOverlay(game) {
             const c = this.ctx, travel = ns.LightSpeed.ensure(game), ratio = Math.min(1, travel.timer / ns.LightSpeed.CONFIG.chargeDuration);
             c.save(); c.globalCompositeOperation = 'screen'; c.strokeStyle = `rgba(150,125,255,${.18 + ratio * .5})`; c.lineWidth = 1 + ratio * 4;
             for (let i = 0; i < 28; i++) { const a = hash(6021, i, 1, 1) * Math.PI * 2, inner = 90 + ratio * 160, outer = inner + 40 + ratio * 380 * hash(6022, i, 2, 1); c.beginPath(); c.moveTo(this.w / 2 + Math.cos(a) * inner, this.h / 2 + Math.sin(a) * inner); c.lineTo(this.w / 2 + Math.cos(a) * outer, this.h / 2 + Math.sin(a) * outer); c.stroke(); }
             c.strokeStyle = `rgba(85,240,173,${.2 + ratio * .55})`; c.lineWidth = 2; c.beginPath(); c.arc(this.w / 2, this.h / 2, 45 + ratio * Math.max(this.w, this.h) * .42, 0, Math.PI * 2); c.stroke(); c.restore();
+        }
+        contractWaypoint(game, objective) {
+            const contract = game.state.contracts.active, target = objective || (contract?.target ? { x: contract.target.x, y: contract.target.y, label: ns.Contracts.destinationName(contract) } : null); if (!target) return null;
+            const zoom = game.camera.zoom || 1, cx = this.w / 2, cy = this.h / 2;
+            const dx = (target.x - game.camera.x) * zoom, dy = (target.y - game.camera.y) * zoom;
+            const distanceToTarget = Math.hypot(target.x - game.state.ship.x, target.y - game.state.ship.y);
+            const sideInset = Math.min(52, this.w * .12), topInset = Math.min(116, this.h * .28), bottomInset = Math.min(174, this.h * .28);
+            const bounds = { left: sideInset, right: this.w - sideInset, top: topInset, bottom: this.h - bottomInset };
+            const projected = { x: cx + dx, y: cy + dy };
+            const onScreen = !ns.LightSpeed.isShifted(game) && projected.x >= bounds.left && projected.x <= bounds.right && projected.y >= bounds.top && projected.y <= bounds.bottom;
+            let x = projected.x, y = projected.y;
+            if (!onScreen) {
+                const scaleX = dx > 0 ? (bounds.right - cx) / Math.abs(dx || 1) : (cx - bounds.left) / Math.abs(dx || 1);
+                const scaleY = dy > 0 ? (bounds.bottom - cy) / Math.abs(dy || 1) : (cy - bounds.top) / Math.abs(dy || 1);
+                const scale = Math.max(0, Math.min(scaleX, scaleY)); x = cx + dx * scale; y = cy + dy * scale;
+                if (x > this.w - 170 && y > this.h - 185) y = Math.max(bounds.top, this.h - 185);
+            }
+            return { x, y, angle: Math.atan2(dy, dx), onScreen, distance: Math.round(distanceToTarget), label: target.label || ns.Contracts.destinationName(contract), bounds };
+        }
+        drawContractWaypoint(game) {
+            ns.Contracts.targetsFor(game.state.contracts.active).forEach((target, index) => this.drawOneContractWaypoint(game, target, index));
+        }
+        drawOneContractWaypoint(game, target, index) {
+            const waypoint = this.contractWaypoint(game, target); if (!waypoint) return;
+            const c = this.ctx; c.save(); c.translate(waypoint.x, waypoint.y); c.strokeStyle = '#ffbd59'; c.fillStyle = '#ffbd59'; c.lineWidth = 2;
+            if (waypoint.onScreen && target.stage?.search && !target.stage.search.revealed) { c.globalAlpha = .25; c.setLineDash?.([8, 8]); c.beginPath(); c.arc(0, 0, target.stage.search.radius * (game.camera.zoom || 1), 0, Math.PI * 2); c.stroke(); c.setLineDash?.([]); c.globalAlpha = 1; }
+            if (waypoint.onScreen) {
+                c.beginPath(); c.arc(0, 0, 18, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.moveTo(-26, 0); c.lineTo(-12, 0); c.moveTo(12, 0); c.lineTo(26, 0); c.moveTo(0, -26); c.lineTo(0, -12); c.moveTo(0, 12); c.lineTo(0, 26); c.stroke();
+            } else {
+                c.rotate(waypoint.angle); c.beginPath(); c.moveTo(12, 0); c.lineTo(-8, -7); c.lineTo(-4, 0); c.lineTo(-8, 7); c.closePath(); c.fill();
+            }
+            c.restore(); c.fillStyle = '#ffbd59'; c.font = '10px "Courier New"'; c.textAlign = waypoint.x > this.w / 2 ? 'right' : 'left';
+            const textX = waypoint.x + (waypoint.x > this.w / 2 ? -18 : 18), textY = (waypoint.onScreen ? waypoint.y + 39 : waypoint.y - 10) + index * 14;
+            c.fillText(`${waypoint.label.toUpperCase()} // ${ns.MathUtil.formatDistance(waypoint.distance)}`, textX, textY);
         }
         drawLightSpeed(game) {
             const c = this.ctx, travel = ns.LightSpeed.ensure(game), shake = game.state.settings.screenShake ? 2.2 : 0, cx = this.w / 2, cy = this.h / 2, decel = travel.phase === 'decelerating' ? Math.max(0, 1 - travel.timer / ns.LightSpeed.CONFIG.decelerationDuration) : 1;
@@ -161,15 +233,16 @@
             const wake = 160 + decel * 240; c.fillStyle = '#7d65ff55'; c.beginPath(); c.moveTo(-28, 0); c.lineTo(-wake, -34); c.lineTo(-wake * .72, 0); c.lineTo(-wake, 34); c.closePath(); c.fill(); c.restore();
             this.drawShip(game);
             c.strokeStyle = '#d9e9ff88'; c.lineWidth = 1; c.beginPath(); c.moveTo(cx - 42, cy); c.lineTo(cx - 17, cy); c.moveTo(cx + 17, cy); c.lineTo(cx + 42, cy); c.moveTo(cx, cy - 42); c.lineTo(cx, cy - 17); c.stroke();
-            c.fillStyle = '#cfe9ff'; c.font = '11px "Courier New"'; c.textAlign = 'center'; c.fillText(`VECTOR ${Math.round(game.state.ship.x)}, ${Math.round(game.state.ship.y)} // ${game.region.name.toUpperCase()}`, cx, this.h - 42);
+            c.fillStyle = '#cfe9ff'; c.font = '11px "Courier New"'; c.textAlign = 'center'; c.fillText(`VECTOR ${Math.round(game.state.ship.x)}, ${Math.round(game.state.ship.y)} KM // ${game.region.name.toUpperCase()}`, cx, this.h - 42);
             c.restore();
         }
         render(game) {
-            if (ns.LightSpeed.isShifted(game)) { this.drawLightSpeed(game); return; }
+            const shake = game.state?.settings?.screenShake ? game.impactShake || 0 : 0; this.shakeX = shake ? (Math.random() * 2 - 1) * shake : 0; this.shakeY = shake ? (Math.random() * 2 - 1) * shake : 0;
+            if (ns.LightSpeed.isShifted(game)) { this.drawLightSpeed(game); this.drawContractWaypoint(game); return; }
             this.clear(game.region, game.camera); const c = this.ctx, zoom = game.camera.zoom || 1;
-            c.save(); c.translate(this.w / 2, this.h / 2); c.scale(zoom, zoom); c.translate(-this.w / 2, -this.h / 2); this.drawWorld(game); this.drawNebula(game); this.drawShip(game); c.restore();
+            c.save(); c.translate(this.w / 2, this.h / 2); c.scale(zoom, zoom); c.translate(-this.w / 2, -this.h / 2); this.drawWorld(game); this.drawNebula(game); this.drawContractContact(game); this.drawShip(game); c.restore();
             if (ns.LightSpeed.ensure(game).phase === 'charging') this.drawPhaseOverlay(game);
-            this.drawRadar(game);
+            this.drawRadar(game); this.drawContractWaypoint(game);
         }
     }
     ns.Renderer = Renderer;

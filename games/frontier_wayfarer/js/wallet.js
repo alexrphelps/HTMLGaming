@@ -18,6 +18,10 @@
         const wallet = ensure(state)[pool || 'banked']; const required = normalize(cost);
         return KEYS.every(key => wallet[key] >= required[key]);
     }
+    function shortfall(state, cost, pool) {
+        const wallet = ensure(state)[pool || 'banked'], required = normalize(cost);
+        return KEYS.reduce((missing, key) => { missing[key] = Math.max(0, required[key] - wallet[key]); return missing; }, empty());
+    }
     function debit(state, cost, pool) {
         const name = pool || 'banked'; if (!canAfford(state, cost, name)) return false;
         const wallet = ensure(state)[name]; const required = normalize(cost); KEYS.forEach(key => { wallet[key] -= required[key]; }); return true;
@@ -31,5 +35,5 @@
     }
     function loseUnbanked(state) { const wallet = ensure(state); const lost = normalize(wallet.unbanked); wallet.unbanked = empty(); return lost; }
     function isZero(value) { const normalized = normalize(value); return KEYS.every(key => normalized[key] === 0); }
-    ns.Wallet = { KEYS, empty, normalize, ensure, scale, canAfford, debit, credit, deposit, loseUnbanked, isZero };
+    ns.Wallet = { KEYS, empty, normalize, ensure, scale, canAfford, shortfall, debit, credit, deposit, loseUnbanked, isZero };
 })(window.MiniInvadersV2);

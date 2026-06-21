@@ -27,6 +27,7 @@
         if (ability.type === 'emp') {
             game.enemies.forEach(enemy => {
                 if (ns.MathUtil.distance(enemy, state.ship) > ability.radius) return;
+                enemy.aggroed = true;
                 enemy.hull -= ability.damage; enemy.disabled = Math.max(enemy.disabled || 0, ability.duration);
                 if (enemy.hull <= 0) game.onEnemyKilled(enemy);
             });

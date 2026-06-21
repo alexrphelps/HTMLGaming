@@ -13,7 +13,7 @@ This game is the open-universe evolution of Mini Invaders: a single-player top-d
 
 The intended player fantasy is:
 
-1. Fly one personal ship across a handcrafted twenty-region universe.
+1. Fly one personal ship across a handcrafted thirty-region universe.
 2. Aim directly with the mouse while managing inertia, heat, energy, shields, cargo, and module loadout.
 3. Progress through contracts, discoveries, combat, factions, trade, salvaging, and ship upgrades.
 4. Grow a long-lived career that survives defeat, with losses focused on unbanked rewards, cargo risk, and repairable module damage.
@@ -50,7 +50,7 @@ Out of scope unless explicitly requested:
   - `A` / `D`: strafe
   - Mouse 1: fire `primary1`
   - Mouse 2: fire `primary2` when equipped
-  - `F`: interact / dock
+  - `F`: begin an interaction cast / dock
   - `R`: charge or disengage the fitted Asterion Light Drive
   - `Space`, `Q`, `E`, `Shift`: active module slots
   - `Tab`: cycle target
@@ -60,8 +60,8 @@ Out of scope unless explicitly requested:
 
 ### World Structure
 
-- The universe is a 5-by-4 chart of twenty dense authored regions. The original Meridian, Helion, Shatterline, Null, and Violet regions form its central career space; fifteen larger frontier regions surround them.
-- Each region occupies a 9,000-by-7,200 sector inside the finite 45,000-by-28,800 world envelope.
+- The universe is a 5-by-6 chart of thirty dense authored regions. The original Meridian, Helion, Shatterline, Null, and Violet regions form its central career space, with increasingly dangerous frontier rows extending south.
+- Each region occupies a 13,500-by-10,800 sector inside the finite 67,500-by-64,800 world envelope.
 - World streaming is deterministic around a saved world seed.
 - Chunk generation and floating-origin behavior are part of the technical contract and should not be casually removed.
 - Region traversal is seamless; this is not an encounter-map structure.
@@ -127,6 +127,19 @@ The current intended progression order is:
 
 If future progression changes are made, update the unlock evaluator and the milestone messaging together so the HUD and panels still tell the truth.
 
+### Contracts And Waypoints
+
+- Accepting a contract keeps the Wayfarer docked and replaces the local board with a confirmed active-contract summary. Launch remains an explicit Undock action.
+- Only one contract can be active. Ordinary work has one stage; advanced work unlocks after three completed contracts and may contain sequential or parallel stages.
+- Every currently actionable destination appears in the objective HUD and as an edge-clamped flight waypoint. Parallel deliveries expose all outstanding stops, while broad searches show an area until close sensors resolve the exact contact.
+- Survey, salvage, and rescue contracts derive a mission contact at their saved target coordinates and resolve it atomically when interacted with.
+- Salvage and contract contacts use tap-to-start interaction casts. Progress only advances in range, tolerates a brief 0.75-second range break, and cancels on damage, menu entry, docking, or Light Speed.
+- Contract kills, interactions, escorts, and deliveries only advance inside their assigned objective area. Ordinary discoveries and salvage keep their normal rewards but do not satisfy remote contracts.
+- Manual board refreshes advance a persisted deterministic revision and have a global two-minute real-time cooldown. Initial board generation is free and tutorial boards remain fixed.
+- Normal stations offer three to six contracts per refresh; major stations offer five to eight. The seeded count and offers are stable for each board revision.
+- Escort contracts create a persistent 220-hull friendly convoy at a rendezvous 1,800 KM from its destination. Raiders arrive together in distant wedge formations, prioritize the convoy, and switch aggro to the player when attacked. The contract fails if the convoy is destroyed or left beyond escort range for eight seconds.
+- Abandoning a contract removes its waypoint and applies the standing penalty to its issuer.
+
 ### Ship Progression
 
 The player owns one ship, `Wayfarer`, and improves it over time.
@@ -142,10 +155,17 @@ Current ship slot model:
 - `utility1`
 - `utility2`
 - `utility3`
+- `utility4`
 - `abilitySpace`
 - `abilityQ`
 - `abilityE`
 - `abilityShift`
+
+### Station Markets
+
+- Every station has a deterministic commodity and module specialty plus a smaller rotating selection.
+- Supplemental stock rotates every twenty minutes of career play and persists in the save; major stations carry broader inventories and major-only hardware.
+- Unstocked cargo cannot be purchased locally, but owned cargo can always be sold so a pilot is never trapped with an unusable hold.
 
 The old dedicated secondary-weapon slot is gone. Weapon groups now map to the two primary slots.
 
@@ -179,6 +199,7 @@ Each discipline has:
 - one capstone
 
 Capstones should remain gated by both discipline investment and a matching achievement. Full retraining should remain station-based and paid, not free everywhere.
+Ranked trait cards show the cumulative current effect rather than only the per-rank description.
 
 ## UI Direction
 
@@ -203,24 +224,32 @@ Do not regress into:
 Current UI contract:
 
 - Sparse world HUD during flight
+- One active-contract waypoint with destination and distance, rendered above normal flight and Light Drive views
 - Responsive start command layout and cockpit workspace that scale from wide desktop views down to narrow embedded frames
 - Desktop cockpit navigation uses a dedicated system rail; compact layouts convert it to a horizontal strip
+- Cockpit hotkeys switch directly between tabs. Repeating the active hotkey closes it in flight or returns to the Station panel while docked.
 - The Station header always includes an Undock button when docked, regardless of which cockpit tab is open
+- Contract boards use a two-column VIEW-first layout with expandable inline briefs and acceptance inside the opened brief.
+- The Ship console uses dedicated profile, core-system, and weapons/utility panels with a static fitted-ship profile.
 - Bottom-center systems dock for hull, shield, energy, and heat
 - Ability HUD aligned with the systems dock
 - Currency visible in world HUD, start screen, pause/panel header, station screens, and defeat flow
 - Distinct full-screen cockpit panels for contracts, trade, ship, traits, factions, navigation, and settings
 - Code-drawn or asset-based non-emoji iconography, including the custom reticle cursor
 - The Wayfarer silhouette visibly reflects fitted weapons, defenses, cargo, utilities, drives, and active modules
+- Passive utility modules also animate in flight: repair drones orbit, sensors sweep, heat sinks vent, and cargo pods trail position lights
+- Unaffordable paid actions remain clickable, display an explicit insufficient-credit state, and report the missing currencies
 - Primary and secondary fire should emit from the visible weapon tip for every ship orientation, not from the ship centerline
 
 ## World Hazards
 
 - Asteroids drift and rotate in three size tiers. Weapon damage splits large rocks into medium fragments, medium rocks into small fragments, and destroys small rocks for a modest unbanked Aetherium reward.
+- Player and enemy ships physically separate and rebound from asteroid impacts. High-speed impacts damage both bodies, while all projectiles stop at the first asteroid or ship they cross.
 - The starting Trade Belt sector should remain comparatively sparse so the opening route reads clearly.
 - Asteroid mutations persist while a career remains loaded, including across chunk unloads, but are intentionally not written into the save file.
 - The sector perimeter is a visible nebula rather than a collision wall. Flight and Blink may cross it, but escalating nebula exposure damages hull directly and rapidly becomes lethal.
 - Nebula gas should extend visibly into the end zones, with a thicker and denser layered presentation well beyond the practical boundary so the hazard reads as a region, not a line.
+- Internal geometry remains unchanged, but all player-facing distance and speed telemetry is expressed as `KM` and `KM/S` to establish the intended galactic scale.
 
 ## Code Architecture
 
@@ -271,7 +300,8 @@ High-level ownership map:
 
 ## Persistence Contract
 
-- Current save schema version is `2`.
+- Current save schema version is `4`.
+- Schema 3 careers scale saved world and contract coordinates into the larger 5-by-6 universe before landmark-linked destinations are refreshed.
 - Saves must continue to migrate forward safely.
 - Legacy diamonds migrate to banked Aetherium at 1:1.
 - Existing owned modules should be preserved during migration.
@@ -285,6 +315,9 @@ Important save domains:
 - ship chassis, slots, owned modules, cargo, and module damage
 - reputations and allegiance
 - contract board and active contract state
+- contract-board revision used for deterministic offer refreshes
+- manual board-refresh timestamp and active convoy route/ship state
+- consumed procedural signal and salvage ids, preventing regenerated pickups after reload
 - discoveries and visited regions
 - economy state
 - world seed and location

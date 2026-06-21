@@ -19,6 +19,7 @@
     }
     function beginCharge(game) {
         if (!canCharge(game)) return false;
+        game.cancelInteraction?.(true);
         const travel = ensure(game); travel.phase = 'charging'; travel.timer = 0; travel.distance = 0; travel.integrity = integrity(game.state.ship); travel.damageSerial = game.state.ship.damageSerial || 0; travel.zoom = 1; travel.forcedExit = false;
         game.notify('ASTERION DRIVE // PHASE CAST STARTED'); return true;
     }

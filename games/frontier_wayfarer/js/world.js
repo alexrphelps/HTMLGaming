@@ -3,7 +3,7 @@
     const { clamp, hash, distance } = ns.MathUtil;
     const CHUNK_SIZE = 900;
     const LOAD_RADIUS = 2;
-    const WORLD_BOUNDS = { minX: -22500, maxX: 22500, minY: -12000, maxY: 16800 };
+    const WORLD_BOUNDS = { minX: -33750, maxX: 33750, minY: -18000, maxY: 46800 };
     const ASTEROID_TIERS = {
         large: { radius: 54, radiusVariance: 14, hull: 90, speed: 7, child: 'medium' },
         medium: { radius: 31, radiusVariance: 7, hull: 45, speed: 12, child: 'small' },
@@ -47,7 +47,8 @@
         const center = { x: (cx + .5) * CHUNK_SIZE, y: (cy + .5) * CHUNK_SIZE };
         const region = regionAt(center.x, center.y);
         const entities = [];
-        const asteroidCount = region.id === 'trade_belt' ? 3 + Math.floor(hash(seed, cx, cy, 1) * 6) : 5 + Math.floor(hash(seed, cx, cy, 1) * (7 + region.danger * 2));
+        const baseAsteroids = 5 + Math.floor(hash(seed, cx, cy, 1) * (7 + region.danger * 2));
+        const asteroidCount = Math.max(3, Math.round(baseAsteroids * (region.asteroidDensity || 1)));
         for (let i = 0; i < asteroidCount; i++) entities.push(makeAsteroid(seed, cx, cy, i));
         if (hash(seed, cx, cy, 3) < .16 + region.danger * .035) {
             entities.push({
@@ -63,7 +64,7 @@
     }
 
     class WorldService {
-        constructor(seed) { this.seed = seed; this.chunks = new Map(); this.asteroidRecords = new Map(); this.origin = { x: 0, y: 0 }; }
+        constructor(seed, consumedEntityIds) { this.seed = seed; this.chunks = new Map(); this.asteroidRecords = new Map(); this.consumedEntityIds = new Set(consumedEntityIds || []); this.origin = { x: 0, y: 0 }; }
         restoreAsteroids(chunk) {
             const roots = chunk.entities.filter(entity => entity.kind === 'asteroid');
             chunk.entities = chunk.entities.filter(entity => entity.kind !== 'asteroid');
@@ -87,7 +88,7 @@
             const wanted = new Set();
             for (let oy = -LOAD_RADIUS; oy <= LOAD_RADIUS; oy++) for (let ox = -LOAD_RADIUS; ox <= LOAD_RADIUS; ox++) {
                 const key = chunkKey(ccx + ox, ccy + oy); wanted.add(key);
-                if (!this.chunks.has(key)) { const chunk = generateChunk(this.seed, ccx + ox, ccy + oy); this.restoreAsteroids(chunk); this.chunks.set(key, chunk); }
+                if (!this.chunks.has(key)) { const chunk = generateChunk(this.seed, ccx + ox, ccy + oy); chunk.entities = chunk.entities.filter(entity => !this.consumedEntityIds.has(entity.id)); this.restoreAsteroids(chunk); this.chunks.set(key, chunk); }
             }
             for (const [key, chunk] of this.chunks) if (!wanted.has(key)) { this.snapshotAsteroids(chunk); this.chunks.delete(key); }
             if (Math.abs(x - this.origin.x) > 4000 || Math.abs(y - this.origin.y) > 4000) this.origin = { x, y };
@@ -118,6 +119,12 @@
         }
         loadedEntities() { return Array.from(this.chunks.values()).flatMap(chunk => chunk.entities); }
         nearbyEntities(x, y, radius) { return this.loadedEntities().filter(e => distance({ x, y }, e) <= radius); }
+        consumeEntity(state, entity) {
+            if (!entity || !['signal', 'salvage'].includes(entity.kind) || this.consumedEntityIds.has(entity.id)) return false;
+            this.consumedEntityIds.add(entity.id); state.consumedEntityIds = Array.from(this.consumedEntityIds);
+            for (const chunk of this.chunks.values()) { const index = chunk.entities.indexOf(entity); if (index >= 0) { chunk.entities.splice(index, 1); break; } }
+            return true;
+        }
         nearestStation(x, y, predicate) { return LANDMARKS.filter(l => l.type === 'station' && (!predicate || predicate(l))).sort((a, b) => distance({ x, y }, a) - distance({ x, y }, b))[0]; }
         toScreen(x, y, camera, viewport) { return { x: viewport.w / 2 + x - camera.x, y: viewport.h / 2 + y - camera.y }; }
         discover(state, entity) { if (!entity || state.discoveries.includes(entity.id)) return false; state.discoveries.push(entity.id); state.stats.discoveries++; return true; }
