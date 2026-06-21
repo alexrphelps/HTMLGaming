@@ -1,0 +1,52 @@
+(function (ns) {
+    function hasAnomaly(state) { return state.discoveries.some(id => id.includes('signal:') || ['cold_start_beacon', 'silent_crown', 'glass_wake'].includes(id)); }
+    function evaluate(state) {
+        const tutorial = state.progression?.tutorialStep || 0;
+        const anomaly = hasAnomaly(state);
+        const combat = state.pilot.level >= 3 && state.stats.kills >= 10;
+        const factionStanding = state.pilot.allegiance && state.reputations[state.pilot.allegiance] >= 25;
+        const rim = state.visitedRegions.includes('anomaly_rim') && state.pilot.level >= 6;
+        return {
+            tutorial, guildBoard: tutorial >= 1, shields: tutorial >= 2 || Boolean(state.progression?.legacyShield),
+            tradeTier: rim ? 3 : state.contracts.completed >= 3 ? 2 : tutorial >= 1 ? 1 : 0,
+            anomaly, combat, factionStanding: Boolean(factionStanding), rim,
+            contractTypes: {
+                haul: tutorial >= 1, salvage: tutorial >= 1, rescue: tutorial >= 1,
+                escort: state.contracts.completed >= 3, survey: anomaly, bounty: combat,
+                smuggle: state.reputations.corsairs >= 10, assault: Boolean(factionStanding)
+            },
+            abilitySlots: {
+                abilityShift: tutorial >= 1 || Boolean(state.progression?.legacyCareer),
+                abilitySpace: state.contracts.completed >= 3,
+                abilityQ: anomaly,
+                abilityE: Boolean(state.pilot.allegiance) || state.contracts.completed >= 10
+            }
+        };
+    }
+    function requirementMet(state, requirement) {
+        if (!requirement || requirement === 'starter') return true;
+        const u = evaluate(state);
+        return {
+            trade1: u.tradeTier >= 1, contracts3: state.contracts.completed >= 3,
+            anomaly: u.anomaly, combat: u.combat, shield: u.shields,
+            faction25: u.factionStanding, rim: u.rim, mechanic: Boolean(state.pilot.achievements.master_mechanic)
+        }[requirement] || false;
+    }
+    function moduleVisible(state, module) { return state.ship.ownedModules.includes(module.id) || requirementMet(state, module.unlock); }
+    function commodityVisible(state, commodity) {
+        const u = evaluate(state); if (commodity.id === 'relics') return u.tradeTier >= 3 || state.reputations.corsairs >= 10;
+        return u.tradeTier >= (commodity.tier || 1);
+    }
+    function nextMilestone(state) {
+        const u = evaluate(state);
+        if (u.tutorial === 0) return 'Complete COLD START to unlock contracts, trade, and Afterburner.';
+        if (u.tutorial === 1) return 'Complete PARTS RUN to unlock shield generators.';
+        if (state.contracts.completed < 3) return `Complete ${3 - state.contracts.completed} more contract(s) to unlock Trade II and Space ability.`;
+        if (!u.anomaly) return 'Discover an anomaly to unlock surveys, Sunshard technology, and Q ability.';
+        if (!u.combat) return 'Reach level 3 and destroy 10 hostiles to unlock bounties and combat hardware.';
+        if (!u.abilitySlots.abilityE) return 'Join a faction or complete 10 independent contracts to unlock E ability.';
+        if (!u.rim) return 'Reach level 6 and enter the Anomaly Rim to unlock Trade III.';
+        return 'All career licenses unlocked. Raise faction standing for elite hardware.';
+    }
+    ns.Unlocks = { evaluate, requirementMet, moduleVisible, commodityVisible, nextMilestone, hasAnomaly };
+})(window.MiniInvadersV2);

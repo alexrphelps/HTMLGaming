@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontier Wayfarer // Open Universe</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <main id="gameShell">
+        <canvas id="gameCanvas" aria-label="Frontier Wayfarer starfighter viewport"></canvas>
+        <div class="cockpit-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+        <header class="top-hud">
+            <div class="identity-block"><span class="hud-label">CURRENT REGION</span><strong id="regionName">MERIDIAN TRADE BELT</strong></div>
+            <div class="objective" id="objective"><strong>FREE FLIGHT</strong><span>Dock for contracts or chart the frontier.</span></div>
+            <div class="currency-block"><span id="pilotLevel">LV 1</span><div id="worldWallet" class="wallet-strip"></div></div>
+        </header>
+
+        <aside class="systems-hud">
+            <div class="system-meter hull"><header><span>HULL</span><b id="hullValue">140/140</b></header><div><i id="hullBar"></i></div></div>
+            <div class="system-meter shield"><header><span>SHIELD</span><b id="shieldValue">80/80</b></header><div><i id="shieldBar"></i></div></div>
+            <div class="system-meter energy"><header><span>ENERGY</span><b id="energyValue">70/70</b></header><div><i id="energyBar"></i></div></div>
+            <div class="system-meter heat"><header><span>HEAT</span><b id="heatValue">0/100</b></header><div><i id="heatBar"></i></div></div>
+        </aside>
+
+        <div id="abilityHud" class="ability-hud"></div>
+
+        <footer class="bottom-hud"><div id="contextPrompt">TAB // CYCLE TARGET</div><strong id="speedValue">0 M/S</strong><div>M MAP // T TRAITS // C CONTRACTS // ESC SYSTEMS</div></footer>
+        <div id="message" class="system-message" role="status"></div>
+
+        <section id="cockpitPanel" class="cockpit-panel" aria-label="Cockpit systems">
+            <header class="panel-header"><div><span>WAYFARER // COCKPIT OS</span><h1 id="panelTitle">STATION</h1></div><nav id="panelTabs"></nav><div id="menuWallet" class="wallet-strip"></div><button data-action="close" aria-label="Close panel">ESC</button></header>
+            <div id="panelBody" class="panel-body"></div>
+        </section>
+
+        <section id="startScreen" class="start-screen active">
+            <div class="start-grid"></div>
+            <div class="start-content">
+                <div class="brand-mark"><i></i><i></i><i></i></div>
+                <p class="eyebrow">GAMEHUB FLIGHT SYSTEMS // CAREER SIMULATION</p>
+                <h1>FRONTIER<br><span>WAYFARER</span></h1>
+                <h2>OPEN UNIVERSE // FRONTIER WAYFARER</h2>
+                <p class="intro">One ship. Five regions. No assigned destiny. Earn Aetherium, Sunshards, and Helionite; build the Wayfarer; and choose who deserves your guns.</p>
+                <div id="startWallet" class="wallet-strip start-wallet"></div>
+                <div class="start-actions"><button id="continueCareer" data-action="continue">CONTINUE CAREER</button><button class="primary" data-action="new">NEW CAREER</button></div>
+                <div class="start-features"><span>INERTIAL FLIGHT</span><span>SEAMLESS REGIONS</span><span>FACTION CAREERS</span><span>PERSISTENT SHIP</span></div>
+            </div>
+            <div class="start-telemetry"><span>HELION SIGNAL +12</span><span>NULL ACTIVITY ELEVATED</span><span>GUILD LANES OPEN</span></div>
+        </section>
+    </main>
+
+    <script src="js/namespace.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/math.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/wallet.js"></script>
+    <script src="js/unlocks.js"></script>
+    <script src="js/progression.js"></script>
+    <script src="js/world.js"></script>
+    <script src="js/economy.js"></script>
+    <script src="js/contracts.js"></script>
+    <script src="js/save.js"></script>
+    <script src="js/combat.js"></script>
+    <script src="js/abilities.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

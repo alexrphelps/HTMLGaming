@@ -51,6 +51,24 @@ window.GAMEHUB_GAMES = [
         libraryList: 'polished'
     },
     {
+        folder: 'frontier_wayfarer',
+        name: 'Frontier Wayfarer',
+        description: 'Forge a career across a seamless five-region universe through contracts, factions, trade, exploration, and inertial starfighter combat.',
+        category: 'Action RPG',
+        difficulty: 'Medium',
+        icon: 'M2',
+        tags: ['2d', 'open-world', 'space', 'starfighter', 'rpg', 'contracts', 'factions'],
+        version: '2.0.0',
+        author: 'GameHub',
+        estimatedPlayTime: 45,
+        aiEffortRating: 5,
+        defaultRating: 1,
+        input: 'Keyboard + Mouse',
+        rendering: 'Canvas',
+        saveSupport: 'Campaign',
+        libraryList: 'ai-slope'
+    },
+    {
         folder: 'Cellvive',
         name: 'Cellvive',
         description: 'Survive as a blob-like cell. Eat smaller cells to grow while avoiding bigger ones.',

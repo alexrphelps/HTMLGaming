@@ -399,6 +399,7 @@ class GameSelector {
         return [
             { folder: 'snake', name: 'Snake!', category: 'Arcade', difficulty: 'Easy', icon: 'S', libraryList: 'ai-slope' },
             { folder: 'miniinvaders', name: 'Mini Invaders', category: 'Arcade', difficulty: 'Medium', icon: 'MI', libraryList: 'ai-slope' },
+            { folder: 'frontier_wayfarer', name: 'Frontier Wayfarer', category: 'Action RPG', difficulty: 'Medium', icon: 'FW', libraryList: 'ai-slope' },
             { folder: 'Cellvive', name: 'Cellvive', category: 'Action', difficulty: 'Easy', icon: 'CV', libraryList: 'polished' },
             { folder: 'cosmicdrifter', name: 'Cosmic Drifter', category: 'Exploration', difficulty: 'Medium', icon: 'CD', libraryList: 'polished' },
             { folder: 'stickperson', name: 'Stickman Platformer', category: 'Platformer', difficulty: 'Easy', icon: 'SP', libraryList: 'ai-slope' },
