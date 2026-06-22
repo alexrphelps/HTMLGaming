@@ -134,10 +134,15 @@
             data.progression = Object.assign({ tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 }, data.progression);
             data.progression.bossesDefeated = data.progression.bossesDefeated && typeof data.progression.bossesDefeated === 'object' ? data.progression.bossesDefeated : {};
             data.schemaVersion = 7;
-            return data;
         }
         if (data.schemaVersion === 7) {
             ns.Wallet.ensure(data); delete data.ship.lightSpeed;
+            data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            refreshContractTargets(data); ns.Galaxies.ensureState(data); data.schemaVersion = 8;
+        }
+        if (data.schemaVersion === 8) {
+            ns.Wallet.ensure(data); delete data.ship.lightSpeed; ns.Galaxies.ensureState(data);
             data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
             data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
             refreshContractTargets(data); return data;
@@ -145,7 +150,7 @@
         return null;
     }
     function validate(data) {
-        return Boolean(data && data.schemaVersion === 7 && data.pilot?.wallet && data.ship && data.reputations && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
+        return Boolean(data && data.schemaVersion === 8 && data.pilot?.wallet && data.ship && data.reputations && ns.Data.GALAXIES.some(galaxy => galaxy.id === data.galaxyId) && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
     }
     function save(state, storage) {
         try { (storage || localStorage).setItem(ns.SAVE_KEY, serialize(state)); state.lastSaveAt = Date.now(); return true; }

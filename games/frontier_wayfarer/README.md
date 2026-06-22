@@ -13,7 +13,7 @@ This game is the open-universe evolution of Mini Invaders: a single-player top-d
 
 The intended player fantasy is:
 
-1. Fly one personal ship across a handcrafted thirty-region universe.
+1. Fly one personal ship across seven connected galaxies, each retaining a persistent thirty-region local chart.
 2. Aim directly with the mouse while managing inertia, heat, energy, shields, cargo, and module loadout.
 3. Progress through contracts, discoveries, combat, factions, trade, salvaging, and ship upgrades.
 4. Grow a long-lived career that survives defeat, with losses focused on unbanked rewards, cargo risk, and repairable module damage.
@@ -60,7 +60,7 @@ Out of scope unless explicitly requested:
 
 ### World Structure
 
-- The universe is a 5-by-6 chart of thirty dense authored regions. The original Meridian, Helion, Shatterline, Null, and Violet regions form its central career space, with increasingly dangerous frontier rows extending south.
+- Galaxy A is the original 5-by-6 chart of thirty dense authored regions. Six fixed stargate destinations reuse that authored local-chart structure with distinct procedural seeds and persistent chart state.
 - Each region occupies a 13,500-by-10,800 sector inside the finite 67,500-by-64,800 world envelope.
 - World streaming is deterministic around a saved world seed.
 - Chunk generation and floating-origin behavior are part of the technical contract and should not be casually removed.
@@ -253,6 +253,14 @@ Current UI contract:
 - Unaffordable paid actions remain clickable, display an explicit insufficient-credit state, and report the missing currencies
 - Primary and secondary fire should emit from the visible weapon tip for every ship orientation, not from the ship centerline
 
+## Intergalactic Stargates
+
+- The existing thirty-region chart is Galaxy A, Meridian Reach. Six additional fixed galaxies form a persistent seven-node station-stargate network.
+- Intergalactic travel requires the Gateheart Singularity Core and Atlas Stargate Engine fitted together on a Tier IV specialist hull.
+- The Station Stargate inner tab only appears inside Navigation while docked with the complete compatible drive pair.
+- Stargate routes are one hop at a time. Each galaxy keeps its own local position, discoveries, visited regions, market state, contract board, and procedural world seed.
+- Active contracts must be completed or abandoned before station-stargate travel.
+
 ## World Hazards
 
 - Asteroids drift and rotate in three size tiers. Weapon damage splits large rocks into medium fragments, medium rocks into small fragments, and destroys small rocks for a modest unbanked Aetherium reward.
@@ -273,25 +281,30 @@ Current script order:
 2. `js/data.js`
 3. `js/math.js`
 4. `js/expansion.js`
-5. `js/state.js`
-6. `js/wallet.js`
-7. `js/unlocks.js`
-8. `js/progression.js`
-9. `js/world.js`
-10. `js/economy.js`
-11. `js/contracts.js`
-12. `js/save.js`
-13. `js/combat.js`
-14. `js/abilities.js`
-15. `js/weapons.js`
-16. `js/encounters.js`
-17. `js/worldEvents.js`
-18. `js/lightSpeed.js`
-19. `js/input.js`
-20. `js/renderer.js`
-21. `js/game.js`
-22. `js/ui.js`
-23. `js/main.js`
+5. `js/galaxies.js`
+6. `js/registry.js`
+7. `js/state.js`
+8. `js/wallet.js`
+9. `js/unlocks.js`
+10. `js/progression.js`
+11. `js/world.js`
+12. `js/economy.js`
+13. `js/contracts.js`
+14. `js/save.js`
+15. `js/combat.js`
+16. `js/abilities.js`
+17. `js/weapons.js`
+18. `js/encounters.js`
+19. `js/worldEvents.js`
+20. `js/lightSpeed.js`
+21. `js/runtime.js`
+22. `js/commands.js`
+23. `js/input.js`
+24. `js/renderer.js`
+25. `js/game.js`
+26. `js/components.js`
+27. `js/ui.js`
+28. `js/main.js`
 
 High-level ownership map:
 
@@ -301,6 +314,7 @@ High-level ownership map:
 - `wallet.js`: all currency normalization and transactions
 - `unlocks.js`: progression milestone evaluation and visibility rules
 - `expansion.js`: hulls, weapon/enemy/boss definitions, specializations, faction thresholds, narrative flavor
+- `galaxies.js`: seven-galaxy route graph, Tier IV hull classes, stargate modules, local-chart snapshots, and intergalactic travel
 - `progression.js`: trait logic, derived hull/ship stats, equipment and hull fitting, respec logic
 - `weapons.js`: player weapon firing, charging, guidance, piercing, splash, and chain effects
 - `encounters.js`: enemy creation, faction targeting, patrol combat, and boss phases

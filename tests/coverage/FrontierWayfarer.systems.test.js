@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '../..');
 const gameDir = path.join(root, 'games/frontier_wayfarer');
 const configPath = path.join(root, 'games.config.js');
 const expectedScripts = [
-  'js/namespace.js', 'js/data.js', 'js/math.js', 'js/expansion.js', 'js/registry.js', 'js/state.js', 'js/wallet.js',
+  'js/namespace.js', 'js/data.js', 'js/math.js', 'js/expansion.js', 'js/galaxies.js', 'js/registry.js', 'js/state.js', 'js/wallet.js',
   'js/unlocks.js', 'js/progression.js', 'js/world.js', 'js/economy.js', 'js/contracts.js',
   'js/save.js', 'js/combat.js', 'js/abilities.js', 'js/weapons.js', 'js/encounters.js', 'js/worldEvents.js', 'js/lightSpeed.js', 'js/runtime.js', 'js/commands.js', 'js/input.js', 'js/renderer.js',
   'js/game.js', 'js/components.js', 'js/ui.js', 'js/main.js'
@@ -61,6 +61,8 @@ describe('Frontier Wayfarer integration contract', () => {
     expect(read('css/style.css')).toContain('.map-custom-target { position: absolute; width: 12px;');
     expect(read('css/style.css')).not.toContain('min-width: 960px');
     expect(fs.existsSync(path.join(gameDir, 'assets/aim-reticle.svg'))).toBe(true);
+    expect(fs.existsSync(path.join(gameDir, 'assets/station-stargate-galaxies.png'))).toBe(true);
+    expect(read('css/style.css')).toContain("url('../assets/station-stargate-galaxies.png')");
   });
 
   test('registers V2 separately while retaining the original game', () => {
@@ -662,12 +664,12 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     expect(contract.escort).toMatchObject({ phase: 'rendezvous', convoy: null, end: { x: -3450, y: -1350 } }); expect(ns.MathUtil.distance(contract.escort.start, contract.escort.end)).toBeLessThanOrEqual(1800.01); expect(contract.target).toEqual(contract.escort.start);
   });
 
-  test('migrates legacy diamonds, weapons, shields, coordinates, loadouts, and hull ownership into schema v7', () => {
+  test('migrates legacy diamonds, weapons, shields, coordinates, loadouts, hull ownership, and galaxy state into schema v8', () => {
     const ns = runtime(); const legacy = ns.State.createState(31); legacy.schemaVersion = 1; legacy.pilot.diamonds = 777; delete legacy.pilot.wallet; delete legacy.customWaypoint;
     legacy.ship.x = 100; legacy.ship.y = 200;
     legacy.ship.slots.secondary = 'seeker_rack'; legacy.ship.slots.defense = 'shield_mk1'; legacy.ship.ownedModules.push('shield_mk1');
     const migrated = ns.Save.migrate(legacy);
-    expect(migrated.schemaVersion).toBe(7); expect(migrated.ship).toMatchObject({ x: 150, y: 300, activeHullId: 'wayfarer', ownedHullIds: ['wayfarer'] }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull(); expect(migrated.customWaypoint).toBeNull();
+    expect(migrated.schemaVersion).toBe(8); expect(migrated).toMatchObject({ galaxyId: 'galaxy_a', visitedGalaxies: ['galaxy_a'] }); expect(migrated.ship).toMatchObject({ x: 150, y: 300, activeHullId: 'wayfarer', ownedHullIds: ['wayfarer'] }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull(); expect(migrated.customWaypoint).toBeNull();
     expect(migrated.ship.slots.primary2).toBe('seeker_rack'); expect(migrated.ship.slots.defense).toBe('shield_balanced'); expect(migrated.ship.ownedModules).toContain('afterburner');
   });
 
@@ -821,11 +823,11 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     }));
   });
 
-  test('fits four distinct utilities and preserves them through schema v7 saves', () => {
+  test('fits four distinct utilities and preserves them through schema v8 saves', () => {
     const ns = runtime(), state = ns.State.createState(82); state.ship.chassis.massLimit = 200; const utilities = ['repair_drones', 'sensor_array', 'heat_sink', 'cargo_pods']; state.ship.ownedModules.push(...utilities);
     utilities.forEach((id, index) => expect(ns.Progression.equipModule(state, `utility${index + 1}`, id)).toBe(true));
     expect(Object.values(state.ship.slots).filter(id => utilities.includes(id))).toEqual(expect.arrayContaining(utilities));
-    const loaded = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(loaded.schemaVersion).toBe(7); expect(loaded.ship.slots.utility4).toBe('cargo_pods'); expect(ns.Progression.calculateShipStats(loaded).cargo).toBeGreaterThan(14);
+    const loaded = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(loaded.schemaVersion).toBe(8); expect(loaded.ship.slots.utility4).toBe('cargo_pods'); expect(ns.Progression.calculateShipStats(loaded).cargo).toBeGreaterThan(14);
   });
 
   test('equips the Asterion Light Drive from the real ship panel after purchase', () => {
@@ -951,6 +953,52 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     state.ship.activeHullId = 'meridian_ranger'; const ranger = ns.Progression.calculateShipStats(state); state.ship.activeHullId = 'prism_eidolon'; const eidolon = ns.Progression.calculateShipStats(state); expect(ranger).toMatchObject({ massLimit: 58, energyRecharge: 18 }); expect(ranger.sensor).toBeGreaterThan(1100); expect(eidolon.reactor).toBeGreaterThan(ranger.reactor); expect(eidolon.shield).toBeGreaterThanOrEqual(ranger.shield);
   });
 
+  test('defines the fixed seven-galaxy route graph and preserves separate local charts across travel', () => {
+    const ns = runtime(), state = ns.State.createState(1201);
+    expect(ns.Data.GALAXIES.map(galaxy => galaxy.code)).toEqual(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+    expect(ns.Data.GALAXY_LINKS).toEqual([
+      ['galaxy_a', 'galaxy_b'],
+      ['galaxy_b', 'galaxy_c'], ['galaxy_b', 'galaxy_d'],
+      ['galaxy_c', 'galaxy_e'], ['galaxy_c', 'galaxy_f'],
+      ['galaxy_d', 'galaxy_g'],
+      ['galaxy_f', 'galaxy_e'], ['galaxy_f', 'galaxy_g']
+    ]);
+    expect(ns.Galaxies.neighbors('galaxy_a')).toEqual(['galaxy_b']); expect(ns.Galaxies.connected('galaxy_a', 'galaxy_c')).toBe(false);
+    state.ship.activeHullId = 'meridian_ranger'; state.ship.ownedHullIds.push('meridian_ranger'); state.ship.slots.reactor = ns.Galaxies.GATE_REACTOR; state.ship.slots.engine = ns.Galaxies.GATE_ENGINE;
+    state.ship.x = 321; state.ship.y = 654; state.discoveries.push('galaxy-a-only'); const galaxyASeed = ns.Galaxies.worldSeed(state);
+    expect(ns.Galaxies.travel(state, 'galaxy_c')).toMatchObject({ ok: false, reason: 'no-direct-route' });
+    expect(ns.Galaxies.travel(state, 'galaxy_b')).toMatchObject({ ok: true, destination: { code: 'B' } });
+    expect(state).toMatchObject({ galaxyId: 'galaxy_b', dockedAt: 'waypoint_zero', visitedGalaxies: ['galaxy_a', 'galaxy_b'] }); expect(ns.Galaxies.worldSeed(state)).not.toBe(galaxyASeed); expect(state.discoveries).not.toContain('galaxy-a-only');
+    state.ship.x = 987; state.discoveries.push('galaxy-b-only'); expect(ns.Galaxies.travel(state, 'galaxy_a')).toMatchObject({ ok: true, destination: { code: 'A' } });
+    expect(state.ship.x).toBe(321); expect(state.discoveries).toContain('galaxy-a-only'); expect(state.discoveries).not.toContain('galaxy-b-only');
+    state.contracts.active = { id: 'gate-blocker' }; expect(ns.Galaxies.travel(state, 'galaxy_b')).toMatchObject({ ok: false, reason: 'active-contract' });
+  });
+
+  test('restricts the Gateheart and Atlas systems to Tier IV hulls and guarantees them at unlocked major markets', () => {
+    const ns = runtime(), state = ns.State.createState(1202), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero');
+    const modules = [ns.Galaxies.GATE_REACTOR, ns.Galaxies.GATE_ENGINE]; state.ship.ownedModules.push(...modules); state.ship.chassis.massLimit = 220;
+    expect(Object.values(ns.Data.HULLS).filter(hull => hull.tier === 4).map(hull => hull.id)).toEqual(['meridian_ranger', 'concord_lancer', 'corsair_ravager', 'prism_eidolon']);
+    expect(ns.Progression.checkEquipModule(state, 'reactor', ns.Galaxies.GATE_REACTOR)).toMatchObject({ ok: false, reason: 'hull-tier' });
+    state.ship.activeHullId = 'meridian_ranger'; state.ship.ownedHullIds.push('meridian_ranger'); expect(ns.Progression.equipModule(state, 'reactor', ns.Galaxies.GATE_REACTOR)).toBe(true); expect(ns.Progression.equipModule(state, 'engine', ns.Galaxies.GATE_ENGINE)).toBe(true); expect(ns.Galaxies.gateStatus(state).ready).toBe(true);
+    expect(ns.Progression.checkSwitchHull(state, 'wayfarer')).toMatchObject({ ok: false, reason: 'hull-tier' });
+    state.progression.bossesDefeated = { foundry_ark: 1 }; const inventory = ns.Economy.inventoryFor(state, station); expect(inventory.modules).toEqual(expect.arrayContaining(modules));
+  });
+
+  test('reveals the Station Stargate inner tab only when docked with the complete compatible system pair', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.ui.openPanel(game, 'navigation');
+    expect([...game.ui.panelBody.querySelectorAll('[data-action="navigation-view"]')].map(button => button.textContent.trim())).toEqual(['LOCAL MAP']);
+    game.state.ship.activeHullId = 'meridian_ranger'; game.state.ship.ownedHullIds.push('meridian_ranger'); game.state.ship.slots.reactor = ns.Galaxies.GATE_REACTOR; game.state.ship.slots.engine = ns.Galaxies.GATE_ENGINE; game.ui.renderPanel(game);
+    expect([...game.ui.panelBody.querySelectorAll('[data-action="navigation-view"]')].map(button => button.textContent.trim())).toEqual(['LOCAL MAP', 'STATION STARGATE']);
+    game.ui.panelBody.querySelector('[data-action="navigation-view"][data-id="stargate"]').click();
+    expect(game.ui.panelBody.querySelectorAll('.stargate-node')).toHaveLength(7); expect(game.ui.panelBody.querySelector('#stargateOverlay')).not.toBeNull(); expect(game.ui.panelBody.querySelector('.stargate-confirm').textContent).toContain('STATION STARGATE TRAVEL');
+    game.ui.panelBody.querySelector('.stargate-confirm').click(); expect(game.state.galaxyId).toBe('galaxy_b'); expect(game.ui.activeTab).toBe('navigation'); expect(game.ui.navigationView).toBe('stargate'); dom.window.close();
+  });
+
+  test('migrates schema-seven careers into Galaxy A without losing the active local chart', () => {
+    const ns = runtime(), legacy = ns.State.createState(1203); legacy.schemaVersion = 7; legacy.ship.x = 444; delete legacy.galaxyId; delete legacy.visitedGalaxies; delete legacy.galaxyCharts; delete legacy.lastStargateTravelAt;
+    const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 8, galaxyId: 'galaxy_a', visitedGalaxies: ['galaxy_a'], ship: { x: 444 } });
+  });
+
   test('derives Tier IV reactor, engine, and defense tradeoffs including Light Speed capability', () => {
     const ns = runtime(), state = ns.State.createState(906); state.ship.chassis.massLimit = 220; state.ship.ownedModules.push('helion_capacitor', 'corsair_surge', 'prism_resonance', 'comet_drive', 'vector_dancer', 'siege_drive', 'bastion_barrier', 'flux_screen', 'reactive_plating');
     ns.Progression.equipModule(state, 'reactor', 'corsair_surge'); ns.Progression.equipModule(state, 'engine', 'comet_drive'); ns.Progression.equipModule(state, 'defense', 'reactive_plating'); const surge = ns.Progression.calculateShipStats(state); expect(surge).toMatchObject({ energyRecharge: 30, armor: .25, lightSpeed: true }); expect(surge.hull).toBe(230); expect(surge.effects.weaponHeat).toBeCloseTo(.15);
@@ -971,7 +1019,7 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.region = ns.Data.REGIONS.find(region => region.danger === 5); const ally = ns.Encounters.create(game, 'bandit', 200, 0); ally.hull = 10; const tender = ns.Encounters.create(game, 'support_tender', 220, 0); game.enemies = [ally, tender]; ns.Encounters.update(game, .1); expect(ally.hull).toBeGreaterThan(10);
     expect(['foundry_ark', 'solar_bastion', 'eclipse_cruiser'].map(id => ns.Data.BOSSES[id].controller)).toEqual(['foundry', 'bastion', 'eclipse']);
     const contract = { bossType: 'foundry_ark', target: { x: 400, y: 0 }, encounterId: 'capital:test', bossState: null }, boss = ns.Encounters.spawnBoss(game, contract); expect(Object.keys(boss.components)).toEqual(expect.arrayContaining(['bay_port', 'bay_starboard'])); const component = ns.Data.BOSSES.foundry_ark.components[0]; ns.Encounters.playerHit(game, boss, { x: boss.x + component.x, y: boss.y + component.y, damage: component.hull }); expect(boss.components.bay_port).toBe(0); boss.hull = boss.maxHull * .3; ns.Encounters.update(game, .1); expect(contract.bossState).toMatchObject({ phase: 3, components: { bay_port: 0 }, queuedPattern: { type: 'mine-ring' } });
-    const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(game.state))); expect(restored.schemaVersion).toBe(7); dom.window.close();
+    const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(game.state))); expect(restored.schemaVersion).toBe(8); dom.window.close();
   });
 
   test('generates risk-six capital contracts and seeded optional roaming rematches', () => {
@@ -982,6 +1030,6 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
   });
 
   test('migrates schema-five careers into the capital-threat save contract', () => {
-    const ns = runtime(), legacy = ns.State.createState(908); legacy.schemaVersion = 5; delete legacy.progression.bossesDefeated; delete legacy.progression.roamingThreat; delete legacy.progression.nextRoamingThreatAt; const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 7, progression: { bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 } });
+    const ns = runtime(), legacy = ns.State.createState(908); legacy.schemaVersion = 5; delete legacy.progression.bossesDefeated; delete legacy.progression.roamingThreat; delete legacy.progression.nextRoamingThreatAt; const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 8, galaxyId: 'galaxy_a', progression: { bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 } });
   });
 });

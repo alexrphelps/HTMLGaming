@@ -100,6 +100,7 @@
         if (!module) return { ok: false, reason: 'missing' };
         if (!state.ship.ownedModules.includes(moduleId)) return { ok: false, reason: 'unowned' };
         if (!slotAccepts(slot, module)) return { ok: false, reason: 'slot' };
+        if (module.stargateSystem && !ns.Galaxies.isHighestTierHull(state)) return { ok: false, reason: 'hull-tier' };
         if (slot.startsWith('ability') && !unlocks.abilitySlots[slot]) return { ok: false, reason: 'locked' };
         const old = state.ship.slots[slot];
         const previousSlot = Object.keys(state.ship.slots).find(key => key !== slot && state.ship.slots[key] === moduleId);
@@ -127,6 +128,7 @@
         const hull = ns.Data.HULLS[hullId];
         if (!state.dockedAt) return { ok: false, reason: 'dock' };
         if (!hull || !state.ship.ownedHullIds.includes(hullId)) return { ok: false, reason: 'unowned' };
+        if (!ns.Galaxies.isHighestTierHull(hull) && Object.values(state.ship.slots).some(moduleId => MODULES[moduleId]?.stargateSystem)) return { ok: false, reason: 'hull-tier' };
         const previous = state.ship.activeHullId; state.ship.activeHullId = hullId; const stats = calculateShipStats(state); state.ship.activeHullId = previous;
         if (stats.mass > stats.massLimit) return { ok: false, reason: 'mass' };
         if (cargoUsed(state) > stats.cargo) return { ok: false, reason: 'cargo' };

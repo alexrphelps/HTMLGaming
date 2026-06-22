@@ -16,8 +16,9 @@
         continueCareer() { const state = ns.Save.load(); if (!state) return this.newCareer(); this.useState(state); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('CAREER RESTORED'); }
         useState(state) {
             if (!('customWaypoint' in state)) state.customWaypoint = null;
-            this.state = state; this.world = new ns.World.WorldService(state.worldSeed, state.consumedEntityIds); this.region = this.world.update(state.ship.x, state.ship.y);
-            this.random = new ns.Runtime.SimulationRandom(state.worldSeed ^ 0x57a1f4); this.entitySerial = 0; this.runtime.init(this);
+            ns.Galaxies.ensureState(state); const galaxySeed = ns.Galaxies.worldSeed(state);
+            this.state = state; this.world = new ns.World.WorldService(galaxySeed, state.consumedEntityIds); this.region = this.world.update(state.ship.x, state.ship.y);
+            this.random = new ns.Runtime.SimulationRandom(galaxySeed ^ 0x57a1f4); this.entitySerial = 0; this.runtime.init(this);
             this.camera.x = state.ship.x; this.camera.y = state.ship.y; this.camera.zoom = 1; this.lightSpeed = ns.LightSpeed.createState(); this.bullets = []; this.enemies = []; this.effects = []; this.collisionGuards.clear(); this.impactShake = 0; this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false;
             const stats = ns.Progression.calculateShipStats(state); state.ship.hull = clamp(state.ship.hull, 0, stats.hull); state.ship.shield = clamp(state.ship.shield, 0, stats.shield); state.ship.energy = clamp(state.ship.energy, 0, stats.reactor);
             if (state.dockedAt) { const station = LANDMARKS.find(l => l.id === state.dockedAt); if (station) ns.Economy.ensureMarket(state, station); }
@@ -282,6 +283,16 @@
             const c = this.state.contracts.active; if (c) ns.Contracts.recordProgress(this.state, 'dock', 1, station);
             if (c && ns.Contracts.isComplete(c)) { const completed = ns.Contracts.complete(this.state); if (completed) this.notify('CONTRACT COMPLETE // REWARDS BANKED'); }
             ns.Economy.driftMarkets(this.state); this.save(); this.paused = true; this.ui.openPanel(this, 'station'); this.notify(`DOCKED // ${station.name.toUpperCase()}`); return true;
+        }
+        stargateTravel(destinationId) {
+            const outcome = ns.Galaxies.travel(this.state, destinationId);
+            if (!outcome.ok) {
+                const reason = { 'dock-required': 'DOCK AT A STATION', 'systems-offline': 'STARGATE SYSTEMS OFFLINE', 'unknown-galaxy': 'UNKNOWN GALAXY', 'current-galaxy': 'ALREADY IN THIS GALAXY', 'no-direct-route': 'NO DIRECT STARGATE ROUTE', 'active-contract': 'COMPLETE OR ABANDON ACTIVE CONTRACT' }[outcome.reason] || outcome.reason.toUpperCase();
+                this.notify(`STARGATE TRAVEL BLOCKED // ${reason}`); return false;
+            }
+            this.useState(this.state); this.paused = true; this.save();
+            this.ui.navigationView = 'stargate'; this.ui.selectedGalaxyId = outcome.destination.id; this.ui.openPanel(this, 'navigation');
+            this.notify(`STARGATE ARRIVAL // GALAXY ${outcome.destination.code} // ${outcome.destination.name.toUpperCase()}`); return true;
         }
         undock() { this.state.dockedAt = null; this.paused = false; this.ui.closePanel(); this.last = performance.now(); this.notify('FLIGHT CONTROL RESTORED'); }
         selectTarget() { if (!this.enemies.length) return; this.enemies.push(this.enemies.shift()); }

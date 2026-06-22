@@ -36,6 +36,7 @@
             const useful = Object.values(MODULES).find(module => module.cost && !ns.Wallet.isZero(module.cost) && ns.Unlocks.moduleVisible(state, module) && !state.ship.ownedModules.includes(module.id) && (!module.majorOnly || station.major));
             if (useful && !saved.modules.includes(useful.id)) saved.modules.push(useful.id);
             Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!saved.modules.includes(module.id)) saved.modules.push(module.id); });
+            if (station.major) Object.values(MODULES).filter(module => module.stargateSystem && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!saved.modules.includes(module.id)) saved.modules.push(module.id); });
             return saved;
         }
         const commodityIds = Object.keys(COMMODITIES), moduleIds = Object.values(MODULES).filter(module => module.cost && !ns.Wallet.isZero(module.cost) && (!module.majorOnly || station.major)).map(module => module.id);
@@ -46,6 +47,7 @@
         const remoteness = REGIONS.find(region => region.id === station.region)?.remoteness || 0, moduleWeight = id => 1 + remoteness * Math.max(0, (MODULES[id].tier || 1) - 1) * 1.5;
         pickWeighted(preferred, station.major ? 4 : 2, identity, modules, moduleWeight); pickWeighted(moduleIds, station.major ? 3 : 2, rotation, modules, moduleWeight);
         if (station.major && moduleIds.includes('light_drive') && !modules.includes('light_drive')) modules.push('light_drive');
+        if (station.major) Object.values(MODULES).filter(module => module.stargateSystem && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!modules.includes(module.id)) modules.push(module.id); });
         const useful = moduleIds.find(id => ns.Unlocks.moduleVisible(state, MODULES[id]) && !state.ship.ownedModules.includes(id)); if (useful && !modules.includes(useful)) modules.push(useful);
         Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!modules.includes(module.id)) modules.push(module.id); });
         const inventory = { cycle, commodities, modules, refreshedAt: Number(state.playTime) || 0 }; state.marketInventories[station.id] = inventory; return inventory;

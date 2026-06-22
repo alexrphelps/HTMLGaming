@@ -4,8 +4,8 @@ class FrontierWayfarerGame {
         this.container = null;
         this.metadata = {
             name: 'Frontier Wayfarer',
-            description: 'An open-universe starfighter career RPG.',
-            category: 'Action RPG', difficulty: 'Medium', icon: 'M2', version: '2.0.0'
+            description: 'A seven-galaxy starfighter career RPG.',
+            category: 'Action RPG', difficulty: 'Medium', icon: 'M2', version: '4.0.0'
         };
     }
     async init() {

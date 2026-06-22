@@ -8,8 +8,12 @@
 
     function createState(seed) {
         return {
-            schemaVersion: 7,
+            schemaVersion: 8,
             worldSeed: Number.isFinite(seed) ? seed : Math.floor(Math.random() * 0x7fffffff),
+            galaxyId: 'galaxy_a',
+            visitedGalaxies: ['galaxy_a'],
+            galaxyCharts: {},
+            lastStargateTravelAt: 0,
             playTime: 0,
             pilot: { level: 1, xp: 0, traitPoints: 0, traits: {}, achievements: {}, wallet: { banked: { aetherium: 250, sunshards: 0, helionite: 0 }, unbanked: { aetherium: 0, sunshards: 0, helionite: 0 } }, allegiance: null },
             ship: {
