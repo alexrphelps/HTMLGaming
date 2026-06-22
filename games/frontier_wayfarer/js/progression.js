@@ -3,7 +3,7 @@
 
     function getTraitRank(state, id) { return state.pilot.traits[id] || 0; }
     function getDisciplineSpend(state, discipline) {
-        return TRAITS.filter(t => t.discipline === discipline && !t.capstone)
+        return TRAITS.filter(t => t.discipline === discipline && !t.capstone && !t.specialization)
             .reduce((sum, t) => sum + getTraitRank(state, t.id), 0);
     }
     function capstoneAchievement(discipline) {
@@ -12,6 +12,10 @@
     function canBuyTrait(state, id) {
         const trait = TRAITS.find(t => t.id === id);
         if (!trait || state.pilot.traitPoints < 1 || getTraitRank(state, id) >= trait.maxRank) return false;
+        if (trait.specialization) {
+            const capstone = TRAITS.find(item => item.discipline === trait.discipline && item.capstone);
+            return Boolean(getTraitRank(state, capstone?.id)) && !TRAITS.some(item => item.specialization && item.discipline === trait.discipline && item.id !== id && getTraitRank(state, item.id));
+        }
         if (!trait.capstone) return true;
         return getDisciplineSpend(state, trait.discipline) >= 8 && Boolean(state.pilot.achievements[capstoneAchievement(trait.discipline)]);
     }
@@ -49,8 +53,10 @@
     function equippedModules(state) {
         return Object.values(state.ship.slots).filter(Boolean).map(id => MODULES[id]).filter(Boolean);
     }
+    function activeHull(state) { return ns.Data.HULLS[state.ship.activeHullId] || ns.Data.HULLS.wayfarer; }
     function calculateShipStats(state) {
         const effects = traitEffects(state);
+        const hull = activeHull(state);
         const modules = equippedModules(state);
         const rawMass = modules.reduce((sum, m) => sum + (m.mass || 0), 0);
         const mass = rawMass * (1 + (effects.mass || 0));
@@ -60,20 +66,24 @@
         const cargo = modules.find(m => m.slot === 'cargo') || {};
         const utilities = modules.filter(m => m.slot === 'utility');
         const utility = key => utilities.reduce((sum, m) => sum + (m[key] || 0), 0);
+        ['weaponHeat', 'abilityEnergyCost'].forEach(key => { effects[key] = (effects[key] || 0) + modules.reduce((sum, module) => sum + (module[key] || 0), 0); });
         const damageScale = Object.values(state.ship.moduleDamage).reduce((worst, amount) => Math.max(worst, amount || 0), 0);
         return {
-            mass, massLimit: state.ship.chassis.massLimit,
-            thrust: (engine.thrust || 180) * (1 + (effects.thrust || 0)) * (1 - damageScale * .25),
-            turn: (engine.turn || 2.4) * (1 + (effects.turn || 0)),
-            reactor: (reactor.reactor || 55) + state.ship.chassis.reactorBonus + (effects.reactor || 0),
-            hull: state.ship.chassis.integrity,
-            shield: (defense.shield || 0) * (1 + (effects.shield || 0)),
+            mass, massLimit: hull.massLimit + (state.ship.chassis.massLimit - 52),
+            thrust: (engine.thrust || 180) * hull.thrust * (1 + (effects.thrust || 0)) * (1 - damageScale * .25),
+            strafeScale: hull.strafe * (engine.strafe || 1), maxSpeed: hull.maxSpeed + (engine.maxSpeed || 0), radius: hull.radius,
+            turn: (engine.turn || 2.4) * (hull.turn || 1) * (1 + (effects.turn || 0)), braking: engine.braking || 1,
+            reactor: (reactor.reactor || 55) + hull.reactor + state.ship.chassis.reactorBonus + (effects.reactor || 0),
+            hull: hull.hull + (state.ship.chassis.integrity - 140) + (defense.hullBonus || 0), armor: defense.armor || 0,
+            shield: (defense.shield || 0) * hull.shield * (1 + (effects.shield || 0)),
             shieldRecharge: defense.shieldRecharge || 0,
             shieldDelay: defense.shieldDelay || 0,
-            cargo: (cargo.cargo || 6) + state.ship.chassis.cargoBonus + utility('cargo') + (effects.cargo || 0),
-            energyRecharge: 16,
-            cooling: 15 + utility('cooling'), repair: utility('repair') * (1 + (effects.repair || 0)),
-            sensor: 850 + utility('sensor') + (effects.sensor || 0),
+            cargo: Math.max(1, (cargo.cargo || 6) + hull.cargo + state.ship.chassis.cargoBonus + utility('cargo') + (effects.cargo || 0)),
+            energyRecharge: (reactor.energyRecharge || 16) + (hull.energyRecharge || 0),
+            cooling: Math.max(1, 15 + hull.cooling + (reactor.cooling || 0) + utility('cooling')), repair: utility('repair') * (1 + (effects.repair || 0)),
+            sensor: 850 + hull.sensor + utility('sensor') + (effects.sensor || 0),
+            collisionResistance: engine.collisionResistance || 0, heavyStability: engine.heavyStability || 0,
+            lightSpeed: Boolean(engine.lightSpeed || engine.id === 'light_drive'), lightTurn: engine.lightTurn || 1, lightCharge: engine.lightCharge || 1, lightDeceleration: engine.lightDeceleration || 1,
             effects
         };
     }
@@ -95,7 +105,7 @@
         const previousSlot = Object.keys(state.ship.slots).find(key => key !== slot && state.ship.slots[key] === moduleId);
         if (previousSlot) state.ship.slots[previousSlot] = null;
         state.ship.slots[slot] = moduleId;
-        if (calculateShipStats(state).mass > state.ship.chassis.massLimit) {
+        if (calculateShipStats(state).mass > calculateShipStats(state).massLimit) {
             state.ship.slots[slot] = old;
             if (previousSlot) state.ship.slots[previousSlot] = moduleId;
             return { ok: false, reason: 'mass' };
@@ -113,6 +123,27 @@
         return true;
     }
     function cargoUsed(state) { return Object.values(state.ship.cargo).reduce((sum, qty) => sum + qty, 0); }
+    function checkSwitchHull(state, hullId) {
+        const hull = ns.Data.HULLS[hullId];
+        if (!state.dockedAt) return { ok: false, reason: 'dock' };
+        if (!hull || !state.ship.ownedHullIds.includes(hullId)) return { ok: false, reason: 'unowned' };
+        const previous = state.ship.activeHullId; state.ship.activeHullId = hullId; const stats = calculateShipStats(state); state.ship.activeHullId = previous;
+        if (stats.mass > stats.massLimit) return { ok: false, reason: 'mass' };
+        if (cargoUsed(state) > stats.cargo) return { ok: false, reason: 'cargo' };
+        return { ok: true };
+    }
+    function switchHull(state, hullId) {
+        const check = checkSwitchHull(state, hullId); if (!check.ok) return check;
+        state.ship.activeHullId = hullId; const stats = calculateShipStats(state);
+        state.ship.name = ns.Data.HULLS[hullId].name;
+        state.ship.hull = Math.min(state.ship.hull, stats.hull); state.ship.shield = Math.min(state.ship.shield, stats.shield); state.ship.energy = Math.min(state.ship.energy, stats.reactor);
+        return { ok: true };
+    }
+    function buyHull(state, hullId, station) {
+        const hull = ns.Data.HULLS[hullId];
+        if (!hull || state.ship.ownedHullIds.includes(hullId) || !ns.Expansion.hullAvailable(state, hull, station) || !ns.Wallet.debit(state, hull.cost)) return false;
+        state.ship.ownedHullIds.push(hullId); return true;
+    }
     function updateAchievements(state) {
         const a = state.pilot.achievements;
         if (state.stats.kills >= 20) a.combat_veteran = true;
@@ -122,5 +153,5 @@
         return a;
     }
 
-    ns.Progression = { getTraitRank, getDisciplineSpend, canBuyTrait, buyTrait, respecCost, respec, traitEffects, traitTotalLabel, calculateShipStats, checkEquipModule, equipModule, cargoUsed, updateAchievements };
+    ns.Progression = { getTraitRank, getDisciplineSpend, canBuyTrait, buyTrait, respecCost, respec, traitEffects, traitTotalLabel, activeHull, calculateShipStats, checkEquipModule, equipModule, cargoUsed, checkSwitchHull, switchHull, buyHull, updateAchievements };
 })(window.MiniInvadersV2);

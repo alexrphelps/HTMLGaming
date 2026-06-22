@@ -29,8 +29,11 @@
         const u = evaluate(state);
         return {
             trade1: u.tradeTier >= 1, contracts3: state.contracts.completed >= 3,
+            trade2: u.tradeTier >= 2, concord10: state.reputations.concord >= 10, corsairs10: state.reputations.corsairs >= 10,
             anomaly: u.anomaly, combat: u.combat, shield: u.shields,
-            faction25: u.factionStanding, rim: u.rim, lightDrive: u.lightDrive, mechanic: Boolean(state.pilot.achievements.master_mechanic)
+            faction25: u.factionStanding, rim: u.rim, lightDrive: u.lightDrive, mechanic: Boolean(state.pilot.achievements.master_mechanic),
+            capital: Object.keys(state.progression?.bossesDefeated || {}).some(id => !ns.Data.BOSSES[id]?.capital),
+            capitalVeteran: Object.keys(state.progression?.bossesDefeated || {}).some(id => ns.Data.BOSSES[id]?.capital)
         }[requirement] || false;
     }
     function moduleVisible(state, module) { return state.ship.ownedModules.includes(module.id) || requirementMet(state, module.unlock); }

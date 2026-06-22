@@ -32,7 +32,12 @@
     function inventoryFor(state, station) {
         state.marketInventories = state.marketInventories || {};
         const cycle = Math.floor((Number(state.playTime) || 0) / INVENTORY_CYCLE_SECONDS), saved = state.marketInventories[station.id];
-        if (saved?.cycle === cycle) return saved;
+        if (saved?.cycle === cycle) {
+            const useful = Object.values(MODULES).find(module => module.cost && !ns.Wallet.isZero(module.cost) && ns.Unlocks.moduleVisible(state, module) && !state.ship.ownedModules.includes(module.id) && (!module.majorOnly || station.major));
+            if (useful && !saved.modules.includes(useful.id)) saved.modules.push(useful.id);
+            Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!saved.modules.includes(module.id)) saved.modules.push(module.id); });
+            return saved;
+        }
         const commodityIds = Object.keys(COMMODITIES), moduleIds = Object.values(MODULES).filter(module => module.cost && !ns.Wallet.isZero(module.cost) && (!module.majorOnly || station.major)).map(module => module.id);
         const identity = seeded((state.worldSeed ^ station.x ^ station.y ^ 0x51f15e) >>> 0), rotation = seeded((state.worldSeed ^ station.x ^ station.y ^ cycle * 977 ^ 0xa11ce) >>> 0);
         const commodities = []; pick(commodityIds, station.major ? 2 : 1, identity, commodities); pick(commodityIds, 1, rotation, commodities);
@@ -41,6 +46,8 @@
         const remoteness = REGIONS.find(region => region.id === station.region)?.remoteness || 0, moduleWeight = id => 1 + remoteness * Math.max(0, (MODULES[id].tier || 1) - 1) * 1.5;
         pickWeighted(preferred, station.major ? 4 : 2, identity, modules, moduleWeight); pickWeighted(moduleIds, station.major ? 3 : 2, rotation, modules, moduleWeight);
         if (station.major && moduleIds.includes('light_drive') && !modules.includes('light_drive')) modules.push('light_drive');
+        const useful = moduleIds.find(id => ns.Unlocks.moduleVisible(state, MODULES[id]) && !state.ship.ownedModules.includes(id)); if (useful && !modules.includes(useful)) modules.push(useful);
+        Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!modules.includes(module.id)) modules.push(module.id); });
         const inventory = { cycle, commodities, modules, refreshedAt: Number(state.playTime) || 0 }; state.marketInventories[station.id] = inventory; return inventory;
     }
     function stocksCommodity(state, station, commodityId) { return inventoryFor(state, station).commodities.includes(commodityId); }
@@ -52,7 +59,8 @@
         const pressure = clamp(1.25 - market.supply / 180, .72, 1.35);
         const trait = ns.Progression.traitEffects(state).market || 0;
         const allegianceDiscount = state.pilot.allegiance === station.faction ? .05 : 0;
-        const spread = side === 'sell' ? .88 + trait + allegianceDiscount : 1.12 - trait - allegianceDiscount;
+        const serviceDiscount = side === 'buy' && state.progression.serviceDiscount?.stationId === station.id && state.progression.serviceDiscount.uses > 0 ? state.progression.serviceDiscount.value : 0;
+        const spread = side === 'sell' ? .88 + trait + allegianceDiscount : 1.12 - trait - allegianceDiscount - serviceDiscount;
         return Math.max(1, Math.round(commodity.basePrice * market.modifier * pressure * spread));
     }
     function trade(state, station, commodityId, quantity) {
@@ -70,6 +78,7 @@
             if (amount <= 0) return false;
             ns.Wallet.credit(state, { aetherium: price(state, station, commodityId, 'sell') * amount }, 'banked'); state.ship.cargo[commodityId] -= amount; market.supply += amount;
         }
+        if (quantity > 0 && state.progression.serviceDiscount?.stationId === station.id && state.progression.serviceDiscount.uses > 0) state.progression.serviceDiscount.uses--;
         state.stats.trades++; return true;
     }
     function buyModule(state, moduleId, station) {

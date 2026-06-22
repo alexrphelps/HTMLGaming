@@ -1,5 +1,5 @@
 (function (ns) {
-    const { REGIONS, LANDMARKS } = ns.Data;
+    const { REGIONS, LANDMARKS, WORLD_OBJECT_TYPES, WORLD_SCENARIOS } = ns.Data;
     const { clamp, hash, distance } = ns.MathUtil;
     const CHUNK_SIZE = 900;
     const LOAD_RADIUS = 2;
@@ -43,6 +43,30 @@
             shapeSeed: Math.floor(hash(seed, cx, cy, 500 + index) * 100000)
         };
     }
+    function eligibleDefinitions(definitions, region, safeOnly) {
+        return Object.values(definitions).filter(definition => {
+            if (!definition.backdrops?.[region.backdrop] || region.danger < (definition.minDanger || 0) || region.danger > (definition.maxDanger || Infinity)) return false;
+            return !safeOnly || ['survey_probe', 'emergency_supply_pod', 'abandoned_worksite'].includes(definition.id);
+        });
+    }
+    function weightedDefinition(definitions, region, roll, safeOnly) {
+        const eligible = eligibleDefinitions(definitions, region, safeOnly), total = eligible.reduce((sum, definition) => sum + definition.backdrops[region.backdrop], 0);
+        if (!total) return null;
+        let cursor = roll * total;
+        return eligible.find(definition => (cursor -= definition.backdrops[region.backdrop]) <= 0) || eligible[eligible.length - 1];
+    }
+    function generatedEntity(seed, cx, cy, region, definition, kind, salt) {
+        const minX = Math.max(cx * CHUNK_SIZE + 80, region.x + 80), maxX = Math.min((cx + 1) * CHUNK_SIZE - 80, region.x + region.w - 80);
+        const minY = Math.max(cy * CHUNK_SIZE + 80, region.y + 80), maxY = Math.min((cy + 1) * CHUNK_SIZE - 80, region.y + region.h - 80);
+        return {
+            id: `${kind === 'worldScenario' ? 'world-scenario' : 'world-object'}:${definition.id}:${cx}:${cy}`,
+            kind, typeId: definition.id, name: definition.name,
+            x: minX + hash(seed, cx, cy, salt) * Math.max(0, maxX - minX),
+            y: minY + hash(seed, cx, cy, salt + 1) * Math.max(0, maxY - minY),
+            radius: kind === 'worldScenario' ? 30 : 22, region: region.id,
+            variant: definition.ambushChance && hash(seed, cx, cy, salt + 2) < definition.ambushChance ? 'guarded' : 'standard'
+        };
+    }
     function generateChunk(seed, cx, cy) {
         const center = { x: (cx + .5) * CHUNK_SIZE, y: (cy + .5) * CHUNK_SIZE };
         const region = regionAt(center.x, center.y);
@@ -50,13 +74,23 @@
         const baseAsteroids = 5 + Math.floor(hash(seed, cx, cy, 1) * (7 + region.danger * 2));
         const asteroidCount = Math.max(3, Math.round(baseAsteroids * (region.asteroidDensity || 1)));
         for (let i = 0; i < asteroidCount; i++) entities.push(makeAsteroid(seed, cx, cy, i));
-        if (hash(seed, cx, cy, 3) < .16 + region.danger * .035) {
-            entities.push({
-                id: `signal:${cx}:${cy}`, kind: hash(seed, cx, cy, 4) > .55 ? 'salvage' : 'signal',
-                x: cx * CHUNK_SIZE + hash(seed, cx, cy, 5) * CHUNK_SIZE,
-                y: cy * CHUNK_SIZE + hash(seed, cx, cy, 6) * CHUNK_SIZE,
-                radius: 18, discovered: false, region: region.id
-            });
+        const insideWorld = center.x >= WORLD_BOUNDS.minX && center.x < WORLD_BOUNDS.maxX && center.y >= WORLD_BOUNDS.minY && center.y < WORLD_BOUNDS.maxY;
+        const openingRoute = region.id === 'trade_belt' && distance(center, { x: 0, y: 0 }) < 2500;
+        const objectChance = .08 + region.danger * .02 + region.remoteness * .015;
+        if (insideWorld && hash(seed, cx, cy, 3) < objectChance) {
+            const definition = weightedDefinition(WORLD_OBJECT_TYPES, region, hash(seed, cx, cy, 4), openingRoute);
+            if (definition) entities.push(generatedEntity(seed, cx, cy, region, definition, 'worldObject', 5));
+        }
+        const scenarioChance = .025 + region.danger * .012 + region.remoteness * .01;
+        if (insideWorld && !openingRoute && hash(seed, cx, cy, 10) < scenarioChance) {
+            const definition = weightedDefinition(WORLD_SCENARIOS, region, hash(seed, cx, cy, 11), false);
+            if (definition) {
+                const scenario = generatedEntity(seed, cx, cy, region, definition, 'worldScenario', 12); entities.push(scenario);
+                if (definition.companionObject && WORLD_OBJECT_TYPES[definition.companionObject]) {
+                    const companion = generatedEntity(seed, cx, cy, region, WORLD_OBJECT_TYPES[definition.companionObject], 'worldObject', 16);
+                    companion.id += ':worksite'; companion.x = clamp(scenario.x + 95, Math.max(cx * CHUNK_SIZE + 40, region.x + 40), Math.min((cx + 1) * CHUNK_SIZE - 40, region.x + region.w - 40)); companion.y = clamp(scenario.y - 65, Math.max(cy * CHUNK_SIZE + 40, region.y + 40), Math.min((cy + 1) * CHUNK_SIZE - 40, region.y + region.h - 40)); companion.variant = 'worksite'; entities.push(companion);
+                }
+            }
         }
         LANDMARKS.filter(l => Math.floor(l.x / CHUNK_SIZE) === cx && Math.floor(l.y / CHUNK_SIZE) === cy)
             .forEach(l => entities.push(Object.assign({ radius: l.type === 'station' ? 105 : 65, kind: l.type }, l)));
@@ -120,7 +154,7 @@
         loadedEntities() { return Array.from(this.chunks.values()).flatMap(chunk => chunk.entities); }
         nearbyEntities(x, y, radius) { return this.loadedEntities().filter(e => distance({ x, y }, e) <= radius); }
         consumeEntity(state, entity) {
-            if (!entity || !['signal', 'salvage'].includes(entity.kind) || this.consumedEntityIds.has(entity.id)) return false;
+            if (!entity || !['signal', 'salvage', 'worldObject', 'worldScenario'].includes(entity.kind) || this.consumedEntityIds.has(entity.id)) return false;
             this.consumedEntityIds.add(entity.id); state.consumedEntityIds = Array.from(this.consumedEntityIds);
             for (const chunk of this.chunks.values()) { const index = chunk.entities.indexOf(entity); if (index >= 0) { chunk.entities.splice(index, 1); break; } }
             return true;
@@ -130,5 +164,5 @@
         discover(state, entity) { if (!entity || state.discoveries.includes(entity.id)) return false; state.discoveries.push(entity.id); state.stats.discoveries++; return true; }
     }
 
-    ns.World = { CHUNK_SIZE, LOAD_RADIUS, WORLD_BOUNDS, ASTEROID_TIERS, boundaryExposure, regionAt, generateChunk, WorldService };
+    ns.World = { CHUNK_SIZE, LOAD_RADIUS, WORLD_BOUNDS, ASTEROID_TIERS, boundaryExposure, regionAt, eligibleDefinitions, weightedDefinition, generateChunk, WorldService };
 })(window.MiniInvadersV2);

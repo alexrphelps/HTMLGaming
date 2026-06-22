@@ -17,10 +17,12 @@
         const moduleId = state.ship.slots[slot], module = ns.Data.MODULES[moduleId];
         if (!unlocked[slot] || !module?.ability) return false;
         const cd = cooldowns(state), stats = ns.Progression.calculateShipStats(state), energyCost = module.ability.energy * (1 + (stats.effects.abilityEnergyCost || 0));
-        if ((cd[slot] || 0) > 0 || state.ship.energy < energyCost) return false;
+        const overclock = stats.effects.overclock && (cd[slot] || 0) > 0 && (cd[slot] || 0) <= module.ability.cooldown * .5;
+        if (((cd[slot] || 0) > 0 && !overclock) || state.ship.energy < energyCost) return false;
         const ability = module.ability, effects = effectState(state);
         if (ability.type === 'overshield' && stats.shield <= 0) return false;
-        state.ship.energy -= energyCost; cd[slot] = ability.cooldown * (ability.type === 'afterburner' ? 1 - (stats.effects.afterburnerRecovery || 0) : 1);
+        state.ship.energy -= energyCost; if (overclock) { state.ship.heat = Math.min(100, state.ship.heat + 35); ns.Combat.applyHullDamage(state, 5); }
+        cd[slot] = ability.cooldown * (ability.type === 'afterburner' ? 1 - (stats.effects.afterburnerRecovery || 0) : 1);
         if (ability.type === 'afterburner') effects.afterburner = ability.duration;
         if (ability.type === 'blink') Object.assign(state.ship, safeBlinkDestination(game, ability.distance));
         if (ability.type === 'overshield') { state.ship.overshield = ability.amount; effects.overshield = ability.duration; }
@@ -39,7 +41,7 @@
     function update(game, dt) {
         const state = game.state, cd = cooldowns(state), effects = effectState(state);
         Object.keys(cd).forEach(slot => { cd[slot] = Math.max(0, cd[slot] - dt); });
-        ['afterburner', 'overshield', 'cloak'].forEach(name => { if (effects[name] > 0) effects[name] = Math.max(0, effects[name] - dt); });
+        ['afterburner', 'overshield', 'cloak', 'damageResistance', 'ghostVector'].forEach(name => { if (effects[name] > 0) effects[name] = Math.max(0, effects[name] - dt); });
         if (effects.overshield === 0) state.ship.overshield = 0;
         if (effects.repair > 0 && effects.repairRemaining > 0) {
             const stats = ns.Progression.calculateShipStats(state); const restored = Math.min(effects.repairRemaining, effects.repairRemaining / effects.repair * dt);

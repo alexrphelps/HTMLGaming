@@ -8,7 +8,10 @@
         return { phase: 'idle', timer: 0, cooldown: 0, distance: 0, integrity: 0, damageSerial: 0, zoom: 1, forcedExit: false };
     }
     function ensure(game) { if (!game.lightSpeed) game.lightSpeed = createState(); return game.lightSpeed; }
-    function fitted(game) { return game.state?.ship?.slots?.engine === 'light_drive'; }
+    function drive(game) { return ns.Data.MODULES[game.state?.ship?.slots?.engine] || {}; }
+    function fitted(game) { const module = drive(game); return Boolean(module.id === 'light_drive' || module.lightSpeed); }
+    function chargeDuration(game) { return CONFIG.chargeDuration * (drive(game).lightCharge || 1); }
+    function decelerationDuration(game) { return CONFIG.decelerationDuration * (drive(game).lightDeceleration || 1); }
     function isShifted(game) { return shiftedPhases.includes(ensure(game).phase); }
     function isTraveling(game) { return ensure(game).phase !== 'idle'; }
     function isLocked(game) { return ensure(game).phase !== 'idle' || ensure(game).cooldown > 0; }
@@ -43,7 +46,7 @@
         const ship = game.state.ship;
         if (steer) {
             const target = ns.MathUtil.angleToPointer(game.input.mouse, { w: game.renderer.w, h: game.renderer.h }, ship.angle);
-            ship.angle = approachAngle(ship.angle, target, CONFIG.turnRate * dt);
+            ship.angle = approachAngle(ship.angle, target, CONFIG.turnRate * (drive(game).lightTurn || 1) * dt);
         }
         ship.vx = Math.cos(ship.angle) * speed; ship.vy = Math.sin(ship.angle) * speed;
         ship.x += ship.vx * dt; ship.y += ship.vy * dt;
@@ -74,6 +77,7 @@
         ship.vx = Math.cos(ship.angle) * 340; ship.vy = Math.sin(ship.angle) * 340;
         travel.phase = 'idle'; travel.timer = 0; travel.cooldown = CONFIG.cooldown; travel.zoom = .55;
         game.region = game.world.update(ship.x, ship.y); game.camera.x = ship.x; game.camera.y = ship.y;
+        if (ns.Progression.traitEffects(game.state).ghostVector) { ship.abilityEffects.cloak = 3; ship.abilityEffects.ghostVector = 5; }
         game.notify(`REMATERIALIZED // ${game.region.name.toUpperCase()}`);
     }
     function update(game, dt) {
@@ -86,11 +90,11 @@
         }
         if (travel.phase === 'charging') {
             if ((ship.damageSerial || 0) !== travel.damageSerial || integrity(ship) < travel.integrity - .001) return interrupt(game);
-            travel.timer += dt; travel.zoom = 1 - .32 * Math.min(1, travel.timer / CONFIG.chargeDuration);
+            const duration = chargeDuration(game); travel.timer += dt; travel.zoom = 1 - .32 * Math.min(1, travel.timer / duration);
             const target = ns.MathUtil.angleToPointer(game.input.mouse, { w: game.renderer.w, h: game.renderer.h }, ship.angle);
             ship.angle = approachAngle(ship.angle, target, 1.1 * dt);
-            move(game, 340 + 760 * Math.pow(Math.min(1, travel.timer / CONFIG.chargeDuration), 2), dt, false);
-            if (travel.timer >= CONFIG.chargeDuration) enter(game);
+            move(game, 340 + 760 * Math.pow(Math.min(1, travel.timer / duration), 2), dt, false);
+            if (travel.timer >= duration) enter(game);
             return;
         }
         if (travel.phase === 'cruising') {
@@ -101,7 +105,7 @@
             return;
         }
         if (travel.phase === 'decelerating') {
-            travel.timer += dt; const ratio = Math.min(1, travel.timer / CONFIG.decelerationDuration);
+            travel.timer += dt; const ratio = Math.min(1, travel.timer / decelerationDuration(game));
             move(game, CONFIG.cruiseSpeed + (340 - CONFIG.cruiseSpeed) * ratio * ratio, dt, true); travel.zoom = .68 - ratio * .13;
             if (ratio >= 1) finish(game);
         }
@@ -110,7 +114,7 @@
         const travel = ensure(game), unlocked = game.state ? ns.Unlocks.evaluate(game.state).lightDrive : false;
         if (!unlocked && !game.state?.ship?.ownedModules?.includes('light_drive')) return { label: 'LICENSE LOCKED', className: 'locked' };
         if (!fitted(game)) return { label: game.state.ship.ownedModules.includes('light_drive') ? 'FIT DRIVE' : 'NOT INSTALLED', className: 'locked' };
-        if (travel.phase === 'charging') return { label: `CHARGING ${Math.min(100, Math.round(travel.timer / CONFIG.chargeDuration * 100))}%`, className: 'charging' };
+        if (travel.phase === 'charging') return { label: `CHARGING ${Math.min(100, Math.round(travel.timer / chargeDuration(game) * 100))}%`, className: 'charging' };
         if (travel.phase === 'cruising') return { label: 'R // DECELERATE', className: 'active' };
         if (travel.phase === 'decelerating') return { label: 'REMATERIALIZING', className: 'charging' };
         if (travel.cooldown > 0) return { label: `COOLDOWN ${travel.cooldown.toFixed(1)}S`, className: 'cooling' };
@@ -118,5 +122,5 @@
         if (game.state.ship.energy <= 0 || game.state.ship.heat >= 100) return { label: 'DRIVE RESERVES EXHAUSTED', className: 'locked' };
         return { label: 'R // LIGHT SPEED', className: 'ready' };
     }
-    ns.LightSpeed = { CONFIG, createState, ensure, fitted, isShifted, isTraveling, isLocked, canCharge, beginCharge, beginDeceleration, toggle, update, status, distanceToBoundary };
+    ns.LightSpeed = { CONFIG, createState, ensure, fitted, drive, chargeDuration, decelerationDuration, isShifted, isTraveling, isLocked, canCharge, beginCharge, beginDeceleration, toggle, update, status, distanceToBoundary };
 })(window.MiniInvadersV2);

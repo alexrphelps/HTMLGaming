@@ -4,6 +4,17 @@
     --violet: #ce75ff; --text: #d9edf2; --muted: #73909b; --danger: #ff597f;
     --space: clamp(10px, 1.25vw, 22px); --panel-font: clamp(11px, .78vw, 15px);
 }
+
+.station-flair, .contract-dropdown blockquote { color: #9fc8d2; font-style: italic; border-left: 2px solid #55d7ff66; padding-left: 12px; }
+.hull-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.hull-card { border-top: 2px solid var(--faction); }
+.hull-card.locked { opacity: .76; }
+.hull-silhouette { width: 100%; height: 92px; display: block; margin-bottom: .5rem; background: #041015; border: 1px solid #27444d; }
+.hull-silhouette polygon { fill: #0b2027; stroke: var(--faction); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.hull-card .module-stats b small { display: block; color: #8faab3; font-size: .65rem; }
+.map-target.capital-threat { background: #ff315c; box-shadow: 0 0 0 6px #ff315c33, 0 0 18px #ff315c; animation: target-pulse .8s infinite alternate; }
+@keyframes target-pulse { to { transform: translate(-50%, -50%) scale(1.35); opacity: .65; } }
+.mission-report { margin-bottom: 18px; padding: 18px; border: 1px solid #ffbd5966; background: #241b0d99; }
 * { box-sizing: border-box; }
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--void); color: var(--text); font-family: "Courier New", Consolas, monospace; }
 button, input { font: inherit; }

@@ -52,6 +52,22 @@
         R('eventide_deep', 'Eventide Deep', 4, 5, '#8d55c9', 5, 'independents', 'anomaly', 1, 3)
     ];
 
+    const WORLD_OBJECT_TYPES = {
+        derelict_hauler: { id: 'derelict_hauler', name: 'Derelict Hauler', backdrops: { belt: 4, frontier: 5, null: 3, anomaly: 1 }, minDanger: 1, interactionDuration: 3, style: 'derelict', color: '#ffbd59', reward: { aetherium: 42 }, dangerScale: { aetherium: 9 }, helioniteAt: 3, xp: 18, rewardType: 'salvage' },
+        survey_probe: { id: 'survey_probe', name: 'Guild Survey Probe', backdrops: { belt: 3, core: 4, frontier: 3, anomaly: 3 }, minDanger: 1, interactionDuration: 5, style: 'probe', color: '#55d7ff', reward: { aetherium: 12, sunshards: 6 }, dangerScale: { sunshards: 1 }, xp: 35, rewardType: 'discovery' },
+        memorial_beacon: { id: 'memorial_beacon', name: 'Memorial Beacon', backdrops: { belt: 1, core: 1, frontier: 3, null: 2, anomaly: 3 }, minDanger: 2, interactionDuration: 4, style: 'beacon', color: '#b8d5dc', reward: { sunshards: 4 }, xp: 45, rewardType: 'discovery' },
+        emergency_supply_pod: { id: 'emergency_supply_pod', name: 'Emergency Supply Pod', backdrops: { belt: 5, core: 3, frontier: 4 }, minDanger: 1, interactionDuration: 3, style: 'pod', color: '#55f0ad', reward: { aetherium: 32 }, dangerScale: { aetherium: 4 }, xp: 12, rewardType: 'salvage' },
+        smuggler_dead_drop: { id: 'smuggler_dead_drop', name: 'Smuggler Dead Drop', backdrops: { null: 7 }, minDanger: 3, interactionDuration: 4, style: 'drop', color: '#ff4f91', reward: { aetherium: 65, sunshards: 2, helionite: 2 }, dangerScale: { aetherium: 8 }, xp: 24, rewardType: 'salvage', ambushChance: .45 },
+        unstable_prism: { id: 'unstable_prism', name: 'Unstable Prism', backdrops: { anomaly: 8 }, minDanger: 4, interactionDuration: 5, style: 'prism', color: '#ce75ff', reward: { sunshards: 11 }, dangerScale: { sunshards: 1 }, xp: 55, rewardType: 'discovery', heat: 34, energyDrain: 22 }
+    };
+
+    const WORLD_SCENARIOS = {
+        distress_call: { id: 'distress_call', name: 'Distress Call', backdrops: { core: 3, frontier: 6, null: 5 }, minDanger: 2, triggerRadius: 420, style: 'distress', color: '#ffbd59', falseSignalChance: { core: .15, frontier: .34, null: .68 } },
+        border_skirmish: { id: 'border_skirmish', name: 'Border Skirmish', backdrops: { core: 3, null: 3 }, minDanger: 4, triggerRadius: 520, style: 'crossfire', color: '#f2f7ff', hostile: true },
+        raider_sweep: { id: 'raider_sweep', name: 'Raider Sweep', backdrops: { frontier: 4, null: 5 }, minDanger: 3, triggerRadius: 500, style: 'warning', color: '#ff597f', hostile: true },
+        abandoned_worksite: { id: 'abandoned_worksite', name: 'Abandoned Worksite', backdrops: { belt: 5, frontier: 4 }, minDanger: 1, triggerRadius: 380, style: 'worksite', color: '#8faab3', companionObject: 'emergency_supply_pod' }
+    };
+
     const LANDMARKS = [
         { id: 'waypoint_zero', type: 'station', name: 'Waypoint Zero', x: 0, y: 0, region: 'trade_belt', faction: 'independents', major: true },
         { id: 'cold_start_beacon', type: 'anomaly', name: 'Cold Start Beacon', x: 1080, y: 270, region: 'trade_belt', faction: 'independents' },
@@ -187,5 +203,5 @@
         corsairs: ['A Useful Stranger', 'Cut the Helion Line', 'A Captain Owes Nothing', 'Crown of Static']
     };
 
-    ns.Data = { FACTIONS: F, REGIONS, LANDMARKS, COMMODITIES, MODULES, TRAITS, CONTRACT_TYPES, QUESTS };
+    ns.Data = { FACTIONS: F, REGIONS, LANDMARKS, WORLD_OBJECT_TYPES, WORLD_SCENARIOS, COMMODITIES, MODULES, TRAITS, CONTRACT_TYPES, QUESTS };
 })(window.MiniInvadersV2);

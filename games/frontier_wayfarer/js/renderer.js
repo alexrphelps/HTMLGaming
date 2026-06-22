@@ -25,11 +25,13 @@
                 if (entity.kind === 'asteroid') this.drawAsteroid(entity, p);
                 else if (entity.kind === 'station') this.drawStation(entity, p, game.time);
                 else if (entity.kind === 'anomaly') this.drawAnomaly(entity, p, game.time);
+                else if (entity.kind === 'worldObject') this.drawWorldObject(entity, p, game.time);
+                else if (entity.kind === 'worldScenario') this.drawWorldScenario(entity, p, game.time);
                 else this.drawSignal(entity, p, game.time);
             });
             game.enemies.forEach(e => this.drawEnemy(e, this.screen(e, camera), game.time));
             const convoy = game.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0) this.drawConvoy(convoy, this.screen(convoy, camera), game.time);
-            game.bullets.forEach(b => { const p = this.screen(b, camera); c.strokeStyle = b.enemy ? '#ff597f' : '#55f0ad'; c.lineWidth = b.enemy ? 2 : 3; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - b.vx * .025, p.y - b.vy * .025); c.stroke(); });
+            game.bullets.forEach(b => { const p = this.screen(b, camera); c.strokeStyle = b.color || (b.enemy ? '#ff597f' : '#55f0ad'); c.lineWidth = b.type === 'beam' ? 5 : b.enemy ? 2 : 3; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - b.vx * (b.type === 'beam' ? .06 : .025), p.y - b.vy * (b.type === 'beam' ? .06 : .025)); c.stroke(); if (b.type === 'missile') { c.fillStyle = b.color || '#ffbd59'; c.fillRect(p.x - 2, p.y - 2, 4, 4); const speed = Math.max(1, Math.hypot(b.vx, b.vy)); c.globalAlpha = .55; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - b.vx / speed * 14, p.y - b.vy / speed * 14); c.stroke(); c.globalAlpha = 1; } else if (b.type === 'mine') { c.globalAlpha = .45 + Math.sin(game.time * 7) * .2; c.beginPath(); c.arc(p.x, p.y, b.radius + 4, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1; } });
             game.effects.forEach(effect => { const p = this.screen(effect, camera); c.globalAlpha = clamp(effect.life / effect.maxLife, 0, 1); if (effect.flash) { c.strokeStyle = '#f2f7ff'; c.lineWidth = 3; c.beginPath(); c.arc(p.x, p.y, effect.size * (1 - effect.life / effect.maxLife * .65), 0, Math.PI * 2); c.stroke(); } else { c.fillStyle = '#b8d5dc'; c.fillRect(p.x, p.y, effect.size, effect.size); } }); c.globalAlpha = 1;
         }
         drawAsteroid(e, p) {
@@ -67,6 +69,23 @@
             for (let i = 0; i < 4; i++) { c.globalAlpha = .25 + i * .15; c.beginPath(); c.ellipse(0, 0, 22 + i * 14, 48 + i * 10, i * .55, 0, Math.PI * 2); c.stroke(); }
             c.restore(); c.globalAlpha = 1;
         }
+        drawWorldObject(e, p, time) {
+            const definition = ns.Data.WORLD_OBJECT_TYPES[e.typeId] || {}, style = definition.style || 'probe', color = definition.color || '#ce75ff', pulse = Math.sin(time * 3 + e.x) * 2, c = this.ctx;
+            c.save(); c.translate(p.x, p.y); c.strokeStyle = color; c.fillStyle = '#071117'; c.lineWidth = 2;
+            if (style === 'derelict') { c.rotate(.35); this.shipPath([[0,-18],[11,-7],[15,10],[3,7],[-5,16],[-14,7],[-10,-10]]); c.fill(); c.stroke(); c.strokeStyle = '#ff597f'; c.beginPath(); c.moveTo(-7,-4); c.lineTo(8,8); c.stroke(); }
+            else if (style === 'probe') { c.rotate(time * .35); c.strokeRect(-7,-7,14,14); c.beginPath(); c.moveTo(-19,0); c.lineTo(19,0); c.moveTo(0,-19); c.lineTo(0,19); c.stroke(); c.fillStyle = color; c.fillRect(-3,-3,6,6); }
+            else if (style === 'beacon') { c.beginPath(); c.moveTo(0,-18); c.lineTo(9,12); c.lineTo(0,7); c.lineTo(-9,12); c.closePath(); c.fill(); c.stroke(); c.globalAlpha = .35; c.beginPath(); c.arc(0,0,24+pulse,0,Math.PI*2); c.stroke(); }
+            else if (style === 'pod') { c.strokeRect(-14,-9,28,18); c.fillRect(-5,-6,10,12); [-1,1].forEach(side => { c.beginPath(); c.moveTo(side*14,-6); c.lineTo(side*21,-13); c.lineTo(side*21,13); c.lineTo(side*14,6); c.stroke(); }); }
+            else if (style === 'drop') { c.rotate(Math.PI/4); c.strokeRect(-12,-12,24,24); c.fillStyle = color; c.fillRect(-4,-4,8,8); c.globalAlpha = .4; c.strokeRect(-17,-17,34,34); }
+            else if (style === 'prism') { c.rotate(time * .42); this.shipPath([[0,-22],[12,0],[0,22],[-12,0]]); c.fill(); c.stroke(); c.globalAlpha = .45; c.rotate(-time * .8); c.strokeRect(-18-pulse/2,-18-pulse/2,36+pulse,36+pulse); }
+            c.restore();
+            c.fillStyle = color; c.font = '9px "Courier New"'; c.textAlign = 'center'; c.fillText(String(e.name || definition.name || 'CONTACT').toUpperCase(), p.x, p.y + 34);
+        }
+        drawWorldScenario(e, p, time) {
+            const definition = ns.Data.WORLD_SCENARIOS[e.typeId] || {}, color = definition.color || '#ffbd59', c = this.ctx, pulse = 22 + Math.sin(time * 5 + e.y) * 5;
+            c.save(); c.translate(p.x, p.y); c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 1.5; c.globalAlpha = .65;
+            c.beginPath(); c.arc(0,0,pulse,0,Math.PI*2); c.stroke(); c.beginPath(); c.moveTo(-pulse-8,0); c.lineTo(-8,0); c.moveTo(8,0); c.lineTo(pulse+8,0); c.moveTo(0,-pulse-8); c.lineTo(0,-8); c.moveTo(0,8); c.lineTo(0,pulse+8); c.stroke(); c.fillRect(-3,-3,6,6); c.restore();
+        }
         drawSignal(e, p, time) { const c = this.ctx; c.strokeStyle = e.kind === 'salvage' ? '#ffbd59' : '#ce75ff'; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 12 + Math.sin(time * 4) * 4, 0, Math.PI * 2); c.stroke(); c.fillStyle = c.strokeStyle; c.fillRect(p.x - 2, p.y - 2, 4, 4); }
         drawContractContact(game) {
             ns.Contracts.contactsFor(game.state.contracts.active).forEach(contact => {
@@ -77,9 +96,13 @@
             });
         }
         drawEnemy(e, p, time) {
-            const c = this.ctx; c.save(); c.translate(p.x, p.y); c.rotate(e.angle + Math.PI / 2); c.strokeStyle = e.faction === 'concord' ? '#55d7ff' : '#ff4f91'; c.fillStyle = '#080b10'; c.lineWidth = 2;
-            c.beginPath(); c.moveTo(0, -16); c.lineTo(13, 13); c.lineTo(0, 8); c.lineTo(-13, 13); c.closePath(); c.fill(); c.stroke(); c.restore();
-            c.fillStyle = '#281018'; c.fillRect(p.x - 16, p.y + 20, 32, 3); c.fillStyle = '#ff597f'; c.fillRect(p.x - 16, p.y + 20, 32 * clamp(e.hull / e.maxHull, 0, 1), 3);
+            const c = this.ctx, color = e.faction === 'concord' ? '#55d7ff' : e.faction === 'corsairs' ? '#ff4f91' : '#ff8b59', r = e.radius || 14; c.save(); c.translate(p.x, p.y); c.rotate(e.angle + Math.PI / 2); c.strokeStyle = color; c.fillStyle = '#080b10'; c.lineWidth = e.bossType ? 3 : 2;
+            const shapes = { dart:[[0,-18],[8,12],[0,8],[-8,12]], block:[[0,-18],[15,-8],[16,14],[0,10],[-16,14],[-15,-8]], fork:[[0,-17],[12,-11],[7,14],[0,8],[-7,14],[-12,-11]], blade:[[0,-19],[14,8],[4,14],[0,7],[-4,14],[-14,8]], shield:[[0,-18],[14,-6],[11,14],[0,10],[-11,14],[-14,-6]], hook:[[0,-19],[15,-4],[7,4],[14,15],[0,9],[-14,15],[-7,4],[-15,-4]], bomber:[[0,-19],[17,-8],[14,16],[4,11],[0,16],[-4,11],[-14,16],[-17,-8]], lancer:[[0,-25],[8,-9],[17,13],[0,8],[-17,13],[-8,-9]], layer:[[0,-15],[18,-2],[10,16],[0,9],[-10,16],[-18,-2]], tender:[[0,-16],[18,-10],[20,14],[0,18],[-20,14],[-18,-10]], jammer:[[0,-16],[10,-7],[18,0],[10,7],[0,16],[-10,7],[-18,0],[-10,-7]], carrier:[[0,-48],[29,-28],[45,-8],[39,35],[15,48],[0,35],[-15,48],[-39,35],[-45,-8],[-29,-28]], aegis:[[0,-50],[24,-35],[43,0],[33,38],[0,47],[-33,38],[-43,0],[-24,-35]], reaver:[[0,-50],[35,-25],[19,-3],[41,35],[8,28],[0,44],[-8,28],[-41,35],[-19,-3],[-35,-25]], foundry:[[0,-55],[38,-44],[62,-12],[58,48],[25,61],[0,45],[-25,61],[-58,48],[-62,-12],[-38,-44]], solar:[[0,-60],[34,-40],[55,0],[34,48],[0,62],[-34,48],[-55,0],[-34,-40]], eclipse:[[0,-58],[48,-27],[30,-5],[58,40],[15,31],[0,56],[-15,31],[-58,40],[-30,-5],[-48,-27]], cutter:[[0,-16],[13,13],[0,8],[-13,13]] };
+            const key = e.bossType ? ns.Data.BOSSES[e.bossType]?.shape : ns.Data.ENEMY_TYPES[e.archetype]?.shape || 'cutter'; c.save(); c.scale(r / (e.bossType ? 60 : 15), r / (e.bossType ? 60 : 15)); this.shipPath(shapes[key] || shapes.cutter); c.fill(); c.stroke(); c.restore();
+            (ns.Data.BOSSES[e.bossType]?.components || []).forEach(component => { const alive = (e.components?.[component.id] || 0) > 0; c.fillStyle = alive ? color : '#32151b'; c.globalAlpha = alive ? .85 : .35; c.beginPath(); c.arc(component.x, component.y, 7, 0, Math.PI * 2); c.fill(); }); c.globalAlpha = 1;
+            if (e.telegraph > 0) { c.globalAlpha = e.telegraph / .55; c.strokeStyle = '#fff2b0'; c.beginPath(); c.arc(0, 0, r + 9, 0, Math.PI * 2); c.stroke(); }
+            if (e.shielded) { c.globalAlpha = .5; c.strokeStyle = '#55d7ff'; c.beginPath(); c.arc(0, 0, r + 7, 0, Math.PI * 2); c.stroke(); } c.restore();
+            const width = e.bossType ? 120 : 32, y = p.y + r + 8; c.fillStyle = '#281018'; c.fillRect(p.x - width / 2, y, width, e.bossType ? 7 : 3); c.fillStyle = color; c.fillRect(p.x - width / 2, y, width * clamp(e.hull / e.maxHull, 0, 1), e.bossType ? 7 : 3); if (e.bossType) { c.fillStyle = color; c.font = '10px "Courier New"'; c.textAlign = 'center'; c.fillText(`${ns.Data.BOSSES[e.bossType].name.toUpperCase()} // PHASE ${e.bossPhase}`, p.x, y + 20); }
         }
         drawConvoy(convoy, p, time) {
             const c = this.ctx, color = ns.Data.FACTIONS[convoy.faction]?.color || '#55d7ff'; c.save(); c.translate(p.x, p.y); c.rotate(convoy.angle + Math.PI / 2); c.strokeStyle = color; c.fillStyle = '#07161c'; c.lineWidth = 2;
@@ -120,14 +143,16 @@
             if (equipped.includes('cargo_pods')) { c.strokeStyle = '#ffbd59'; c.globalAlpha = .35 + Math.sin(time * 4) * .15; [-1, 1].forEach(side => { c.beginPath(); c.moveTo(side * 24, 10); c.lineTo(side * 24, 30 + Math.sin(time * 3 + side) * 5); c.stroke(); c.fillStyle = '#ffbd59'; c.fillRect(side * 24 - 1.5, 8, 3, 3); }); c.globalAlpha = 1; }
         }
         drawShipModel(game, options) {
-            const c = this.ctx, s = game.state.ship, config = options || {}, scale = (config.scale || 1) * ns.MathUtil.shipScale(s); c.save(); c.translate(config.x, config.y); c.rotate(config.rotation ?? s.angle + Math.PI / 2); c.scale(scale, scale); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
+            const c = this.ctx, s = game.state.ship, config = options || {}, hull = ns.Progression.activeHull(game.state), scale = (config.scale || 1) * ns.MathUtil.shipScale(s); c.save(); c.translate(config.x, config.y); c.rotate(config.rotation ?? s.angle + Math.PI / 2); c.scale(scale, scale); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
             c.shadowColor = '#55f0ad'; c.shadowBlur = 12; c.fillStyle = '#08181e'; c.strokeStyle = '#55f0ad'; c.lineWidth = 2;
-            this.shipPath([[0,-31],[8,-18],[13,-8],[28,13],[20,20],[8,14],[0,22],[-8,14],[-20,20],[-28,13],[-13,-8],[-8,-18]]); c.fill(); c.stroke();
+            this.shipPath(hull.shape); c.fill(); c.stroke();
             c.shadowBlur = 0; c.fillStyle = '#112a32'; c.strokeStyle = '#3e7180'; this.shipPath([[0,-23],[7,-10],[8,10],[0,17],[-8,10],[-7,-10]]); c.fill(); c.stroke();
             c.fillStyle = '#55d7ff'; c.globalAlpha *= .8; this.shipPath([[0,-19],[5,-8],[0,-2],[-5,-8]]); c.fill(); c.globalAlpha = ns.Abilities.isActive(game.state, 'cloak') ? .35 : 1;
             c.fillStyle = '#ffbd59'; c.shadowColor = '#ffbd59'; c.shadowBlur = 8; c.beginPath(); c.arc(0, 7, 3.5, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0;
             this.drawFittedStructures(game);
             this.drawUtilityEffects(game);
+            Object.entries(game.weaponCharges || {}).forEach(([slot, charge]) => { if (!charge.active) return; const module = ns.Data.MODULES[s.slots[slot]], spec = ns.Weapons.weaponData(module), pct = charge.value / spec.charge.max, side = slot === 'primary2' ? 1 : -1, mount = ns.MathUtil.weaponMount(module), stages = spec.charge.stages || 1; c.globalAlpha = .35 + pct * .65; c.strokeStyle = spec.color; c.lineWidth = 1 + pct * 3; for (let ring = 0; ring < Math.max(1, Math.ceil(pct * stages)); ring++) { c.beginPath(); c.arc(side * mount.lateral, -mount.forward, 4 + pct * 9 + ring * 4, 0, Math.PI * 2); c.stroke(); } c.beginPath(); c.moveTo(side * mount.lateral - 10, -mount.forward); c.lineTo(side * mount.lateral + 10, -mount.forward); c.stroke(); c.globalAlpha = 1; });
+            Object.entries(game.weaponLocks || {}).forEach(([slot, lock]) => { const module = ns.Data.MODULES[s.slots[slot]], spec = ns.Weapons.weaponData(module); if (!spec.lock || lock.value <= 0) return; const side = slot === 'primary2' ? 1 : -1, mount = ns.MathUtil.weaponMount(module), pct = lock.value / spec.lock; c.strokeStyle = spec.color; c.globalAlpha = .4 + pct * .6; c.beginPath(); c.arc(side * mount.lateral, -mount.forward, 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct); c.stroke(); c.globalAlpha = 1; });
             const thrusting = !config.static && (game.input.down('w', 'W') || ns.Abilities.isActive(game.state, 'afterburner')), flame = config.static ? 5 : (thrusting ? 12 : 4) + Math.random() * 5; c.fillStyle = ns.Abilities.isActive(game.state, 'afterburner') ? '#ffbd59' : '#55d7ff'; [-1, 1].forEach(side => { c.beginPath(); c.moveTo(side * 8 - 3, 17); c.lineTo(side * 8, 22 + flame); c.lineTo(side * 8 + 3, 17); c.fill(); });
             if (s.shield > 0 || s.overshield > 0) { c.globalAlpha = .18 + (s.overshield > 0 ? .18 : 0); c.strokeStyle = s.overshield > 0 ? '#ce75ff' : '#55d7ff'; c.lineWidth = 1.5; c.beginPath(); c.ellipse(0, 0, 35, 40, 0, 0, Math.PI * 2); c.stroke(); }
             c.restore();
@@ -178,7 +203,7 @@
             c.save(); c.translate(x, y); c.fillStyle = '#02090dcc'; c.strokeStyle = '#55f0ad55'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, radius, 0, Math.PI * 2); c.fill(); c.stroke();
             c.beginPath(); c.moveTo(-radius, 0); c.lineTo(radius, 0); c.moveTo(0, -radius); c.lineTo(0, radius); c.stroke();
             const drawBlip = (e, color, size) => { const dx = (e.x - game.state.ship.x) / range * radius, dy = (e.y - game.state.ship.y) / range * radius; if (Math.hypot(dx, dy) > radius) return; c.fillStyle = color; c.fillRect(dx - size / 2, dy - size / 2, size, size); };
-            game.world.nearbyEntities(game.state.ship.x, game.state.ship.y, range).forEach(e => drawBlip(e, e.kind === 'station' ? ns.Data.FACTIONS[e.faction].color : e.kind === 'asteroid' ? '#56707d' : '#ce75ff', e.kind === 'station' ? 5 : 3));
+            game.world.nearbyEntities(game.state.ship.x, game.state.ship.y, range).forEach(e => { const definition = e.kind === 'worldObject' ? ns.Data.WORLD_OBJECT_TYPES[e.typeId] : e.kind === 'worldScenario' ? ns.Data.WORLD_SCENARIOS[e.typeId] : null; drawBlip(e, e.kind === 'station' ? ns.Data.FACTIONS[e.faction].color : e.kind === 'asteroid' ? '#56707d' : definition?.color || '#ce75ff', e.kind === 'station' ? 5 : e.kind === 'worldScenario' ? 4 : 3); });
             game.enemies.forEach(e => drawBlip(e, '#ff4f91', 4)); const convoy = game.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0) drawBlip(convoy, '#55d7ff', 5); c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 3, 0, Math.PI * 2); c.fill(); c.restore();
         }
         drawPhaseOverlay(game) {

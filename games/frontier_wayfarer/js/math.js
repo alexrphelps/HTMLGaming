@@ -40,7 +40,7 @@
     function shipScale(ship) { return 1 + Math.min(4, (ship?.chassis?.level || 1) - 1) * .035; }
     function weaponMount(moduleOrId) { const id = typeof moduleOrId === 'string' ? moduleOrId : moduleOrId?.id || ''; return { forward: id.includes('rail') ? 31 : id.includes('seeker') ? 13 : 24, lateral: 15 }; }
     function weaponHardpoint(ship, slot, module) {
-        const side = slot === 'primary2' ? 1 : -1, scale = shipScale(ship), mount = weaponMount(module);
+        const side = slot === 'primary2' ? 1 : -1, scale = shipScale(ship), moduleMount = weaponMount(module), hullMount = ns.Data?.HULLS?.[ship?.activeHullId]?.mounts, mount = { forward: hullMount?.forward || moduleMount.forward, lateral: hullMount?.lateral || moduleMount.lateral };
         const forward = mount.forward * scale, lateral = side * mount.lateral * scale;
         return { x: ship.x + Math.cos(ship.angle) * forward - Math.sin(ship.angle) * lateral, y: ship.y + Math.sin(ship.angle) * forward + Math.cos(ship.angle) * lateral };
     }

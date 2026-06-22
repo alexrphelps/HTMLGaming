@@ -26,7 +26,7 @@ This is not meant to drift back toward a short-session arcade score attack. Ever
 - Preserve the no-build browser-script architecture under `window.MiniInvadersV2`.
 - Keep the universe finite and region-authored, not endless procedural space.
 - Keep the game single-player.
-- Keep one persistent personal ship rather than a fleet or disposable hull loop.
+- Keep one active persistent personal ship, with dock-only switching among purchased hull frames rather than a fleet or disposable hull loop.
 - Keep pilot traits separate from ship modules.
 - Keep module effects and trait effects funneled through centralized derived-stat calculation instead of mutating duplicate runtime fields.
 - Keep progression gated through milestones and accomplishments rather than exposing everything at once.
@@ -36,7 +36,7 @@ Out of scope unless explicitly requested:
 - Multiplayer
 - Planetary landings
 - Walking characters
-- Multiple owned ships
+- Per-ship inventories, cargo holds, crews, or fleet deployment
 - Refactoring to TypeScript, bundlers, or frameworks
 
 ## Current Gameplay Contract
@@ -142,7 +142,7 @@ If future progression changes are made, update the unlock evaluator and the mile
 
 ### Ship Progression
 
-The player owns one ship, `Wayfarer`, and improves it over time.
+The player begins with the balanced `Wayfarer` and may purchase eight additional frames: Guild Mule, Concord Kestrel, Concord Bulwark, Corsair Wraith, Meridian Ranger, Concord Lancer, Corsair Ravager, and Prism Eidolon. Hulls have distinct silhouettes, weapon mounts, collision radii, hull, mass, cargo, thrust, strafe, speed, shield, cooling, energy-recharge, turn, and sensor bases. Modules, cargo, insurance, frame tier, and loadout remain career-wide; only one hull is active, and switching is dock-only and blocked by incompatible mass or cargo.
 
 Current ship slot model:
 
@@ -168,6 +168,17 @@ Current ship slot model:
 - Unstocked cargo cannot be purchased locally, but owned cargo can always be sold so a pilot is never trapped with an unusable hold.
 
 The old dedicated secondary-weapon slot is gone. Weapon groups now map to the two primary slots.
+
+Weapon families are behavior-driven: green pulse bolts, violet piercing rail shots, amber homing seekers, a cyan charge-and-release beam lance, a magenta scatter array, a teal chaining arc projector, a ramping solar repeater, lock-on Bloodhound torpedoes, a three-stage Prism Nova Coil, disabling ion needles, and missile-intercepting flak. Weapon behavior belongs in `weapons.js`, while enemy archetypes, faction targeting, and boss phases belong in `encounters.js`.
+
+### Factions And Bosses
+
+- Bandits are factionless and hostile everywhere. Concord and Corsair patrols use standing thresholds: +10 friendly, 0 through +9 neutral, -1 through -49 hostile, and -50 docking denial.
+- Allegiance guarantees friendly treatment from the selected faction and hostile treatment from its opponent. Provoking or destroying neutral/friendly faction ships costs standing.
+- Friendly boards add priority work, negative-standing boards shrink, and faction assaults explicitly target the opposing faction.
+- Risk-five boss contracts unlock at level 6 and twenty kills: Guild boards target the Marauder Carrier, Concord boards target the Void Reaver, and Corsair boards target the Aegis Frigate.
+- After an introductory boss victory and level 10, risk-six capital contracts introduce the Foundry Ark, Solar Bastion, and Eclipse Cruiser. Contract victories unlock rare warned roaming rematches in danger-five regions.
+- Specialist encounter roles include torpedo bombers, beam lancers, mine layers, support tenders, and jammer drones. Capital components and active roaming damage state persist through saves.
 
 ### Shields
 
@@ -197,6 +208,7 @@ Each discipline has:
 
 - four 3-rank traits
 - one capstone
+- two mutually exclusive one-rank specializations unlocked after its capstone
 
 Capstones should remain gated by both discipline investment and a matching achievement. Full retraining should remain station-based and paid, not free everywhere.
 Ranked trait cards show the cumulative current effect rather than only the per-rank description.
@@ -260,22 +272,26 @@ Current script order:
 1. `js/namespace.js`
 2. `js/data.js`
 3. `js/math.js`
-4. `js/state.js`
-5. `js/wallet.js`
-6. `js/unlocks.js`
-7. `js/progression.js`
-8. `js/world.js`
-9. `js/economy.js`
-10. `js/contracts.js`
-11. `js/save.js`
-12. `js/combat.js`
-13. `js/abilities.js`
-14. `js/lightSpeed.js`
-15. `js/input.js`
-16. `js/renderer.js`
-17. `js/game.js`
-18. `js/ui.js`
-19. `js/main.js`
+4. `js/expansion.js`
+5. `js/state.js`
+6. `js/wallet.js`
+7. `js/unlocks.js`
+8. `js/progression.js`
+9. `js/world.js`
+10. `js/economy.js`
+11. `js/contracts.js`
+12. `js/save.js`
+13. `js/combat.js`
+14. `js/abilities.js`
+15. `js/weapons.js`
+16. `js/encounters.js`
+17. `js/worldEvents.js`
+18. `js/lightSpeed.js`
+19. `js/input.js`
+20. `js/renderer.js`
+21. `js/game.js`
+22. `js/ui.js`
+23. `js/main.js`
 
 High-level ownership map:
 
@@ -284,7 +300,11 @@ High-level ownership map:
 - `state.js`: canonical save/runtime state creation
 - `wallet.js`: all currency normalization and transactions
 - `unlocks.js`: progression milestone evaluation and visibility rules
-- `progression.js`: trait logic, derived ship stats, equipment fitting, respec logic
+- `expansion.js`: hulls, weapon/enemy/boss definitions, specializations, faction thresholds, narrative flavor
+- `progression.js`: trait logic, derived hull/ship stats, equipment and hull fitting, respec logic
+- `weapons.js`: player weapon firing, charging, guidance, piercing, splash, and chain effects
+- `encounters.js`: enemy creation, faction targeting, patrol combat, and boss phases
+- `worldEvents.js`: ambient object rewards, proximity scenarios, and one-shot living-world outcomes
 - `world.js`: region selection, chunks, landmarks, world streaming, floating origin
 - `economy.js`: markets, pricing, buying, selling, module purchases
 - `contracts.js`: contract generation, boards, rewards, faction joining/leaving
@@ -300,8 +320,9 @@ High-level ownership map:
 
 ## Persistence Contract
 
-- Current save schema version is `4`.
+- Current save schema version is `6`.
 - Schema 3 careers scale saved world and contract coordinates into the larger 5-by-6 universe before landmark-linked destinations are refreshed.
+- Schema 4 careers migrate through schema 5 with the Wayfarer active and owned. Schema 5 careers migrate to schema 6 with boss accomplishments and roaming-capital state initialized safely.
 - Saves must continue to migrate forward safely.
 - Legacy diamonds migrate to banked Aetherium at 1:1.
 - Existing owned modules should be preserved during migration.
@@ -353,13 +374,13 @@ If a change touches launcher registration or risks original-game regressions, al
 
 These are good follow-up directions that match the current architecture:
 
-- deeper faction quest arcs
+- deeper faction quest arcs beyond the current patrol, contract, shipyard, and boss consequences
 - richer authored landmarks and regional encounter identities
 - better contract variety and bespoke mission scripting
-- more active and passive module combinations
+- more active and passive module combinations beyond the six primary weapon families
 - additional milestone-driven market and crafting layers
 - stronger anomaly-region content and discovery payoffs
-- more expressive combat enemy roles that respect mouse-facing flight
+- more regional variants for the current enemy-role and boss framework
 
 These are poor directions unless the game is intentionally re-scoped:
 

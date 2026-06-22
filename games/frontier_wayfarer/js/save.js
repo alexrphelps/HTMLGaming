@@ -105,12 +105,40 @@
             data.ship.abilityCooldowns = data.ship.abilityCooldowns || {}; data.ship.abilityEffects = data.ship.abilityEffects || {};
             delete data.ship.lightSpeed;
             refreshContractTargets(data);
+            data.ship.activeHullId = ns.Data.HULLS[data.ship.activeHullId] ? data.ship.activeHullId : 'wayfarer';
+            data.ship.ownedHullIds = Array.isArray(data.ship.ownedHullIds) ? data.ship.ownedHullIds.filter(id => ns.Data.HULLS[id]) : ['wayfarer'];
+            if (!data.ship.ownedHullIds.includes(data.ship.activeHullId)) data.ship.ownedHullIds.push(data.ship.activeHullId);
+            data.ship.name = ns.Data.HULLS[data.ship.activeHullId].name;
+            data.progression = Object.assign({ tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null }, data.progression);
+            data.schemaVersion = 5;
+        }
+        if (data.schemaVersion === 5) {
+            ns.Wallet.ensure(data);
+            data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            data.marketInventories = data.marketInventories || {};
+            delete data.ship.lightSpeed; refreshContractTargets(data);
+            data.ship.activeHullId = ns.Data.HULLS[data.ship.activeHullId] ? data.ship.activeHullId : 'wayfarer';
+            data.ship.ownedHullIds = Array.isArray(data.ship.ownedHullIds) ? data.ship.ownedHullIds.filter(id => ns.Data.HULLS[id]) : ['wayfarer'];
+            if (!data.ship.ownedHullIds.includes(data.ship.activeHullId)) data.ship.ownedHullIds.push(data.ship.activeHullId);
+            data.ship.name = ns.Data.HULLS[data.ship.activeHullId].name;
+            data.progression = Object.assign({ tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 }, data.progression);
+            data.schemaVersion = 6;
+        }
+        if (data.schemaVersion === 6) {
+            ns.Wallet.ensure(data);
+            data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            data.marketInventories = data.marketInventories || {};
+            delete data.ship.lightSpeed; refreshContractTargets(data);
+            data.progression = Object.assign({ tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 }, data.progression);
+            data.progression.bossesDefeated = data.progression.bossesDefeated && typeof data.progression.bossesDefeated === 'object' ? data.progression.bossesDefeated : {};
             return data;
         }
         return null;
     }
     function validate(data) {
-        return Boolean(data && data.schemaVersion === 4 && data.pilot?.wallet && data.ship && data.reputations && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
+        return Boolean(data && data.schemaVersion === 6 && data.pilot?.wallet && data.ship && data.reputations && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
     }
     function save(state, storage) {
         try { (storage || localStorage).setItem(ns.SAVE_KEY, serialize(state)); state.lastSaveAt = Date.now(); return true; }

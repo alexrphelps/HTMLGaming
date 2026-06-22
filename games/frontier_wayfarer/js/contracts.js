@@ -140,19 +140,30 @@
         const revision = Math.max(0, Math.round(Number(state.contracts.boardRevision) || 0));
         const rand = seeded((state.worldSeed ^ station.x ^ station.y ^ state.contracts.completed * 97 ^ revision * 193 ^ index * 131) >>> 0);
         const remoteness = REGIONS.find(region => region.id === station.region)?.remoteness || 0;
+        if (index === 0 && state.pilot.level >= 6 && state.stats.kills >= 20) return generateBoss(state, station, rand);
         if (state.contracts.completed >= 3 && rand() < Math.min(.7, .42 + remoteness * .08)) return generateAdvanced(state, station, index, rand, ADVANCED_TEMPLATES[Math.floor(rand() * ADVANCED_TEMPLATES.length)]);
         const types = eligibleTypes(state, station.faction), weighted = types.flatMap(type => Array.from({ length: Math.max(1, Math.round(1 + type.risk * remoteness * .35)) }, () => type));
         const type = weighted[Math.floor(rand() * weighted.length)];
         return generateStandard(state, station, index, rand, type);
     }
+    function generateBoss(state, station, rand) {
+        const capitalReady = state.pilot.level >= 10 && Object.keys(state.progression?.bossesDefeated || {}).some(id => !ns.Data.BOSSES[id]?.capital);
+        const bossType = capitalReady ? (station.faction === 'concord' ? 'eclipse_cruiser' : station.faction === 'corsairs' ? 'solar_bastion' : 'foundry_ark') : station.faction === 'concord' ? 'void_reaver' : station.faction === 'corsairs' ? 'aegis_frigate' : 'marauder_carrier';
+        const boss = ns.Data.BOSSES[bossType], fields = accessibleLandmarks(state, item => item.type !== 'station'), field = fields[Math.floor(rand() * fields.length)] || LANDMARKS.find(item => item.type !== 'station');
+        const target = fieldPoint(field, rand, 520), id = `boss:${bossType}:${station.id}:${state.contracts.completed}:${state.contracts.boardRevision}`;
+        const contract = { id, type: station.faction === 'independents' ? 'bounty' : 'assault', name: `Priority Target: ${boss.name}`, description: `Break the ${boss.name} operating near ${field.name}.`, issuer: station.faction, origin: station.id, destination: field.id, target, reward: boss.capital ? { aetherium: 1500, sunshards: 30, helionite: 85 } : { aetherium: 900, sunshards: 18, helionite: 55 }, xp: boss.capital ? 520 : 340, risk: boss.capital ? 6 : 5, progress: 0, required: 1, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', bossType, enemyFaction: boss.faction, encounterId: id };
+        contract.stages = [makeStage(id, 0, { type: contract.type, event: 'kill', name: boss.name, instruction: `Destroy the ${boss.name}. Deployed escorts are secondary targets.`, destination: field.id, target, required: 1, bossType })];
+        contract.briefing = ns.Expansion.briefing(contract, station); return syncContract(contract);
+    }
     function boardSize(state, station, revision) {
         const rand = seeded((state.worldSeed ^ station.x ^ station.y ^ revision * 811) >>> 0), min = station.major ? 5 : 3, spread = 4;
-        return min + Math.floor(rand() * spread);
+        const status = ns.Expansion.patrolStatus(state, station.faction), trust = status === 'FRIENDLY' ? 1 : (state.reputations[station.faction] || 0) < 0 ? -2 : 0;
+        return Math.max(1, min + Math.floor(rand() * spread) + trust);
     }
     function refreshBoard(state, station) {
         if ((state.progression?.tutorialStep || 0) < 2) { state.contracts.board = [tutorialContract(state, station)]; return state.contracts.board; }
         state.contracts.boardRevision = Math.max(0, Math.round(Number(state.contracts.boardRevision) || 0)) + 1;
-        state.contracts.board = Array.from({ length: boardSize(state, station, state.contracts.boardRevision) }, (_, i) => generate(state, station, i)); return state.contracts.board;
+        state.contracts.board = Array.from({ length: boardSize(state, station, state.contracts.boardRevision) }, (_, i) => { const contract = generate(state, station, i); contract.briefing = contract.briefing || ns.Expansion.briefing(contract, station); if (ns.Expansion.patrolStatus(state, station.faction) === 'FRIENDLY' && i === 0) { Object.keys(contract.reward).forEach(key => { contract.reward[key] = Math.round(contract.reward[key] * 1.1); }); contract.priority = true; } return contract; }); return state.contracts.board;
     }
     function refreshRemaining(state, now) { return Math.max(0, BOARD_COOLDOWN_MS - ((Number(now) || Date.now()) - (Number(state.contracts.lastManualRefreshAt) || 0))); }
     function manualRefresh(state, station, now) {
@@ -181,14 +192,16 @@
     function revealSearches(state, position) {
         const contract = state.contracts.active; if (!contract) return [];
         return activeStages(contract).filter(stage => {
-            if (!stage.search || stage.search.revealed || distance(position, stage.search.center) > stage.search.radius) return false;
-            stage.search.entered = true; return distance(position, stage.search.exact) <= 240;
+            const savant = ns.Progression.traitEffects(state).fieldSavant ? 1.5 : 1;
+            if (!stage.search || stage.search.revealed || distance(position, stage.search.center) > stage.search.radius * savant) return false;
+            stage.search.entered = true; return distance(position, stage.search.exact) <= 240 * savant;
         }).map(stage => { stage.search.revealed = true; stage.target = point(stage.search.exact); syncContract(contract); return stage; });
     }
     function recordProgress(state, event, amount, position) {
         const contract = state.contracts.active; if (!contract) return false; let changed = false;
         activeStages(contract).slice().forEach(stage => {
             if (stage.event !== event) return;
+            if (stage.bossType && position?.bossType !== stage.bossType) return;
             if (event === 'dock' && stage.destination && position?.id !== stage.destination) return;
             if (event === 'dock' && !stage.destination && (!position || distance(position, stage.target) > EVENT_RANGES.dock)) return;
             if (event !== 'dock' && (!position || distance(position, stage.target) > (EVENT_RANGES[event] || 220))) return;
@@ -210,16 +223,25 @@
         const c = state.contracts.active; if (!c) return null; const stages = ensureStages(c);
         if (!isComplete(c) && stages.length === 1 && c.progress >= c.required) completeStage(c, stages[0]);
         if (!isComplete(c)) return null;
-        ns.Wallet.credit(state, c.reward, state.dockedAt ? 'banked' : 'unbanked'); const repEffect = 4 * (1 + (ns.Progression.traitEffects(state).reputation || 0));
+        const effects = ns.Progression.traitEffects(state), factionCombat = ['assault', 'bounty'].includes(c.type) && c.issuer !== 'independents', marque = effects.letterOfMarque && factionCombat ? 1.2 : 1;
+        const paidReward = Object.fromEntries(Object.entries(c.reward).map(([key, value]) => [key, Math.round(value * marque)]));
+        ns.Wallet.credit(state, paidReward, state.dockedAt ? 'banked' : 'unbanked'); const repEffect = 4 * (1 + (effects.reputation || 0)) * marque;
         state.reputations[c.issuer] = clamp(state.reputations[c.issuer] + repEffect, -100, 100); const opponent = FACTIONS[c.issuer] && FACTIONS[c.issuer].hostileTo;
-        if (c.type === 'assault' && opponent) state.reputations[opponent] = clamp(state.reputations[opponent] - 5, -100, 100); ns.State.addExperience(state, c.xp);
+        if (c.type === 'assault' && opponent) state.reputations[opponent] = clamp(state.reputations[opponent] - 5 * marque, -100, 100); ns.State.addExperience(state, c.xp);
+        c.debrief = { outcome: c.bossType ? `${ns.Data.BOSSES[c.bossType].name} confirmed destroyed.` : `${c.name} completed to issuer specification.`, response: `${ns.Data.FACTIONS[c.issuer]?.short || 'GUILD'} control acknowledges the result.`, standing: Math.round(repEffect), payment: paidReward };
+        state.progression.pendingDebrief = c.id;
+        if (c.bossType) {
+            state.progression.bossesDefeated = state.progression.bossesDefeated || {};
+            state.progression.bossesDefeated[c.bossType] = (state.progression.bossesDefeated[c.bossType] || 0) + 1;
+        }
+        if (effects.quartermaster && ['haul', 'escort', 'advanced'].includes(c.type)) state.progression.serviceDiscount = { stationId: c.destination, value: .2, uses: 1 };
         if (!c.tutorialStep) { state.stats.contracts++; state.contracts.completed++; }
         if (c.tutorialStep) { state.progression.tutorialStep = Math.max(state.progression.tutorialStep, c.tutorialStep); if (c.tutorialStep === 1) { if (!state.ship.ownedModules.includes('afterburner')) state.ship.ownedModules.push('afterburner'); state.ship.slots.abilityShift = 'afterburner'; } else { if (!state.ship.ownedModules.includes('shield_scout')) state.ship.ownedModules.push('shield_scout'); state.ship.slots.defense = 'shield_scout'; state.ship.shield = ns.Progression.calculateShipStats(state).shield; } }
         const issuerContracts = state.contracts.history.filter(item => !item.tutorialStep && item.issuer === c.issuer && item.status === 'complete').length + 1;
         if (!c.tutorialStep && issuerContracts % 2 === 0 && state.quests[c.issuer] < ns.Data.QUESTS[c.issuer].length - 1) state.quests[c.issuer]++;
         c.status = 'complete'; state.contracts.history.unshift(c); state.contracts.history = state.contracts.history.slice(0, 20); state.contracts.active = null; state.contracts.board = []; ns.Progression.updateAchievements(state); return c;
     }
-    function joinFaction(state, factionId) { if (!['concord', 'corsairs'].includes(factionId) || state.reputations[factionId] < 15) return false; const old = state.pilot.allegiance; if (old && old !== factionId) state.reputations[old] = clamp(state.reputations[old] - 35, -100, 100); state.pilot.allegiance = factionId; state.reputations[factionId] = Math.max(20, state.reputations[factionId]); return true; }
+    function joinFaction(state, factionId) { if (!['concord', 'corsairs'].includes(factionId) || state.reputations[factionId] < 15) return false; const old = state.pilot.allegiance; if (old && old !== factionId) state.reputations[old] = clamp(state.reputations[old] - 35, -100, 100); state.pilot.allegiance = factionId; state.reputations[factionId] = Math.max(20, state.reputations[factionId]); const opponent = FACTIONS[factionId].hostileTo; state.reputations[opponent] = Math.min(-20, state.reputations[opponent]); return true; }
     function leaveFaction(state) { if (!state.pilot.allegiance) return false; state.reputations[state.pilot.allegiance] = clamp(state.reputations[state.pilot.allegiance] - 25, -100, 100); state.pilot.allegiance = null; return true; }
-    ns.Contracts = { BOARD_COOLDOWN_MS, ESCORT_CONFIG, ADVANCED_TEMPLATES, generate, generateAdvanced, refreshBoard, refreshRemaining, manualRefresh, accept, ensureStages, activeStages, syncContract, isComplete, recordProgress, complete, abandon, fail, startEscort, contactFor, contactsFor, targetsFor, revealSearches, destinationName, objectiveInstruction, joinFaction, leaveFaction };
+    ns.Contracts = { BOARD_COOLDOWN_MS, ESCORT_CONFIG, ADVANCED_TEMPLATES, generate, generateBoss, generateAdvanced, refreshBoard, refreshRemaining, manualRefresh, accept, ensureStages, activeStages, syncContract, isComplete, recordProgress, complete, abandon, fail, startEscort, contactFor, contactsFor, targetsFor, revealSearches, destinationName, objectiveInstruction, joinFaction, leaveFaction };
 })(window.MiniInvadersV2);

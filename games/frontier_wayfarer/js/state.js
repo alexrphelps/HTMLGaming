@@ -8,7 +8,7 @@
 
     function createState(seed) {
         return {
-            schemaVersion: 4,
+            schemaVersion: 6,
             worldSeed: Number.isFinite(seed) ? seed : Math.floor(Math.random() * 0x7fffffff),
             playTime: 0,
             pilot: { level: 1, xp: 0, traitPoints: 0, traits: {}, achievements: {}, wallet: { banked: { aetherium: 250, sunshards: 0, helionite: 0 }, unbanked: { aetherium: 0, sunshards: 0, helionite: 0 } }, allegiance: null },
@@ -16,6 +16,7 @@
                 name: 'Wayfarer', x: 260, y: 80, vx: 0, vy: 0, angle: -Math.PI / 2,
                 hull: 140, shield: 0, overshield: 0, shieldRechargeDelay: 0, energy: 80, heat: 0,
                 damageSerial: 0,
+                activeHullId: 'wayfarer', ownedHullIds: ['wayfarer'],
                 chassis: { level: 1, integrity: 140, reactorBonus: 0, cargoBonus: 0, massLimit: 52 },
                 slots: Object.assign({}, DEFAULT_SLOTS), ownedModules: ['pulse_mk1', 'reactor_mk1', 'drive_mk1', 'cargo_mk1'],
                 moduleDamage: {}, abilityCooldowns: {}, abilityEffects: {}, cargo: {}, insured: false
@@ -25,7 +26,7 @@
             marketInventories: {},
             contracts: { board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 },
             quests: { independents: 0, concord: 0, corsairs: 0 },
-            progression: { tutorialStep: 0, legacyCareer: false, legacyShield: false },
+            progression: { tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 },
             discoveries: ['waypoint_zero'],
             customWaypoint: null,
             consumedEntityIds: [],

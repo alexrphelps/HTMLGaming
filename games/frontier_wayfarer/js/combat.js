@@ -1,18 +1,20 @@
 (function (ns) {
     const { clamp } = ns.MathUtil;
     function applyDamage(state, amount) {
-        let remaining = Math.max(0, amount);
+        const resistance = (state.ship.abilityEffects?.damageResistance || 0) > 0 ? .5 : 1;
+        let remaining = Math.max(0, amount) * resistance;
         if (remaining > 0) state.ship.damageSerial = (state.ship.damageSerial || 0) + 1;
         const overshieldHit = Math.min(state.ship.overshield || 0, remaining);
         state.ship.overshield = Math.max(0, (state.ship.overshield || 0) - overshieldHit); remaining -= overshieldHit;
         const shieldHit = Math.min(state.ship.shield, remaining);
         state.ship.shield -= shieldHit; remaining -= shieldHit;
         if (shieldHit > 0 || remaining > 0) state.ship.shieldRechargeDelay = ns.Progression.calculateShipStats(state).shieldDelay;
+        remaining *= 1 - (ns.Progression.calculateShipStats(state).armor || 0);
         state.ship.hull = Math.max(0, state.ship.hull - remaining);
         return state.ship.hull <= 0;
     }
     function applyHullDamage(state, amount) {
-        const damage = Math.max(0, amount); if (damage > 0) state.ship.damageSerial = (state.ship.damageSerial || 0) + 1;
+        const damage = Math.max(0, amount) * ((state.ship.abilityEffects?.damageResistance || 0) > 0 ? .5 : 1) * (1 - (ns.Progression.calculateShipStats(state).armor || 0)); if (damage > 0) state.ship.damageSerial = (state.ship.damageSerial || 0) + 1;
         state.ship.hull = Math.max(0, state.ship.hull - damage);
         return state.ship.hull <= 0;
     }
@@ -31,11 +33,11 @@
         state.contracts.active = null;
         return { station, lostResources, lostCargo };
     }
-    function repairAll(state) {
+    function repairAll(state, chargedCost) {
         const stats = ns.Progression.calculateShipStats(state);
         const damage = Object.values(state.ship.moduleDamage).reduce((sum, d) => sum + d, 0);
         const missingHull = Math.max(0, stats.hull - state.ship.hull);
-        const cost = { aetherium: Math.ceil(missingHull * 1.4 + damage * 420), sunshards: 0, helionite: 0 };
+        const cost = chargedCost || { aetherium: Math.ceil(missingHull * 1.4 + damage * 420), sunshards: 0, helionite: 0 };
         if (cost.aetherium <= 0 || !ns.Wallet.debit(state, cost)) return false;
         state.stats.repairs += Math.round(missingHull + damage * 100);
         state.ship.moduleDamage = {}; state.ship.hull = stats.hull; state.ship.shield = stats.shield;
