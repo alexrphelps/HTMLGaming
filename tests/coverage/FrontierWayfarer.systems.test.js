@@ -10,12 +10,12 @@ const root = path.resolve(__dirname, '../..');
 const gameDir = path.join(root, 'games/frontier_wayfarer');
 const configPath = path.join(root, 'games.config.js');
 const expectedScripts = [
-  'js/namespace.js', 'js/data.js', 'js/math.js', 'js/expansion.js', 'js/state.js', 'js/wallet.js',
+  'js/namespace.js', 'js/data.js', 'js/math.js', 'js/expansion.js', 'js/registry.js', 'js/state.js', 'js/wallet.js',
   'js/unlocks.js', 'js/progression.js', 'js/world.js', 'js/economy.js', 'js/contracts.js',
-  'js/save.js', 'js/combat.js', 'js/abilities.js', 'js/weapons.js', 'js/encounters.js', 'js/worldEvents.js', 'js/lightSpeed.js', 'js/input.js', 'js/renderer.js',
-  'js/game.js', 'js/ui.js', 'js/main.js'
+  'js/save.js', 'js/combat.js', 'js/abilities.js', 'js/weapons.js', 'js/encounters.js', 'js/worldEvents.js', 'js/lightSpeed.js', 'js/runtime.js', 'js/commands.js', 'js/input.js', 'js/renderer.js',
+  'js/game.js', 'js/components.js', 'js/ui.js', 'js/main.js'
 ];
-const coreScripts = expectedScripts.slice(0, 20);
+const coreScripts = expectedScripts.slice(0, expectedScripts.indexOf('js/game.js'));
 
 function read(file) { return fs.readFileSync(path.join(gameDir, file), 'utf8'); }
 function runtime(overrides = {}) {
@@ -88,6 +88,7 @@ describe('Frontier Wayfarer integration contract', () => {
     expect(dom.window.document.getElementById('menuWallet').textContent).toContain('SS');
     expect(dom.window.document.getElementById('abilityHud').children).toHaveLength(4);
     expect(dom.window.document.getElementById('lightDriveHud').textContent).toContain('ASTERION');
+    expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(true);
     expect(() => dom.window.miniInvadersV2Game.renderer.render(dom.window.miniInvadersV2Game)).not.toThrow();
     dom.window.miniInvadersV2Game.lightSpeed.phase = 'cruising';
     expect(() => dom.window.miniInvadersV2Game.renderer.render(dom.window.miniInvadersV2Game)).not.toThrow();
@@ -106,6 +107,9 @@ describe('Frontier Wayfarer integration contract', () => {
     expect(dom.window.document.getElementById('headerUndock').textContent).toContain('UNDOCK');
     const driveHudStyle = read('css/style.css');
     expect(driveHudStyle).toContain('.light-drive-hud { position: absolute; right: 24px; bottom: 162px;');
+    expect(driveHudStyle).toContain('.light-drive-hud[hidden] { display: none !important; }');
+    const style = dom.window.document.createElement('style'); style.textContent = driveHudStyle; dom.window.document.head.append(style);
+    expect(dom.window.getComputedStyle(dom.window.document.getElementById('lightDriveHud')).display).toBe('none');
     expect(dom.window.document.getElementById('lightDriveHud').textContent).toContain('5 SS + 5 HE');
     dom.window.miniInvadersV2Game.destroy(); dom.window.close();
   });
@@ -216,11 +220,13 @@ describe('Frontier Wayfarer integration contract', () => {
     game.interact(); expect(game.state.pilot.wallet.unbanked.aetherium).toBe(before + 35); expect(game.state.consumedEntityIds).toContain(salvage.id); dom.window.close();
   });
 
-  test('renders interaction progress beneath the ship instead of in the footer', () => {
-    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.undock();
-    game.interactionCast = { name: 'Test Signal', duration: 5, progress: 2 };
-    game.ui.renderContext(game); expect(dom.window.document.getElementById('contextPrompt').textContent).toContain('F // LINKING TEST SIGNAL'); expect(dom.window.document.querySelector('#contextPrompt .interaction-progress')).toBeNull();
-    expect(() => game.renderer.drawInteractionCast(game)).not.toThrow(); game.interactionCast = null; expect(() => game.renderer.drawInteractionCast(game)).not.toThrow(); dom.window.close();
+  test('renders interaction prompts and cast progress beneath the ship only when relevant', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.undock(); game.world.chunks.forEach(chunk => { chunk.entities = chunk.entities.filter(entity => entity.kind === 'asteroid'); }); game.renderer.ctx.fillText = jest.fn();
+    game.renderer.drawInteractionPrompt(game); expect(game.renderer.ctx.fillText).not.toHaveBeenCalled();
+    const chunk = Array.from(game.world.chunks.values())[0], signal = { id: 'signal:prompt:test', kind: 'signal', name: 'Test Signal', x: game.state.ship.x + 10, y: game.state.ship.y, radius: 18 }; chunk.entities.push(signal);
+    game.renderer.drawInteractionPrompt(game); expect(game.renderer.ctx.fillText).toHaveBeenLastCalledWith('F // INTERACT TEST SIGNAL', expect.any(Number), expect.any(Number));
+    game.interactionCast = { name: 'Test Signal', duration: 5, progress: 2 }; game.renderer.ctx.fillText.mockClear(); game.renderer.drawInteractionPrompt(game); expect(game.renderer.ctx.fillText).not.toHaveBeenCalled();
+    expect(() => game.renderer.drawInteractionCast(game)).not.toThrow(); dom.window.close();
   });
 
   test('retains cast progress during grace and cancels after range or damage interruption', () => {
@@ -232,9 +238,11 @@ describe('Frontier Wayfarer integration contract', () => {
 
   test('renders the exact fitted ship path in a static compact three-panel console', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, drawModel = jest.spyOn(dom.window.MiniInvadersV2.Renderer.prototype, 'drawShipModel'); game.newCareer(); game.ui.openPanel(game, 'ship');
+    expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(true);
     expect(game.ui.panelBody.querySelectorAll('.ship-console > section')).toHaveLength(3); expect(game.ui.panelBody.querySelector('.ship-portrait svg')).toBeNull(); expect(game.ui.panelBody.querySelector('#shipPreviewCanvas')).not.toBeNull(); expect(drawModel).toHaveBeenCalledWith(game, expect.objectContaining({ rotation: 0, static: true }));
     expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('ENGINE'); expect(game.ui.panelBody.querySelectorAll('.ship-area-hotspot')).toHaveLength(4); expect(game.ui.panelBody.querySelector('.mission-system-grid')).not.toBeNull(); expect(game.ui.panelBody.textContent).toContain('WEAPONS AND UTILITY');
-    game.ui.panelBody.querySelector('[data-action="select-ship-area"][data-id="cargo"]').click(); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('CARGO'); expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1);
+    game.state.ship.slots.engine = 'light_drive'; game.ui.updateHud(game); expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(false);
+    game.ui.panelBody.querySelector('[data-action="select-ship-area"][data-id="cargo"]').click(); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('CARGO'); expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1); expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(false);
     const css = read('css/style.css'); expect(css).toContain('.mission-system-grid { display: grid; grid-template-columns: repeat(2'); expect(css).toContain('.panel-body.ship-view { overflow: hidden;'); expect(css).toContain('.header-undock { min-width:'); drawModel.mockRestore(); dom.window.close();
   });
 
@@ -242,6 +250,69 @@ describe('Frontier Wayfarer integration contract', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.ui.openPanel(game, 'navigation');
     expect(game.ui.panelBody.querySelectorAll('.map-region span')).toHaveLength(1); expect(game.ui.panelBody.querySelector('.map-player').dataset.tooltip).toBe('YOU'); expect([...game.ui.panelBody.querySelectorAll('.map-point')].some(point => point.dataset.tooltip === 'UNKNOWN')).toBe(true);
     const greenline = ns.Data.LANDMARKS.find(item => item.id === 'greenline_exchange'); game.state.ship.x = greenline.x; game.state.ship.y = greenline.y; game.ui.closePanel(); game.state.dockedAt = null; game.paused = false; game.chartNearbyStations(); expect(game.state.discoveries).toContain('greenline_exchange'); game.ui.openPanel(game, 'navigation'); expect([...game.ui.panelBody.querySelectorAll('.map-point')].some(point => point.dataset.tooltip.startsWith('Greenline Exchange //'))).toBe(true); dom.window.close();
+  });
+});
+
+describe('Frontier Wayfarer scalable extension seams', () => {
+  test('registers new content and handlers without editing central dispatchers', () => {
+    const ns = runtime();
+    ns.Registry.registerHandler('worldObject', 'test-handler', jest.fn());
+    ns.Registry.register('region', { id: 'test_region', name: 'Test Region', x: 50000, y: 50000, w: 4000, h: 3000, faction: 'independents', backdrop: 'frontier', danger: 2 });
+    ns.Registry.register('landmark', { id: 'test_station', name: 'Test Station', type: 'station', x: 51000, y: 51000, region: 'test_region', faction: 'independents' });
+    ns.Registry.register('worldObject', { id: 'test_object', name: 'Test Object', handlerId: 'test-handler', backdrops: { frontier: 1 }, reward: { aetherium: 1 } });
+    ns.Registry.register('worldEvent', { id: 'test_event', name: 'Test Event', backdrops: { frontier: 1 } });
+    ns.Registry.register('module', { id: 'test_module', name: 'Test Module', slot: 'utility', mass: 1, tier: 1, cost: { aetherium: 1 } });
+    ns.Registry.register('ability', { id: 'test_ability', effectType: 'test-effect' });
+    ns.Registry.register('contract', { id: 'test_contract', name: 'Test Contract', baseReward: { aetherium: 1 }, risk: 1 });
+    expect(ns.Registry.validate()).toEqual({ ok: true, errors: [] });
+    expect(ns.Registry.get('region', 'test_region').w).toBe(4000);
+    expect(typeof ns.Registry.handler('worldObject', 'test-handler')).toBe('function');
+  });
+
+  test('rejects duplicate ids and reports invalid references', () => {
+    const ns = runtime();
+    expect(() => ns.Registry.register('region', ns.Data.REGIONS[0])).toThrow(/Duplicate region id/);
+    ns.Registry.register('landmark', { id: 'broken_landmark', name: 'Broken', region: 'missing', faction: 'independents' });
+    expect(ns.Registry.validate()).toMatchObject({ ok: false, errors: expect.arrayContaining([expect.stringContaining('missing')]) });
+  });
+
+  test('supports irregular world regions and configurable streaming', () => {
+    const ns = runtime(), regions = [{ id: 'wide', name: 'Wide', x: -1000, y: -500, w: 5000, h: 1400, faction: 'independents', backdrop: 'frontier', danger: 1, asteroidDensity: 0 }];
+    const config = ns.World.createConfig({ regions, landmarks: [], chunkSize: 500, loadRadius: 1 });
+    expect(config.bounds).toEqual({ minX: -1000, maxX: 4000, minY: -500, maxY: 900 });
+    expect(ns.World.regionAt(3500, 0, config).id).toBe('wide');
+    const world = new ns.World.WorldService(7, [], config); world.update(0, 0);
+    expect(world.chunks.size).toBe(9); expect(world.config.chunkSize).toBe(500);
+  });
+
+  test('provides deterministic simulation random streams', () => {
+    const ns = runtime(), first = new ns.Runtime.SimulationRandom(42), second = new ns.Runtime.SimulationRandom(42);
+    expect([first.next(), first.next(), first.range(5, 10)]).toEqual([second.next(), second.next(), second.range(5, 10)]);
+  });
+
+  test('returns structured command results for fitting and upgrades', () => {
+    const ns = runtime(), state = ns.State.createState(4); state.ship.ownedModules.push('drive_mk2'); state.ship.chassis.massLimit = 200;
+    expect(ns.Commands.equip(state, 'engine', 'drive_mk2')).toMatchObject({ ok: true, changes: { slot: 'engine', moduleId: 'drive_mk2' } });
+    state.dockedAt = null; expect(ns.Commands.upgradeChassis(state)).toMatchObject({ ok: false, reason: 'dock-required' });
+  });
+
+  test('keeps persistent HUD component nodes across updates', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer();
+    const walletNode = dom.window.document.querySelector('#worldWallet .wallet-credit'), abilityNode = dom.window.document.querySelector('#abilityHud .ability-slot');
+    game.ui.updateHud(game); game.ui.updateHud(game);
+    expect(dom.window.document.querySelector('#worldWallet .wallet-credit')).toBe(walletNode);
+    expect(dom.window.document.querySelector('#abilityHud .ability-slot')).toBe(abilityNode);
+    game.destroy(); dom.window.close();
+  });
+
+  test('defines fit-first responsive shell contracts', () => {
+    const css = read('css/responsive.css'), html = read('index.html');
+    expect(html).toContain('class="flight-hud-bottom"'); expect(html).toContain('css/responsive.css');
+    expect(css).toContain('height: 100dvh'); expect(css).toContain('grid-template-areas: "top" "viewport" "bottom"');
+    expect(css).toContain('@media (max-width: 620px)'); expect(css).toContain('.start-screen { overflow: auto;');
+    expect(css).toContain('.galaxy-map { width: 100%; height: auto;'); expect(css).not.toContain('min-width: 960px');
+    expect(css).toContain('width: 58.333%'); expect(css).toContain('height: 18.375dvh'); expect(css).toContain('grid-template-columns: repeat(2'); expect(css).toContain('.system-meter > div { height: 8px; }');
+    expect(html).toContain('id="coordinateValue"'); expect(html).toContain('M // MAP'); expect(html).not.toContain('ESC SYSTEMS'); expect(html).not.toContain('id="contextPrompt"');
   });
 });
 
@@ -591,12 +662,12 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     expect(contract.escort).toMatchObject({ phase: 'rendezvous', convoy: null, end: { x: -3450, y: -1350 } }); expect(ns.MathUtil.distance(contract.escort.start, contract.escort.end)).toBeLessThanOrEqual(1800.01); expect(contract.target).toEqual(contract.escort.start);
   });
 
-  test('migrates legacy diamonds, weapons, shields, coordinates, loadouts, and hull ownership into schema v6', () => {
+  test('migrates legacy diamonds, weapons, shields, coordinates, loadouts, and hull ownership into schema v7', () => {
     const ns = runtime(); const legacy = ns.State.createState(31); legacy.schemaVersion = 1; legacy.pilot.diamonds = 777; delete legacy.pilot.wallet; delete legacy.customWaypoint;
     legacy.ship.x = 100; legacy.ship.y = 200;
     legacy.ship.slots.secondary = 'seeker_rack'; legacy.ship.slots.defense = 'shield_mk1'; legacy.ship.ownedModules.push('shield_mk1');
     const migrated = ns.Save.migrate(legacy);
-    expect(migrated.schemaVersion).toBe(6); expect(migrated.ship).toMatchObject({ x: 150, y: 300, activeHullId: 'wayfarer', ownedHullIds: ['wayfarer'] }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull(); expect(migrated.customWaypoint).toBeNull();
+    expect(migrated.schemaVersion).toBe(7); expect(migrated.ship).toMatchObject({ x: 150, y: 300, activeHullId: 'wayfarer', ownedHullIds: ['wayfarer'] }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull(); expect(migrated.customWaypoint).toBeNull();
     expect(migrated.ship.slots.primary2).toBe('seeker_rack'); expect(migrated.ship.slots.defense).toBe('shield_balanced'); expect(migrated.ship.ownedModules).toContain('afterburner');
   });
 
@@ -750,11 +821,11 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     }));
   });
 
-  test('fits four distinct utilities and preserves them through schema v6 saves', () => {
+  test('fits four distinct utilities and preserves them through schema v7 saves', () => {
     const ns = runtime(), state = ns.State.createState(82); state.ship.chassis.massLimit = 200; const utilities = ['repair_drones', 'sensor_array', 'heat_sink', 'cargo_pods']; state.ship.ownedModules.push(...utilities);
     utilities.forEach((id, index) => expect(ns.Progression.equipModule(state, `utility${index + 1}`, id)).toBe(true));
     expect(Object.values(state.ship.slots).filter(id => utilities.includes(id))).toEqual(expect.arrayContaining(utilities));
-    const loaded = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(loaded.schemaVersion).toBe(6); expect(loaded.ship.slots.utility4).toBe('cargo_pods'); expect(ns.Progression.calculateShipStats(loaded).cargo).toBeGreaterThan(14);
+    const loaded = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(loaded.schemaVersion).toBe(7); expect(loaded.ship.slots.utility4).toBe('cargo_pods'); expect(ns.Progression.calculateShipStats(loaded).cargo).toBeGreaterThan(14);
   });
 
   test('equips the Asterion Light Drive from the real ship panel after purchase', () => {
@@ -900,7 +971,7 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.region = ns.Data.REGIONS.find(region => region.danger === 5); const ally = ns.Encounters.create(game, 'bandit', 200, 0); ally.hull = 10; const tender = ns.Encounters.create(game, 'support_tender', 220, 0); game.enemies = [ally, tender]; ns.Encounters.update(game, .1); expect(ally.hull).toBeGreaterThan(10);
     expect(['foundry_ark', 'solar_bastion', 'eclipse_cruiser'].map(id => ns.Data.BOSSES[id].controller)).toEqual(['foundry', 'bastion', 'eclipse']);
     const contract = { bossType: 'foundry_ark', target: { x: 400, y: 0 }, encounterId: 'capital:test', bossState: null }, boss = ns.Encounters.spawnBoss(game, contract); expect(Object.keys(boss.components)).toEqual(expect.arrayContaining(['bay_port', 'bay_starboard'])); const component = ns.Data.BOSSES.foundry_ark.components[0]; ns.Encounters.playerHit(game, boss, { x: boss.x + component.x, y: boss.y + component.y, damage: component.hull }); expect(boss.components.bay_port).toBe(0); boss.hull = boss.maxHull * .3; ns.Encounters.update(game, .1); expect(contract.bossState).toMatchObject({ phase: 3, components: { bay_port: 0 }, queuedPattern: { type: 'mine-ring' } });
-    const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(game.state))); expect(restored.schemaVersion).toBe(6); dom.window.close();
+    const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(game.state))); expect(restored.schemaVersion).toBe(7); dom.window.close();
   });
 
   test('generates risk-six capital contracts and seeded optional roaming rematches', () => {
@@ -911,6 +982,6 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
   });
 
   test('migrates schema-five careers into the capital-threat save contract', () => {
-    const ns = runtime(), legacy = ns.State.createState(908); legacy.schemaVersion = 5; delete legacy.progression.bossesDefeated; delete legacy.progression.roamingThreat; delete legacy.progression.nextRoamingThreatAt; const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 6, progression: { bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 } });
+    const ns = runtime(), legacy = ns.State.createState(908); legacy.schemaVersion = 5; delete legacy.progression.bossesDefeated; delete legacy.progression.roamingThreat; delete legacy.progression.nextRoamingThreatAt; const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 7, progression: { bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 } });
   });
 });

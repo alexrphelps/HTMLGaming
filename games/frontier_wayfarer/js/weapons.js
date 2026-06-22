@@ -11,6 +11,7 @@
         return { x: muzzle.x, y: muzzle.y, vx: ship.vx + Math.cos(angle) * speed, vy: ship.vy + Math.sin(angle) * speed, radius: spec.type === 'missile' ? 5 : ['rail', 'nova'].includes(spec.type) ? 4 : 3, damage: module.damage * damageScale, life: spec.life, maxLife: spec.life, enemy: false, type: spec.type, color: spec.color, turnRate: spec.turnRate || (target ? .9 : 0), splash: spec.splash || 0, chain: spec.chain || 0, chainRange: spec.chainRange || 0, pierce: spec.pierce || 0, proximity: spec.proximity || 0, antiProjectile: Boolean(spec.antiProjectile), status: spec.status || null, hitIds: [], targetId: target?.id || null };
     }
     function fire(game, slot, chargeScale) {
+        if (!game.random) game.random = new ns.Runtime.SimulationRandom(game.state?.worldSeed || 1);
         const state = game.state, ship = state.ship, stats = ns.Progression.calculateShipStats(state), module = ns.Data.MODULES[ship.slots[slot]], spec = weaponData(module);
         if (!module || game.weaponCooldowns[slot] > 0) return false;
         const ramp = spec.ramp ? (game.weaponRamps?.[slot]?.value || 1) : 1, scale = chargeScale || 1, energy = module.energy * scale, heatScale = 1 + (stats.effects.weaponHeat || 0), stability = module.mass >= 12 ? 1 - (stats.heavyStability || 0) : 1, heat = module.heat * scale * heatScale * ramp * stability;
@@ -18,7 +19,7 @@
         let empowered = false;
         if (stats.effects.weaponsFree && game.lastWeaponShot && game.lastWeaponShot.slot !== slot && game.time - game.lastWeaponShot.time <= .5) empowered = true;
         game.weaponCooldowns[slot] = module.fireRate; ship.energy -= energy; ship.heat += heat * (empowered ? .8 : 1); ns.Abilities.onFire(state);
-        const critical = Math.random() < (stats.effects.critical || 0), criticalPower = 2 + (stats.effects.criticalPower || 0) + (stats.effects.targetHunter ? .15 : 0), damageScale = scale * ramp * (empowered ? 1.25 : 1) * (critical ? criticalPower : 1), target = targetFor(game, module), baseAngle = ship.angle;
+        const critical = game.random.chance(stats.effects.critical || 0), criticalPower = 2 + (stats.effects.criticalPower || 0) + (stats.effects.targetHunter ? .15 : 0), damageScale = scale * ramp * (empowered ? 1.25 : 1) * (critical ? criticalPower : 1), target = targetFor(game, module), baseAngle = ship.angle;
         if (spec.type === 'scatter') for (let i = 0; i < spec.pellets; i++) game.bullets.push(projectile(game, slot, module, baseAngle + (i - (spec.pellets - 1) / 2) * spec.spread / Math.max(1, spec.pellets - 1), damageScale, target));
         else game.bullets.push(projectile(game, slot, module, baseAngle, damageScale, target));
         game.lastWeaponShot = { slot, time: game.time }; return true;

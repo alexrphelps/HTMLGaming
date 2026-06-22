@@ -18,7 +18,7 @@
     function stageId(contractId, index) { return `${contractId}:stage:${index}`; }
     function escortState(start, end) { return { phase: 'rendezvous', grace: ESCORT_CONFIG.graceSeconds, ambushes: 0, start: point(start), end: point(end), convoy: null }; }
     function escortStart(destination, angle) {
-        const bounds = ns.World.WORLD_BOUNDS;
+        const bounds = ns.World.catalogBounds();
         return { x: clamp(destination.x + Math.cos(angle) * ESCORT_CONFIG.rendezvousDistance, bounds.minX + 400, bounds.maxX - 400), y: clamp(destination.y + Math.sin(angle) * ESCORT_CONFIG.rendezvousDistance, bounds.minY + 400, bounds.maxY - 400) };
     }
     function makeStage(contractId, index, data) {

@@ -8,7 +8,7 @@
 
     function createState(seed) {
         return {
-            schemaVersion: 6,
+            schemaVersion: 7,
             worldSeed: Number.isFinite(seed) ? seed : Math.floor(Math.random() * 0x7fffffff),
             playTime: 0,
             pilot: { level: 1, xp: 0, traitPoints: 0, traits: {}, achievements: {}, wallet: { banked: { aetherium: 250, sunshards: 0, helionite: 0 }, unbanked: { aetherium: 0, sunshards: 0, helionite: 0 } }, allegiance: null },

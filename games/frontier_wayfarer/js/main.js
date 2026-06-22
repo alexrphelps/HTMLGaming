@@ -1,4 +1,6 @@
 (function (ns) {
+    const validation = ns.Registry.validate();
+    if (!validation.ok) throw new Error(`Frontier Wayfarer content validation failed:\n${validation.errors.join('\n')}`);
     const ui = new ns.UI(); const game = new ns.Game(document.getElementById('gameCanvas'), ui); ui.bind(game);
     window.miniInvadersV2Game = game;
     window.addEventListener('message', event => {

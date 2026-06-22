@@ -13,8 +13,9 @@
     function definition(id) { return ns.Data.ENEMY_TYPES[id] || ns.Data.BOSSES[id] || ns.Data.ENEMY_TYPES.bandit; }
     function create(game, id, x, y, options) {
         const def = definition(id), opts = options || {}, danger = game.region?.danger || 1, boss = Boolean(ns.Data.BOSSES[id]), hull = def.hull + (boss ? danger * 35 : danger * 10);
+        const random = game.random || (game.random = new ns.Runtime.SimulationRandom(game.state?.worldSeed || 1));
         const componentState = opts.components || Object.fromEntries((def.components || []).map(component => [component.id, component.hull]));
-        return { id: opts.id || `hostile:${Date.now()}:${Math.random()}`, x, y, vx: 0, vy: 0, angle: opts.angle || 0, radius: def.radius, hull: opts.hull || hull, maxHull: hull, cooldown: .4 + Math.random(), faction: opts.faction || def.faction, team: opts.faction || def.team, archetype: id, weaponPattern: def.weapon, role: opts.role || def.role || 'hostile', formation: opts.formation || null, aggroed: Boolean(opts.aggroed), disabled: 0, slowed: 0, slowScale: 1, bossType: boss ? id : null, bossPhase: opts.bossPhase || 1, deployCount: opts.deployCount || 0, persistent: boss, roaming: Boolean(opts.roaming), telegraph: 0, shielded: false, components: componentState, patternTimer: opts.patternTimer || 0, specialTimer: opts.specialTimer || 0, queuedPattern: opts.queuedPattern || null };
+        return { id: opts.id || (game.nextEntityId ? game.nextEntityId('hostile') : `hostile:${game.state?.worldSeed || 0}:${Math.floor(random.range(0, 0x7fffffff))}`), x, y, vx: 0, vy: 0, angle: opts.angle || 0, radius: def.radius, hull: opts.hull || hull, maxHull: hull, cooldown: random.range(.4, 1.4), faction: opts.faction || def.faction, team: opts.faction || def.team, archetype: id, weaponPattern: def.weapon, role: opts.role || def.role || 'hostile', formation: opts.formation || null, aggroed: Boolean(opts.aggroed), disabled: 0, slowed: 0, slowScale: 1, bossType: boss ? id : null, bossPhase: opts.bossPhase || 1, deployCount: opts.deployCount || 0, persistent: boss, roaming: Boolean(opts.roaming), telegraph: 0, shielded: false, components: componentState, patternTimer: opts.patternTimer || 0, specialTimer: opts.specialTimer || 0, queuedPattern: opts.queuedPattern || null };
     }
     function spawn(game, count, center, faction, role, archetype) {
         if (!game.enemies.length) game.bulkheadsUsed = false;
@@ -30,7 +31,7 @@
                 const specialists = Object.values(ns.Data.ENEMY_TYPES).filter(def => def.minDanger && danger >= def.minDanger && (!faction || def.faction === faction || def.faction === 'bandits')).map(def => def.id);
                 const roster = i > 0 && specialists.length ? regular.concat(specialists, specialists) : regular; type = roster[i % roster.length];
             }
-            const enemy = create(game, type, x, y, { id: `hostile:${Date.now()}:${i}`, faction: faction || definition(type).faction, role, formation: formation ? 'wedge' : null, angle: formation ? formationAngle + Math.PI : angle + Math.PI });
+            const enemy = create(game, type, x, y, { faction: faction || definition(type).faction, role, formation: formation ? 'wedge' : null, angle: formation ? formationAngle + Math.PI : angle + Math.PI });
             game.enemies.push(enemy); spawned.push(enemy);
         }
         return spawned;
@@ -77,7 +78,7 @@
             if (enemy.specialTimer <= 0 && support.length < 4) { spawn(game, 2, enemy, enemy.faction, 'boss-support', 'beam_lancer'); enemy.specialTimer = 12; }
         } else if (def.controller === 'eclipse') {
             const engines = componentAlive(enemy, 'blink');
-            if (enemy.specialTimer <= 0 && engines) { const a = Math.atan2(target.y - enemy.y, target.x - enemy.x) + Math.PI / 2 * (Math.random() < .5 ? -1 : 1); enemy.x = target.x + Math.cos(a) * 360; enemy.y = target.y + Math.sin(a) * 360; enemy.specialTimer = Math.max(4, 9 - enemy.bossPhase); game.notify('ECLIPSE CRUISER // PHASE SIGNATURE SHIFT'); }
+            if (enemy.specialTimer <= 0 && engines) { const a = Math.atan2(target.y - enemy.y, target.x - enemy.x) + Math.PI / 2 * (game.random.chance(.5) ? -1 : 1); enemy.x = target.x + Math.cos(a) * 360; enemy.y = target.y + Math.sin(a) * 360; enemy.specialTimer = Math.max(4, 9 - enemy.bossPhase); game.notify('ECLIPSE CRUISER // PHASE SIGNATURE SHIFT'); }
             if (patternReady(enemy, 'torpedo-fan', dt, .9)) { fireFan(game, enemy, target, def, 3 + enemy.bossPhase * 2, .85); enemy.patternTimer = Math.max(3, 6.5 - enemy.bossPhase); }
         }
     }
@@ -110,7 +111,7 @@
             if (def.ability === 'repair' && enemy.specialTimer <= 0) { const ally = game.enemies.filter(other => other !== enemy && other.hull > 0 && other.team === enemy.team && other.hull < other.maxHull).sort((a, b) => distance(enemy, a) - distance(enemy, b))[0]; if (ally && distance(enemy, ally) < 520) { ally.hull = Math.min(ally.maxHull, ally.hull + 30); enemy.specialTimer = 3; game.effects.push({ x: ally.x, y: ally.y, vx: 0, vy: 0, life: .25, maxLife: .25, size: 22, flash: true, color: '#55f0ad' }); } }
             if (def.ability === 'mines' && enemy.specialTimer <= 0) { mine(game, enemy, enemy.angle + Math.PI, 30); enemy.specialTimer = 3.5; }
             enemy.specialTimer = Math.max(0, enemy.specialTimer - dt);
-            if (d < 680 && enemy.cooldown <= 0) { enemy.cooldown = def.cooldown * (enemy.bossPhase ? Math.max(.55, 1 - (enemy.bossPhase - 1) * .15) : 1) + Math.random() * .35; if (enemy.archetype === 'torpedo_bomber') fireFan(game, enemy, target, def, 2, .25); else fire(game, enemy, target, def); }
+            if (d < 680 && enemy.cooldown <= 0) { enemy.cooldown = def.cooldown * (enemy.bossPhase ? Math.max(.55, 1 - (enemy.bossPhase - 1) * .15) : 1) + game.random.range(0, .35); if (enemy.archetype === 'torpedo_bomber') fireFan(game, enemy, target, def, 2, .25); else fire(game, enemy, target, def); }
             game.world.nearbyEntities(enemy.x, enemy.y, 90).filter(entity => entity.kind === 'asteroid').forEach(asteroid => game.resolveShipAsteroidCollision(enemy, enemy.radius, asteroid, 'enemy'));
         });
         game.enemies = game.enemies.filter(enemy => enemy.hull > 0 && (enemy.persistent || distance(enemy, ship) < 2600));

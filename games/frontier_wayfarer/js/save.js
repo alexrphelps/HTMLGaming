@@ -6,7 +6,7 @@
             const hadStages = Array.isArray(contract.stages) && contract.stages.length > 0;
             if (!hadStages && landmark && contract.type !== 'escort') contract.target = { x: landmark.x, y: landmark.y };
             if (landmark && contract.type === 'escort' && !contract.escort && !['complete', 'failed'].includes(contract.status)) {
-                const angle = ns.MathUtil.hash(data.worldSeed || 0, landmark.x, landmark.y, String(contract.id || '').length) * Math.PI * 2, bounds = ns.World.WORLD_BOUNDS;
+                const angle = ns.MathUtil.hash(data.worldSeed || 0, landmark.x, landmark.y, String(contract.id || '').length) * Math.PI * 2, bounds = ns.World.catalogBounds();
                 contract.escort = { phase: 'rendezvous', grace: 8, ambushes: 0, start: { x: ns.MathUtil.clamp(landmark.x + Math.cos(angle) * 1800, bounds.minX + 400, bounds.maxX - 400), y: ns.MathUtil.clamp(landmark.y + Math.sin(angle) * 1800, bounds.minY + 400, bounds.maxY - 400) }, end: { x: landmark.x, y: landmark.y }, convoy: null };
             }
             if (contract.type === 'escort' && contract.escort) {
@@ -25,7 +25,7 @@
         });
     }
     function serialize(state) {
-        const clean = JSON.parse(JSON.stringify(state)); clean.lastSaveAt = Date.now(); return JSON.stringify(clean);
+        const clean = JSON.parse(JSON.stringify(state)); delete clean.ship?.lightSpeed; clean.lastSaveAt = Date.now(); return JSON.stringify(clean);
     }
     function scalePoint(point, factor) {
         if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
@@ -133,12 +133,19 @@
             delete data.ship.lightSpeed; refreshContractTargets(data);
             data.progression = Object.assign({ tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 }, data.progression);
             data.progression.bossesDefeated = data.progression.bossesDefeated && typeof data.progression.bossesDefeated === 'object' ? data.progression.bossesDefeated : {};
+            data.schemaVersion = 7;
             return data;
+        }
+        if (data.schemaVersion === 7) {
+            ns.Wallet.ensure(data); delete data.ship.lightSpeed;
+            data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            refreshContractTargets(data); return data;
         }
         return null;
     }
     function validate(data) {
-        return Boolean(data && data.schemaVersion === 6 && data.pilot?.wallet && data.ship && data.reputations && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
+        return Boolean(data && data.schemaVersion === 7 && data.pilot?.wallet && data.ship && data.reputations && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
     }
     function save(state, storage) {
         try { (storage || localStorage).setItem(ns.SAVE_KEY, serialize(state)); state.lastSaveAt = Date.now(); return true; }

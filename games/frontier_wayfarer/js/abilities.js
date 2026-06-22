@@ -11,6 +11,15 @@
         }
         return { x: ship.x, y: ship.y };
     }
+    const abilityHandlers = {
+        afterburner: { activate({ effects, ability }) { effects.afterburner = ability.duration; } },
+        blink: { activate({ game, ability }) { Object.assign(game.state.ship, safeBlinkDestination(game, ability.distance)); } },
+        overshield: { canActivate({ stats }) { return stats.shield > 0; }, activate({ state, effects, ability }) { state.ship.overshield = ability.amount; effects.overshield = ability.duration; } },
+        emp: { activate({ game, state, ability }) { game.enemies.forEach(enemy => { if (ns.MathUtil.distance(enemy, state.ship) > ability.radius) return; enemy.aggroed = true; enemy.hull -= ability.damage; enemy.disabled = Math.max(enemy.disabled || 0, ability.duration); if (enemy.hull <= 0) game.onEnemyKilled(enemy); }); } },
+        repair: { activate({ effects, ability }) { effects.repair = ability.duration; effects.repairRemaining = ability.amount; } },
+        cloak: { activate({ effects, ability }) { effects.cloak = ability.duration; } }
+    };
+    Object.entries(abilityHandlers).forEach(([id, handler]) => { if (!ns.Registry.hasHandler('ability', id)) ns.Registry.registerHandler('ability', id, handler); });
     function activate(game, slot) {
         if (ns.LightSpeed?.isTraveling(game)) return false;
         const state = game.state, unlocked = ns.Unlocks.evaluate(state).abilitySlots;
@@ -20,22 +29,10 @@
         const overclock = stats.effects.overclock && (cd[slot] || 0) > 0 && (cd[slot] || 0) <= module.ability.cooldown * .5;
         if (((cd[slot] || 0) > 0 && !overclock) || state.ship.energy < energyCost) return false;
         const ability = module.ability, effects = effectState(state);
-        if (ability.type === 'overshield' && stats.shield <= 0) return false;
+        const handler = ns.Registry.handler('ability', ability.type); if (!handler || handler.canActivate?.({ game, state, stats, ability }) === false) return false;
         state.ship.energy -= energyCost; if (overclock) { state.ship.heat = Math.min(100, state.ship.heat + 35); ns.Combat.applyHullDamage(state, 5); }
         cd[slot] = ability.cooldown * (ability.type === 'afterburner' ? 1 - (stats.effects.afterburnerRecovery || 0) : 1);
-        if (ability.type === 'afterburner') effects.afterburner = ability.duration;
-        if (ability.type === 'blink') Object.assign(state.ship, safeBlinkDestination(game, ability.distance));
-        if (ability.type === 'overshield') { state.ship.overshield = ability.amount; effects.overshield = ability.duration; }
-        if (ability.type === 'emp') {
-            game.enemies.forEach(enemy => {
-                if (ns.MathUtil.distance(enemy, state.ship) > ability.radius) return;
-                enemy.aggroed = true;
-                enemy.hull -= ability.damage; enemy.disabled = Math.max(enemy.disabled || 0, ability.duration);
-                if (enemy.hull <= 0) game.onEnemyKilled(enemy);
-            });
-        }
-        if (ability.type === 'repair') { effects.repair = ability.duration; effects.repairRemaining = ability.amount; }
-        if (ability.type === 'cloak') effects.cloak = ability.duration;
+        handler.activate({ game, state, stats, effects, ability, module, slot });
         game.notify(`${module.name.toUpperCase()} // ACTIVE`); return true;
     }
     function update(game, dt) {

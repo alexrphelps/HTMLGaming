@@ -1,0 +1,172 @@
+:root {
+    --hud-edge: max(8px, env(safe-area-inset-left));
+    --hud-bottom: max(8px, env(safe-area-inset-bottom));
+    --hud-gap: clamp(6px, 1vw, 14px);
+    --touch-target: 44px;
+}
+
+html, body { min-width: 0; min-height: 0; }
+#gameShell {
+    height: 100vh;
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "top" "viewport" "bottom";
+    gap: var(--hud-gap);
+    padding: max(8px, env(safe-area-inset-top)) var(--hud-edge) var(--hud-bottom);
+    overflow: hidden;
+    isolation: isolate;
+}
+#gameCanvas, .cockpit-frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+#gameCanvas { z-index: -2; }
+.cockpit-frame { z-index: -1; }
+
+.top-hud {
+    position: relative;
+    inset: auto;
+    grid-area: top;
+    width: 100%;
+    min-width: 0;
+    z-index: 3;
+}
+.flight-hud-bottom {
+    grid-area: bottom;
+    z-index: 3;
+    position: relative;
+    justify-self: center;
+    width: 58.333%;
+    max-width: 1120px;
+    height: 18.375vh;
+    height: 18.375dvh;
+    max-height: 184px;
+    min-width: 0;
+    pointer-events: none;
+    filter: drop-shadow(0 8px 18px #000b);
+}
+.cockpit-core {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: end;
+    gap: 7px;
+}
+.flight-hud-bottom .ability-hud,
+.flight-hud-bottom .systems-hud,
+.flight-hud-bottom .light-drive-hud {
+    position: relative;
+    inset: auto;
+    transform: none;
+}
+.flight-hud-bottom .systems-hud {
+    width: 60%;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 5px 14px;
+    padding: 10px 17px;
+    border: 1px solid #47717a;
+    border-bottom-color: #162e35;
+    background: linear-gradient(180deg, #07151bea, #030b0fee);
+    clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%, 0 7px);
+}
+.flight-hud-bottom .system-meter header { margin-bottom: 4px; font-size: clamp(10px, .84vw, 14px); }
+.flight-hud-bottom .system-meter > div { height: 8px; }
+.flight-hud-bottom .ability-hud {
+    width: 80%;
+    flex: 0 0 clamp(49px, 7.35dvh, 74px);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+}
+.flight-hud-bottom .ability-slot { min-height: 0; padding: 5px 9px; grid-template-columns: 35px minmax(0, 1fr); font-size: 12px; }
+.flight-hud-bottom .ability-slot b { font-size: clamp(10px, .84vw, 14px); }
+.cockpit-telemetry {
+    position: absolute;
+    top: 10px;
+    width: 18%;
+    height: calc(100% - clamp(56px, 7.35dvh, 81px));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    color: #64848e;
+    font-size: clamp(10px, .84vw, 14px);
+    letter-spacing: .08em;
+}
+.cockpit-telemetry::after { content: ''; position: absolute; top: 8%; bottom: 8%; border-color: #31535c; }
+.telemetry-left { left: 0; text-align: right; align-items: flex-end; }
+.telemetry-left::after { right: -7px; border-right: 1px solid #31535c; transform: skewY(-18deg); }
+.telemetry-right { right: 0; text-align: left; align-items: flex-start; }
+.telemetry-right::after { left: -7px; border-left: 1px solid #31535c; transform: skewY(18deg); }
+.cockpit-telemetry strong { color: var(--cyan); font-size: clamp(16px, 1.26vw, 21px); white-space: nowrap; }
+.cockpit-telemetry small { color: #86a5ad; font-size: inherit; white-space: nowrap; }
+.flight-hud-bottom .light-drive-hud { width: 100%; min-height: 35px; margin-top: 4px; padding: 4px 7px; grid-template-columns: 31px minmax(0, 1fr); font-size: 10px; }
+.flight-hud-bottom .light-drive-hud > span { width: 28px; height: 28px; font-size: 14px; }
+.flight-hud-bottom .light-drive-hud strong { font-size: 10px; }
+.flight-hud-bottom .light-drive-hud small { display: none; }
+
+.cockpit-panel {
+    inset: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    max-width: none;
+    max-height: none;
+    overflow: hidden;
+}
+.cockpit-panel.active { grid-template-rows: auto minmax(0, 1fr); }
+.panel-header { position: relative; z-index: 2; min-width: 0; }
+.panel-workspace, .panel-body { min-width: 0; min-height: 0; }
+.panel-body { overscroll-behavior: contain; }
+.panel-tab, .panel-header button, .panel-body button { min-height: var(--touch-target); }
+
+.map-layout { grid-template-columns: minmax(0, 1fr) minmax(220px, 18vw); min-width: 0; }
+.galaxy-map { width: 100%; height: auto; min-height: min(620px, 65dvh); aspect-ratio: 16 / 10; }
+.ship-view .ship-console.compact { grid-template-columns: minmax(230px, .88fr) minmax(210px, .68fr) minmax(360px, 1.55fr); }
+.legacy-save-notice { padding: 10px 12px; border: 1px solid #ffbd5966; color: var(--amber); background: #251b0dcc; line-height: 1.45; }
+
+@media (max-width: 900px) {
+    .top-hud { grid-template-columns: minmax(0, 1fr) auto; }
+    .objective { grid-column: 1 / -1; grid-row: 2; }
+    .panel-workspace { overflow: hidden; }
+    .panel-sidebar nav { scrollbar-width: thin; }
+    .map-layout { grid-template-columns: 1fr; }
+    .map-layout aside { display: block; border: 0; border-top: 1px solid var(--line); padding: 14px 0 0; }
+    .ship-view .ship-console.compact { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); }
+}
+
+@media (max-width: 620px) {
+    :root { --touch-target: 42px; }
+    #gameShell { gap: 5px; }
+    .top-hud { inset: auto; left: auto; right: auto; top: auto; gap: 5px; }
+    .identity-block, .objective, .currency-block { padding: 6px 8px; }
+    .objective span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .flight-hud-bottom { width: calc(100% - 12px); height: 18.375dvh; }
+    .flight-hud-bottom .systems-hud { width: 58%; padding: 4px 7px; }
+    .flight-hud-bottom .ability-hud { width: 76%; }
+    .cockpit-telemetry { width: 19%; }
+    .flight-hud-bottom .ability-slot { grid-template-columns: 1fr; text-align: center; }
+    .flight-hud-bottom .ability-slot span:last-child { display: none; }
+    .cockpit-panel { inset: 3px; }
+    .panel-header { grid-template-columns: minmax(0, 1fr) auto; }
+    .panel-header h1 { max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .panel-workspace { grid-template-rows: auto minmax(0, 1fr); }
+    .panel-body { padding: 10px; }
+    .ship-view .ship-console.compact { grid-template-columns: minmax(0, 1fr); }
+    .ship-preview-stage { min-height: clamp(220px, 42dvh, 360px); }
+    .mission-system-grid { grid-template-columns: minmax(0, 1fr); }
+    .galaxy-map { min-height: 300px; aspect-ratio: 4 / 5; }
+    .start-screen { overflow: auto; overscroll-behavior: contain; }
+    .start-layout { position: relative; inset: auto; min-height: 100%; padding: 18px; align-content: start; }
+    .start-command { min-width: 0; }
+}
+
+@media (max-height: 620px) {
+    #gameShell { padding-top: 4px; padding-bottom: 4px; }
+    .top-hud { gap: 5px; }
+    .identity-block, .objective, .currency-block { padding-top: 5px; padding-bottom: 5px; }
+    .flight-hud-bottom { height: 18.375dvh; }
+    .start-screen { overflow: auto; }
+    .start-layout { position: relative; inset: auto; min-height: 100%; padding: 14px 20px; }
+}

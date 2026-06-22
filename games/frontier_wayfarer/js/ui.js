@@ -10,13 +10,53 @@
         constructor() {
             this.start = document.getElementById('startScreen'); this.panel = document.getElementById('cockpitPanel'); this.panelBody = document.getElementById('panelBody');
             this.panelTitle = document.getElementById('panelTitle'); this.headerUndock = document.getElementById('headerUndock'); this.message = document.getElementById('message'); this.activeTab = 'station'; this.focusedContractId = null; this.selectedShipArea = 'engine'; this.game = null;
-            document.addEventListener('click', event => this.handleClick(event));
-            document.addEventListener('input', event => { if (event.target.id === 'volumeSetting' && this.game?.state) { this.game.state.settings.volume = Number(event.target.value); this.game.save(); } });
-            document.addEventListener('contextmenu', event => { if (event.target.id === 'gameCanvas') event.preventDefault(); });
+            this.root = document.getElementById('gameShell'); this.onClick = event => this.handleClick(event); this.onInput = event => { if (event.target.id === 'volumeSetting' && this.game?.state) { this.game.state.settings.volume = Number(event.target.value); this.game.save(); } }; this.onContextMenu = event => { if (event.target.id === 'gameCanvas') event.preventDefault(); };
+            this.root.addEventListener('click', this.onClick); this.root.addEventListener('input', this.onInput); this.root.addEventListener('contextmenu', this.onContextMenu);
+            this.components = {
+                startWallet: new ns.Components.Wallet().mount(document.getElementById('startWallet')),
+                worldWallet: new ns.Components.Wallet().mount(document.getElementById('worldWallet')),
+                menuWallet: new ns.Components.Wallet().mount(document.getElementById('menuWallet')),
+                abilities: new ns.Components.AbilityHud().mount(document.getElementById('abilityHud')),
+                drive: new ns.Components.DriveHud().mount(document.getElementById('lightDriveHud')),
+                objective: new ns.Components.Objective().mount(document.getElementById('objective'))
+            };
+            this.panelHost = new ns.Components.PanelHost().mount(this.panelBody, { ui: this });
+            ['pause', 'station', 'contracts', 'trade', 'ship', 'traits', 'factions', 'navigation', 'settings'].forEach(id => this.panelHost.register(id, new ns.Components.TemplatePanel(game => this[`render_${id}`](game))));
+            this.actions = new ns.ActionRouter(); this.registerActions();
+        }
+        registerActions() {
+            this.actions.register('new', ({ game }) => game.newCareer()).register('continue', ({ game }) => game.continueCareer());
+            this.actions.register('close', () => this.closePanel()).register('undock', ({ game }) => game.undock());
+            this.actions.register('tab', ({ game, id }) => { this.activeTab = id; this.renderPanel(game); });
+            this.actions.register('select-ship-area', ({ game, id }) => { if (ns.Registry.get('slot', id)?.group === 'core') { this.selectedShipArea = id; this.renderPanel(game); } });
+            this.actions.register('remove-waypoint', ({ game }) => { game.clearCustomWaypoint('CUSTOM WAYPOINT REMOVED'); this.renderPanel(game); });
+            this.actions.register('equip', ({ game, state, button, id }) => { const outcome = ns.Commands.equip(state, button.dataset.slot, id); if (outcome.ok) { game.save(); this.renderPanel(game); } else { const reason = { 'dock-required': 'DOCK AT A STATION', mass: 'MASS LIMIT EXCEEDED', locked: 'SLOT NOT YET LICENSED' }[outcome.reason] || String(outcome.reason).replace('-', ' ').toUpperCase(); game.notify(`MODULE FIT REJECTED // ${reason}`); } });
+            this.actions.register('chassis', ({ game, state }) => { const outcome = ns.Commands.upgradeChassis(state); if (outcome.ok) { game.save(); this.renderPanel(game); } else if (outcome.changes.cost) this.notifyShortfall(game, outcome.changes.cost); });
+            this.actions.register('insurance', ({ game, state }) => { const outcome = ns.Commands.toggleInsurance(state); if (outcome.ok) { game.save(); this.renderPanel(game); } else if (outcome.changes.cost) this.notifyShortfall(game, outcome.changes.cost); });
+            this.actions.register('toggle-shake', ({ game, state }) => { state.settings.screenShake = !state.settings.screenShake; game.save(); this.renderPanel(game); });
+            this.actions.register('save', ({ game }) => game.save('CAREER SAVED')).register('reset-career', () => { ns.Save.remove(); location.reload(); });
+            this.actions.register('recover', ({ game }) => { this.activeTab = 'station'; this.renderPanel(game); });
+            const persistPanel = game => { game.save(); this.renderPanel(game); };
+            this.actions.register('view-contract', ({ game, id }) => { this.focusedContractId = this.focusedContractId === id ? null : id; this.renderPanel(game); });
+            this.actions.register('accept-contract', ({ game, state, id }) => { if (ns.Contracts.accept(state, id)) { this.focusedContractId = null; persistPanel(game); game.notify('CONTRACT ACCEPTED // WAYPOINT LOCKED'); } });
+            this.actions.register('refresh-contracts', ({ game, state, station }) => { if (!station) return; const outcome = ns.Contracts.manualRefresh(state, station, Date.now()); if (outcome.ok) persistPanel(game); else game.notify(outcome.tutorial ? 'TUTORIAL BOARD CANNOT BE REFRESHED' : `BOARD REFRESH COOLING // ${Math.ceil(outcome.remaining / 1000)} SEC`); });
+            this.actions.register('abandon', ({ game, state }) => { if (ns.Contracts.abandon(state)) persistPanel(game); });
+            this.actions.register('dismiss-debrief', ({ game, state }) => { state.progression.pendingDebrief = null; persistPanel(game); });
+            this.actions.register('buy-hull', ({ game, state, station, id }) => { const hull = HULLS[id], cost = hull?.cost || {}; if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Progression.buyHull(state, id, station)) { persistPanel(game); game.notify(`${hull.name.toUpperCase()} // HULL ACQUIRED`); } });
+            this.actions.register('switch-hull', ({ game, state, id }) => { const outcome = ns.Progression.switchHull(state, id); if (outcome.ok) { persistPanel(game); game.notify(`${HULLS[id].name.toUpperCase()} // ACTIVE HULL`); } else game.notify(`HULL SWITCH BLOCKED // ${outcome.reason.toUpperCase()}`); });
+            this.actions.register('buy-cargo', ({ game, state, station, id }) => { const cost = { aetherium: ns.Economy.price(state, station, id, 'buy') }; if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Economy.trade(state, station, id, 1)) persistPanel(game); });
+            this.actions.register('sell-cargo', ({ game, state, station, id }) => { if (ns.Economy.trade(state, station, id, -1)) persistPanel(game); });
+            this.actions.register('buy-module', ({ game, state, station, id }) => { const cost = MODULES[id]?.cost || {}; if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Economy.buyModule(state, id, station)) persistPanel(game); });
+            this.actions.register('buy-trait', ({ game, state, id }) => { if (ns.Progression.buyTrait(state, id)) persistPanel(game); });
+            this.actions.register('respec', ({ game, state, station }) => { if (!station?.major) return; const cost = ns.Progression.respecCost(state); if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Progression.respec(state)) persistPanel(game); });
+            this.actions.register('join-faction', ({ game, state, id }) => { const outcome = ns.Commands.joinFaction(state, id); if (outcome.ok) persistPanel(game); });
+            this.actions.register('leave-faction', ({ game, state }) => { const outcome = ns.Commands.leaveFaction(state); if (outcome.ok) persistPanel(game); });
+            this.actions.register('repair', ({ game, state }) => { const cost = this.repairCost(state); if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Combat.repairAll(state, cost)) { if (state.progression.serviceDiscount?.stationId === state.dockedAt) state.progression.serviceDiscount.uses = Math.max(0, state.progression.serviceDiscount.uses - 1); persistPanel(game); } });
         }
         bind(game) {
             this.game = game; const saved = ns.Save.load(); document.getElementById('continueCareer').hidden = !saved;
-            document.getElementById('startWallet').innerHTML = this.walletHtml(saved || ns.State.createState(0), false);
+            document.getElementById('legacySaveNotice').hidden = !localStorage.getItem('gamehub.miniInvadersV2.save.v1');
+            this.components.startWallet.render(saved || ns.State.createState(0), false);
         }
         walletHtml(state, showUnbanked) {
             const wallet = ns.Wallet.ensure(state);
@@ -49,26 +89,16 @@
         openPanel(game, tab) { this.game = game; game.cancelInteraction?.(true); this.activeTab = tab || this.activeTab; game.paused = true; this.panel.classList.add('active'); this.renderPanel(game); }
         closePanel() { if (this.game?.state?.dockedAt) return this.openPanel(this.game, 'station'); this.panel.classList.remove('active'); if (this.game) this.game.paused = false; }
         renderAll(game) { this.game = game; if (this.panel.classList.contains('active')) this.renderPanel(game); this.updateHud(game); }
-        renderContext(game) {
-            if (ns.LightSpeed.isShifted(game)) { document.getElementById('contextPrompt').textContent = 'R // DECELERATE'; return; }
-            if (game.interactionCast) { const cast = game.interactionCast, remaining = Math.max(0, cast.duration - cast.progress); document.getElementById('contextPrompt').textContent = `F // LINKING ${String(cast.name).toUpperCase()} // ${remaining.toFixed(1)}S`; return; }
-            const contact = ns.Contracts.contactsFor(game.state.contracts.active).filter(item => distance(item, game.state.ship) <= 190).sort((a, b) => distance(a, game.state.ship) - distance(b, game.state.ship))[0];
-            if (contact && distance(contact, game.state.ship) <= 190) { document.getElementById('contextPrompt').textContent = `F // CONTRACT ${contact.name.toUpperCase()}`; return; }
-            const nearby = game.world.nearbyEntities(game.state.ship.x, game.state.ship.y, 190).sort((a, b) => distance(a, game.state.ship) - distance(b, game.state.ship))[0];
-            document.getElementById('contextPrompt').textContent = nearby ? `F // ${nearby.kind === 'station' ? 'DOCK' : 'INTERACT'} ${nearby.name || nearby.kind}` : 'TAB // CYCLE TARGET';
-        }
         updateHud(game) {
             if (!game.state) return; const state = game.state, s = state.ship, stats = ns.Progression.calculateShipStats(state), active = state.contracts.active;
             this.meter('hull', s.hull, stats.hull); this.meter('shield', s.shield + (s.overshield || 0), stats.shield || 1, stats.shield ? null : 'OFFLINE'); this.meter('energy', s.energy, stats.reactor); this.meter('heat', s.heat, 100);
             document.getElementById('regionName').textContent = game.region.name.toUpperCase(); document.getElementById('pilotLevel').textContent = `LV ${state.pilot.level}`;
             document.getElementById('speedValue').textContent = ns.MathUtil.formatSpeed(Math.hypot(s.vx, s.vy));
+            document.getElementById('coordinateValue').textContent = `X ${Math.round(s.x)} // Y ${Math.round(s.y)}`;
             const targets = active ? ns.Contracts.targetsFor(active) : [], nearest = targets.slice().sort((a, b) => distance(s, a) - distance(s, b))[0], targetDistance = nearest ? distance(s, nearest) : 0, destination = nearest?.label || (active ? ns.Contracts.destinationName(active) : '');
             const threat = state.progression?.roamingThreat;
-            document.getElementById('objective').innerHTML = ns.LightSpeed.isShifted(game) ? `<strong>LIGHT SPEED // ${game.region.name}</strong><span>VECTOR ${Math.round(s.x)}, ${Math.round(s.y)} KM // ${ns.MathUtil.formatDistance(ns.LightSpeed.ensure(game).distance)} SHIFTED${active && nearest ? ` // ${destination.toUpperCase()} ${ns.MathUtil.formatDistance(targetDistance)}` : ''}</span>` : active ? `<strong>${active.name}</strong><span>${destination} // ${ns.MathUtil.formatDistance(targetDistance)} // ${active.progress}/${active.required} STAGES${targets.length > 1 ? ` // ${targets.length} WAYPOINTS` : ''}</span>` : threat ? `<strong>OPTIONAL CAPITAL THREAT // ${ns.Data.BOSSES[threat.bossType].name}</strong><span>${game.region.id === threat.region ? ns.MathUtil.formatDistance(distance(s, threat)) : ns.Data.REGIONS.find(region => region.id === threat.region)?.name || 'REMOTE REGION'} // APPROACH TO ENGAGE</span>` : `<strong>FREE FLIGHT</strong><span>${ns.Unlocks.nextMilestone(state)}</span>`;
-            document.getElementById('worldWallet').innerHTML = this.walletHtml(state, true); document.getElementById('menuWallet').innerHTML = this.walletHtml(state, true);
-            const labels = { abilitySpace: 'SPACE', abilityQ: 'Q', abilityE: 'E', abilityShift: 'SHIFT' };
-            document.getElementById('abilityHud').innerHTML = Object.keys(labels).map(slot => { const info = ns.Abilities.slotState(state, slot), max = info.module?.ability?.cooldown || 1, ready = info.cooldown > 0 ? Math.max(0, 100 - info.cooldown / max * 100) : 100; return `<div class="ability-slot ${info.unlocked ? '' : 'locked'} ${info.cooldown > 0 ? 'cooling' : ''}" style="--ready:${ready}%"><span class="ability-key">${labels[slot]}</span><span><b>${info.unlocked ? info.module?.name || 'EMPTY' : 'LOCKED'}</b>${info.cooldown > 0 ? `${info.cooldown.toFixed(1)} SEC` : info.unlocked ? 'READY' : ''}</span></div>`; }).join('');
-            const drive = ns.LightSpeed.status(game), driveHud = document.getElementById('lightDriveHud'), driveModule = ns.LightSpeed.drive(game), driveName = driveModule.lightSpeed ? driveModule.name.replace(/ DRIVE$/i, '').toUpperCase() : 'ASTERION'; driveHud.className = `light-drive-hud ${drive.className}`; driveHud.innerHTML = `<span>R</span><strong>${driveName}</strong><small>${drive.label}<em>5 SS + 5 HE</em></small>`;
+            const objective = ns.LightSpeed.isShifted(game) ? [`LIGHT SPEED // ${game.region.name}`, `VECTOR ${Math.round(s.x)}, ${Math.round(s.y)} KM // ${ns.MathUtil.formatDistance(ns.LightSpeed.ensure(game).distance)} SHIFTED${active && nearest ? ` // ${destination.toUpperCase()} ${ns.MathUtil.formatDistance(targetDistance)}` : ''}`] : active ? [active.name, `${destination} // ${ns.MathUtil.formatDistance(targetDistance)} // ${active.progress}/${active.required} STAGES${targets.length > 1 ? ` // ${targets.length} WAYPOINTS` : ''}`] : threat ? [`OPTIONAL CAPITAL THREAT // ${ns.Data.BOSSES[threat.bossType].name}`, `${game.region.id === threat.region ? ns.MathUtil.formatDistance(distance(s, threat)) : ns.Data.REGIONS.find(region => region.id === threat.region)?.name || 'REMOTE REGION'} // APPROACH TO ENGAGE`] : ['FREE FLIGHT', ns.Unlocks.nextMilestone(state)];
+            this.components.objective.render(objective[0], objective[1]); this.components.worldWallet.render(state, true); this.components.menuWallet.render(state, true); this.components.abilities.render(state); this.components.drive.render(game);
             const miniMap = document.getElementById('lightSpeedMap'), shifted = ns.LightSpeed.isShifted(game); miniMap.classList.toggle('active', shifted); if (shifted) miniMap.innerHTML = this.mapHtml(game, true);
             this.updateRefreshButton(state);
         }
@@ -88,9 +118,9 @@
             }).join('');
         }
         renderPanel(game) {
-            document.getElementById('panelTabs').innerHTML = this.nav(game); document.getElementById('menuWallet').innerHTML = this.walletHtml(game.state, true); this.panelTitle.textContent = this.activeTab.toUpperCase();
+            document.getElementById('panelTabs').innerHTML = this.nav(game); this.components.menuWallet.render(game.state, true); this.panelTitle.textContent = this.activeTab.toUpperCase();
             this.headerUndock.hidden = !game.state.dockedAt;
-            const render = this[`render_${this.activeTab}`] || this.render_pause; this.panelBody.innerHTML = render.call(this, game); this.panelBody.classList.toggle('ship-view', this.activeTab === 'ship'); if (this.activeTab === 'ship') this.renderShipPreview(game);
+            this.panelHost.render(this.activeTab, game); this.panelBody.classList.toggle('ship-view', this.activeTab === 'ship'); if (this.activeTab === 'ship') this.renderShipPreview(game);
         }
         render_pause(game) { return `<section class="panel-section hero-panel"><p class="eyebrow">FLIGHT SUSPENDED</p><h2>Wayfarer command</h2><p>${ns.Unlocks.nextMilestone(game.state)}</p><button data-action="close">RETURN TO FLIGHT</button></section>`; }
         repairCost(state) { const stats = ns.Progression.calculateShipStats(state), discount = state.progression.serviceDiscount?.stationId === state.dockedAt && state.progression.serviceDiscount.uses > 0 ? 1 - state.progression.serviceDiscount.value : 1; return { aetherium: Math.ceil(((stats.hull - state.ship.hull) * 1.4 + Object.values(state.ship.moduleDamage).reduce((a, b) => a + b, 0) * 420) * discount) }; }
@@ -134,8 +164,7 @@
             const preview = new ns.Renderer(canvas); preview.drawShipPreview(game);
         }
         slotLabel(slot) {
-            const labels = { primary1: 'Primary weapon 1 (Left Click)', primary2: 'Primary weapon 2 (Right Click)', utility1: 'Passive Utility 1', utility2: 'Passive Utility 2', utility3: 'Passive Utility 3', utility4: 'Passive Utility 4', abilitySpace: 'Triggered Ability 1 (Space)', abilityQ: 'Triggered Ability 2 (Q)', abilityE: 'Triggered Ability 3 (E)', abilityShift: 'Triggered Ability 4 (Shift)', reactor: 'Reactor', engine: 'Engine', defense: 'Defense', cargo: 'Cargo' };
-            return labels[slot] || slot;
+            return ns.Registry.get('slot', slot)?.label || slot;
         }
         shipSlotCard(state, slot, id, compatible, equipReason) {
             const module = MODULES[id], docked = Boolean(state.dockedAt);
@@ -145,7 +174,7 @@
             const state = game.state, stats = ns.Progression.calculateShipStats(state), unlocks = ns.Unlocks.evaluate(state);
             const slots = Object.entries(state.ship.slots).filter(([slot]) => !slot.startsWith('ability') || unlocks.abilitySlots[slot]), coreNames = ['reactor', 'engine', 'defense', 'cargo'];
             const core = slots.filter(([slot]) => coreNames.includes(slot)), equipment = slots.filter(([slot]) => !coreNames.includes(slot));
-            const compatible = slot => state.ship.ownedModules.filter(id => { const m = MODULES[id]; return slot.startsWith('primary') ? m.slot === 'primary' : slot.startsWith('utility') ? m.slot === 'utility' : slot.startsWith('ability') ? m.slot === 'ability' : m.slot === slot; });
+            const compatible = slot => { const category = ns.Registry.get('slot', slot)?.category || slot; return state.ship.ownedModules.filter(id => MODULES[id]?.slot === category); };
             const equipReason = check => check.reason === 'mass' ? 'OVER MASS LIMIT' : check.reason === 'locked' ? 'SLOT LOCKED' : 'UNAVAILABLE';
             const selected = core.find(([slot]) => slot === this.selectedShipArea) || core[0], areaButtons = [['cargo', 'Cargo'], ['defense', 'Defense'], ['reactor', 'Reactor'], ['engine', 'Engine']].map(([slot, label]) => `<button class="ship-area-hotspot ${this.selectedShipArea === slot ? 'active' : ''} area-${slot}" data-action="select-ship-area" data-id="${slot}"><span>${label}</span></button>`).join('');
             return `${state.dockedAt ? '' : '<div class="loadout-lock-notice">DOCK AT A STATION TO MODIFY LOADOUT</div>'}<div class="ship-console compact"><section class="ship-portrait"><span class="eyebrow">PERSONAL STARFIGHTER</span><h2>${state.ship.name}</h2><div class="ship-preview-stage"><canvas id="shipPreviewCanvas" aria-label="Static preview of the currently fitted Wayfarer"></canvas>${areaButtons}</div><div class="stat-strip"><span>FRAME<b>TIER ${state.ship.chassis.level}</b></span><span>MASS<b>${stats.mass.toFixed(1)}/${stats.massLimit}</b></span><span>HULL<b>${Math.round(stats.hull)}</b></span><span>CARGO<b>${ns.Progression.cargoUsed(state)}/${stats.cargo}</b></span></div></section><section class="ship-panel core-focus"><header><span class="eyebrow">CORE SHIP AREA</span><h2>${this.slotLabel(selected[0]).toUpperCase()}</h2></header>${this.shipSlotCard(state, selected[0], selected[1], compatible, equipReason)}<div class="derived-stats"><span>ENERGY RECHARGE<b>${stats.energyRecharge}/S</b></span><span>COOLING<b>${stats.cooling}/S</b></span><span>THRUST<b>${Math.round(stats.thrust)}</b></span><span>MAX SPEED<b>${Math.round(stats.maxSpeed)}</b></span><span>SHIELD<b>${Math.round(stats.shield)}</b></span><span>ARMOR<b>${Math.round(stats.armor * 100)}%</b></span></div></section><section class="ship-panel weapons compact-mission"><header><span class="eyebrow">WEAPONS AND UTILITY</span><h2>MISSION SYSTEMS</h2></header><div class="mission-system-grid">${equipment.map(([slot, id]) => this.shipSlotCard(state, slot, id, compatible, equipReason)).join('')}</div></section></div>`;
@@ -155,64 +184,29 @@
         }
         render_factions(game) { const state = game.state; return `<div class="faction-grid">${Object.values(FACTIONS).map(f => { const rep = Math.round(state.reputations[f.id]), joined = state.pilot.allegiance === f.id, status = ns.Expansion.patrolStatus(state, f.id), quest = QUESTS[f.id][Math.min(state.quests[f.id], QUESTS[f.id].length - 1)]; return `<article style="--faction:${f.color}"><span class="eyebrow">${f.short} // PATROLS ${status}</span><h2>${f.name}</h2><p>${f.description}</p><div class="reputation"><span style="width:${Math.max(2, (rep + 100) / 2)}%"></span></div><strong>STANDING ${rep >= 0 ? '+' : ''}${rep}</strong><p>${status === 'FRIENDLY' ? 'Patrol support and priority contracts active.' : status === 'NEUTRAL' ? 'Patrols hold fire unless provoked.' : 'Patrols engage on detection.'} ${rep <= -50 ? 'Docking denied.' : 'Docking permitted.'}</p><p class="quest-line">CURRENT ARC // ${quest}</p>${f.id !== 'independents' ? `<button data-action="${joined ? 'leave-faction' : 'join-faction'}" data-id="${f.id}" ${!joined && rep < 15 ? 'disabled' : ''}>${joined ? 'LEAVE FACTION' : 'JOIN AT +15'}</button>` : '<span class="neutral-badge">INDEPENDENT CAREER NETWORK</span>'}</article>`; }).join('')}</div>`; }
         mapHtml(game, compact) {
-            const state = game.state, bounds = ns.World.WORLD_BOUNDS, exposure = ns.World.boundaryExposure(state.ship.x, state.ship.y), worldW = bounds.maxX - bounds.minX, worldH = bounds.maxY - bounds.minY, pctX = x => (x - bounds.minX) / worldW * 100, pctY = y => (y - bounds.minY) / worldH * 100;
-            const regions = REGIONS.map(region => `<div class="map-region" style="left:${pctX(region.x)}%;top:${pctY(region.y)}%;width:${region.w / worldW * 100}%;height:${region.h / worldH * 100}%;border-color:${region.color}">${!compact && state.visitedRegions.includes(region.id) ? `<span>${region.name}</span>` : ''}</div>`).join('');
-            const landmarks = compact ? '' : LANDMARKS.map(item => { const known = state.discoveries.includes(item.id), tooltip = known ? `${item.name} // ${ns.MathUtil.formatDistance(distance(state.ship, item))}` : 'UNKNOWN'; return `<i tabindex="0" role="img" aria-label="${tooltip}" data-tooltip="${tooltip}" class="map-point ${known ? 'known' : ''}" style="left:${pctX(item.x)}%;top:${pctY(item.y)}%;background:${FACTIONS[item.faction].color}"></i>`; }).join('');
+            const state = game.state, config = game.world?.config || ns.World.createConfig(), bounds = config.bounds, exposure = ns.World.boundaryExposure(state.ship.x, state.ship.y, bounds), worldW = bounds.maxX - bounds.minX, worldH = bounds.maxY - bounds.minY, pctX = x => (x - bounds.minX) / worldW * 100, pctY = y => (y - bounds.minY) / worldH * 100;
+            const regions = config.regions.map(region => `<div class="map-region" style="left:${pctX(region.x)}%;top:${pctY(region.y)}%;width:${region.w / worldW * 100}%;height:${region.h / worldH * 100}%;border-color:${region.color}">${!compact && state.visitedRegions.includes(region.id) ? `<span>${region.name}</span>` : ''}</div>`).join('');
+            const landmarks = compact ? '' : config.landmarks.map(item => { const known = state.discoveries.includes(item.id), tooltip = known ? `${item.name} // ${ns.MathUtil.formatDistance(distance(state.ship, item))}` : 'UNKNOWN'; return `<i tabindex="0" role="img" aria-label="${tooltip}" data-tooltip="${tooltip}" class="map-point ${known ? 'known' : ''}" style="left:${pctX(item.x)}%;top:${pctY(item.y)}%;background:${FACTIONS[item.faction].color}"></i>`; }).join('');
             const threat = state.progression?.roamingThreat, targets = ns.Contracts.targetsFor(state.contracts.active).map(target => `<i class="map-target" style="left:${pctX(target.x)}%;top:${pctY(target.y)}%"></i>`).join('') + (threat ? `<i class="map-target capital-threat" data-tooltip="CAPITAL THREAT // ${ns.Data.BOSSES[threat.bossType].name.toUpperCase()}" style="left:${pctX(threat.x)}%;top:${pctY(threat.y)}%"></i>` : '');
             const custom = state.customWaypoint ? `<i class="map-custom-target" ${compact ? '' : 'data-action="remove-waypoint" role="button" tabindex="0" aria-label="Remove custom waypoint"'} data-tooltip="CUSTOM WAYPOINT // ${ns.MathUtil.formatDistance(distance(state.ship, state.customWaypoint))}" style="left:${pctX(state.customWaypoint.x)}%;top:${pctY(state.customWaypoint.y)}%"></i>` : '';
             return `<div class="${compact ? 'mini-map-canvas' : `galaxy-map ${exposure.proximity > 0 ? 'nebula-near' : ''}`}">${regions}${landmarks}${targets}${custom}<i class="map-player" data-tooltip="YOU" aria-label="YOU" style="left:${Math.max(0, Math.min(100, pctX(state.ship.x)))}%;top:${Math.max(0, Math.min(100, pctY(state.ship.y)))}%"></i></div>`;
         }
         render_navigation(game) {
-            const state = game.state, exposure = ns.World.boundaryExposure(state.ship.x, state.ship.y), hazard = exposure.active ? `NEBULA BREACH // ${ns.MathUtil.formatDistance(exposure.depth)} OUTSIDE SAFE SPACE` : exposure.proximity > 0 ? 'PERIMETER NEBULA IN SENSOR RANGE' : 'SECTOR ENVELOPE NOMINAL';
-            return `<div class="map-layout">${this.mapHtml(game, false)}<aside><span class="eyebrow">SEAMLESS CHART</span><h2>${game.region.name}</h2><p>GRID ${game.region.grid} // ${Math.round(state.ship.x)}, ${Math.round(state.ship.y)} KM<br>${state.discoveries.length} signals logged<br>${state.visitedRegions.length}/${REGIONS.length} regions visited</p><h3>PERIMETER STATUS</h3><p class="map-hazard ${exposure.active ? 'active' : ''}">${hazard}</p><h3>NEXT LICENSE</h3><p>${ns.Unlocks.nextMilestone(state)}</p></aside></div>`;
+            const state = game.state, config = game.world?.config || ns.World.createConfig(), exposure = ns.World.boundaryExposure(state.ship.x, state.ship.y, config.bounds), hazard = exposure.active ? `NEBULA BREACH // ${ns.MathUtil.formatDistance(exposure.depth)} OUTSIDE SAFE SPACE` : exposure.proximity > 0 ? 'PERIMETER NEBULA IN SENSOR RANGE' : 'SECTOR ENVELOPE NOMINAL';
+            return `<div class="map-layout">${this.mapHtml(game, false)}<aside><span class="eyebrow">SEAMLESS CHART</span><h2>${game.region.name}</h2><p>GRID ${game.region.grid || game.region.id.toUpperCase()} // ${Math.round(state.ship.x)}, ${Math.round(state.ship.y)} KM<br>${state.discoveries.length} signals logged<br>${state.visitedRegions.length}/${config.regions.length} regions visited</p><h3>PERIMETER STATUS</h3><p class="map-hazard ${exposure.active ? 'active' : ''}">${hazard}</p><h3>NEXT LICENSE</h3><p>${ns.Unlocks.nextMilestone(state)}</p></aside></div>`;
         }
-        render_settings(game) { const s = game.state.settings; return `<div class="settings-list"><label><span>MASTER VOLUME</span><input id="volumeSetting" type="range" min="0" max="1" step="0.1" value="${s.volume}"></label><label><span>SCREEN SHAKE</span><button data-action="toggle-shake">${s.screenShake ? 'ENABLED' : 'DISABLED'}</button></label><button data-action="save">SAVE CAREER NOW</button><button class="danger" data-action="reset-career">DELETE CAREER</button><div class="controls"><h3>FLIGHT CONTROLS</h3><p>Mouse aim // W/S forward/reverse // A/D strafe</p><p>Mouse 1 weapon one // Mouse 2 weapon two // F interaction cast/dock</p><p>R Light Drive // Space/Q/E/Shift active modules // Tab target</p><p>M map // T traits // C contracts // Esc systems</p></div></div>`; }
-        openDefeat(game, result) { this.activeTab = 'defeat'; this.panel.classList.add('active'); this.headerUndock.hidden = true; document.getElementById('panelTabs').innerHTML = ''; document.getElementById('menuWallet').innerHTML = this.walletHtml(game.state, false); this.panelTitle.textContent = 'RECOVERY REPORT'; this.panelBody.innerHTML = `<section class="defeat"><span class="eyebrow">SHIP DISABLED // RESCUE COMPLETE</span><h2>Recovered at ${result.station.name}</h2><p>All unbanked resources were lost.</p><div>${ns.Wallet.KEYS.map(key => `<span>${CREDIT_META[key].short} LOST <b>${result.lostResources[key]}</b></span>`).join('')}<span>CARGO LOST <b>${Object.values(result.lostCargo).reduce((a, b) => a + b, 0)}</b></span></div><button class="primary" data-action="recover">CONTINUE CAREER</button></section>`; }
+        render_settings(game) { const s = game.state.settings; return `<div class="settings-list"><label><span>MASTER VOLUME</span><input id="volumeSetting" type="range" min="0" max="1" step="0.1" value="${s.volume}"></label><label><span>SCREEN SHAKE</span><button data-action="toggle-shake">${s.screenShake ? 'ENABLED' : 'DISABLED'}</button></label><button data-action="save">SAVE CAREER NOW</button><button class="danger" data-action="reset-career">DELETE CAREER</button><div class="controls"><h3>FLIGHT CONTROLS</h3><p>Mouse aim // W/S forward/reverse // A/D strafe</p><p>Mouse 1 weapon one // Mouse 2 weapon two // F interaction cast/dock</p><p>R Light Drive // Space/Q/E/Shift active modules // Tab target</p><p>M map // T traits // C contracts</p></div></div>`; }
+        openDefeat(game, result) { this.activeTab = 'defeat'; this.panel.classList.add('active'); this.headerUndock.hidden = true; document.getElementById('panelTabs').innerHTML = ''; this.components.menuWallet.render(game.state, false); this.panelTitle.textContent = 'RECOVERY REPORT'; this.panelBody.innerHTML = `<section class="defeat"><span class="eyebrow">SHIP DISABLED // RESCUE COMPLETE</span><h2>Recovered at ${result.station.name}</h2><p>All unbanked resources were lost.</p><div>${ns.Wallet.KEYS.map(key => `<span>${CREDIT_META[key].short} LOST <b>${result.lostResources[key]}</b></span>`).join('')}<span>CARGO LOST <b>${Object.values(result.lostCargo).reduce((a, b) => a + b, 0)}</b></span></div><button class="primary" data-action="recover">CONTINUE CAREER</button></section>`; }
+        destroy() { this.root.removeEventListener('click', this.onClick); this.root.removeEventListener('input', this.onInput); this.root.removeEventListener('contextmenu', this.onContextMenu); this.panelHost.destroy(); Object.values(this.components).forEach(component => component.destroy()); }
         handleClick(event) {
             const button = event.target.closest('[data-action]'), map = event.target.closest('.galaxy-map');
             if (!button && map && this.game?.state) {
-                const bounds = ns.World.WORLD_BOUNDS, box = map.getBoundingClientRect(), ratioX = (event.clientX - box.left) / box.width, ratioY = (event.clientY - box.top) / box.height;
+                const bounds = this.game.world?.config?.bounds || ns.World.WORLD_BOUNDS, box = map.getBoundingClientRect(), ratioX = (event.clientX - box.left) / box.width, ratioY = (event.clientY - box.top) / box.height;
                 if (box.width > 0 && box.height > 0) { this.game.setCustomWaypoint({ x: bounds.minX + ratioX * (bounds.maxX - bounds.minX), y: bounds.minY + ratioY * (bounds.maxY - bounds.minY) }); this.renderPanel(this.game); }
                 return;
             }
-            if (!button) return; const action = button.dataset.action, id = button.dataset.id, game = this.game;
-            if (action === 'new') return game.newCareer(); if (action === 'continue') return game.continueCareer(); if (!game?.state) return;
-            const state = game.state, station = LANDMARKS.find(l => l.id === state.dockedAt);
-            if (action === 'tab') { this.activeTab = id; this.renderPanel(game); }
-            else if (action === 'select-ship-area' && ['engine', 'reactor', 'defense', 'cargo'].includes(id)) { this.selectedShipArea = id; this.renderPanel(game); }
-            else if (action === 'remove-waypoint') { game.clearCustomWaypoint('CUSTOM WAYPOINT REMOVED'); this.renderPanel(game); }
-            else if (action === 'close') this.closePanel(); else if (action === 'undock') game.undock();
-            else if (action === 'view-contract') { this.focusedContractId = this.focusedContractId === id ? null : id; this.renderPanel(game); }
-            else if (action === 'accept-contract' && ns.Contracts.accept(state, id)) { this.focusedContractId = null; game.save(); this.renderPanel(game); game.notify('CONTRACT ACCEPTED // WAYPOINT LOCKED'); }
-            else if (action === 'refresh-contracts' && station) { const result = ns.Contracts.manualRefresh(state, station, Date.now()); if (result.ok) { game.save(); this.renderPanel(game); } else game.notify(result.tutorial ? 'TUTORIAL BOARD CANNOT BE REFRESHED' : `BOARD REFRESH COOLING // ${Math.ceil(result.remaining / 1000)} SEC`); }
-            else if (action === 'abandon' && ns.Contracts.abandon(state)) { game.save(); this.renderPanel(game); }
-            else if (action === 'dismiss-debrief') { state.progression.pendingDebrief = null; game.save(); this.renderPanel(game); }
-            else if (action === 'buy-hull') { const hull = HULLS[id]; if (!ns.Wallet.canAfford(state, hull?.cost || {})) this.notifyShortfall(game, hull?.cost || {}); else if (ns.Progression.buyHull(state, id, station)) { game.save(); this.renderPanel(game); game.notify(`${hull.name.toUpperCase()} // HULL ACQUIRED`); } }
-            else if (action === 'switch-hull') { const result = ns.Progression.switchHull(state, id); if (result.ok) { game.save(); this.renderPanel(game); game.notify(`${HULLS[id].name.toUpperCase()} // ACTIVE HULL`); } else game.notify(`HULL SWITCH BLOCKED // ${result.reason.toUpperCase()}`); }
-            else if (action === 'buy-cargo') { const cost = { aetherium: ns.Economy.price(state, station, id, 'buy') }; if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Economy.trade(state, station, id, 1)) { game.save(); this.renderPanel(game); } }
-            else if (action === 'sell-cargo' && ns.Economy.trade(state, station, id, -1)) { game.save(); this.renderPanel(game); }
-            else if (action === 'buy-module') { const cost = MODULES[id]?.cost || {}; if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Economy.buyModule(state, id, station)) { game.save(); this.renderPanel(game); } }
-            else if (action === 'equip') {
-                if (!state.dockedAt) { game.notify('MODULE FIT REJECTED // DOCK AT A STATION'); return; }
-                const slot = button.dataset.slot, check = ns.Progression.checkEquipModule(state, slot, id);
-                if (!check.ok) {
-                    if (check.reason === 'mass') game.notify('MODULE FIT REJECTED // MASS LIMIT EXCEEDED');
-                    else if (check.reason === 'locked') game.notify('MODULE FIT REJECTED // SLOT NOT YET LICENSED');
-                    return;
-                }
-                if (ns.Progression.equipModule(state, slot, id)) { game.save(); this.renderPanel(game); }
-            }
-            else if (action === 'buy-trait' && ns.Progression.buyTrait(state, id)) { game.save(); this.renderPanel(game); }
-            else if (action === 'respec' && station?.major) { const cost = ns.Progression.respecCost(state); if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Progression.respec(state)) { game.save(); this.renderPanel(game); } }
-            else if (action === 'join-faction' && ns.Contracts.joinFaction(state, id)) { game.save(); this.renderPanel(game); }
-            else if (action === 'leave-faction' && ns.Contracts.leaveFaction(state)) { game.save(); this.renderPanel(game); }
-            else if (action === 'repair') { const cost = this.repairCost(state); if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (ns.Combat.repairAll(state, cost)) { if (state.progression.serviceDiscount?.stationId === state.dockedAt) state.progression.serviceDiscount.uses = Math.max(0, state.progression.serviceDiscount.uses - 1); game.save(); this.renderPanel(game); } }
-            else if (action === 'chassis') { const cost = this.chassisCost(state); if (!ns.Wallet.canAfford(state, cost)) this.notifyShortfall(game, cost); else if (state.ship.chassis.level < 5 && ns.Wallet.debit(state, cost)) { state.ship.chassis.level++; state.ship.chassis.integrity += 35; state.ship.chassis.massLimit += 10; state.ship.chassis.reactorBonus += 8; state.ship.chassis.cargoBonus += 3; state.ship.hull = ns.Progression.calculateShipStats(state).hull; game.save(); this.renderPanel(game); } }
-            else if (action === 'insurance') { const cost = { aetherium: 300 }; if (state.ship.insured) state.ship.insured = false; else if (!ns.Wallet.canAfford(state, cost)) return this.notifyShortfall(game, cost); else if (ns.Wallet.debit(state, cost)) state.ship.insured = true; game.save(); this.renderPanel(game); }
-            else if (action === 'toggle-shake') { state.settings.screenShake = !state.settings.screenShake; game.save(); this.renderPanel(game); }
-            else if (action === 'save') game.save('CAREER SAVED');
-            else if (action === 'reset-career') { ns.Save.remove(); location.reload(); }
-            else if (action === 'recover') { this.activeTab = 'station'; this.renderPanel(game); }
+            if (!button) return; const action = button.dataset.action, id = button.dataset.id, game = this.game, state = game?.state || null, station = state ? LANDMARKS.find(l => l.id === state.dockedAt) : null;
+            if (this.actions.dispatch(action, { ui: this, game, state, station, button, id, event })) return;
         }
     }
     ns.UI = UI;

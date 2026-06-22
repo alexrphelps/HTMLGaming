@@ -389,3 +389,15 @@ These are poor directions unless the game is intentionally re-scoped:
 - collapsing the three-resource economy back into one number
 - moving core progression into faction allegiance so hard that build freedom breaks
 - bypassing unlocks by sprinkling one-off UI exceptions
+# Extending Frontier Wayfarer
+
+Frontier Wayfarer keeps its dependency-free browser-script boot, but content is exposed through `MiniInvadersV2.Registry`. Add definitions after `registry.js` has loaded and before `main.js` validates the catalog.
+
+- Regions may be any axis-aligned rectangle. Register a `region` with `x`, `y`, `w`, `h`, faction, backdrop, and danger; world bounds are derived from the supplied region set.
+- Landmarks reference a registered region ID. World objects and events provide eligibility data and may name a registered handler through `handlerId`.
+- Modules target a registered slot category. New concrete slots belong in the `slot` registry, where label, category, input, and UI group are declared once.
+- Abilities, world-object interactions, and world events use `Registry.registerHandler(kind, id, handler)` instead of adding branches to central dispatch functions.
+- Runtime services implement `update(game, dt)` and can be added to `RuntimePipeline`. Player mutations should be exposed as commands returning `{ ok, reason, changes }`.
+- UI actions belong in `ActionRouter`; persistent interface pieces implement `mount`, `render`, and `destroy` through `Components.Component`.
+
+Call `MiniInvadersV2.Registry.validate()` in tests for every content pack. It catches duplicate IDs, missing regions/factions/handlers, unsupported module slots, invalid bounds, and malformed costs.

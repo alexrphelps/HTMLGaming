@@ -9,6 +9,7 @@
             this.bullets = []; this.enemies = []; this.effects = []; this.time = 0; this.running = false; this.paused = false; this.last = 0; this.accumulator = 0;
             this.weaponCooldowns = { primary1: 0, primary2: 0 }; this.enemySpawnedFor = null; this.autosaveTimer = 0; this.uiTimer = 0; this.messageTimer = 0; this.encounterTimer = 18; this.collisionGuards = new Map(); this.impactShake = 0;
             this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false;
+            this.random = new ns.Runtime.SimulationRandom(1); this.runtime = new ns.Runtime.RuntimePipeline(ns.Runtime.defaultSystems()); this.entitySerial = 0;
             this.loop = this.loop.bind(this); this.onResize = () => this.renderer.resize(); window.addEventListener('resize', this.onResize);
         }
         newCareer() { ns.Save.remove(); this.useState(ns.State.createState()); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('WAYFARER ONLINE // FREE PILOT LICENSE ISSUED'); }
@@ -16,6 +17,7 @@
         useState(state) {
             if (!('customWaypoint' in state)) state.customWaypoint = null;
             this.state = state; this.world = new ns.World.WorldService(state.worldSeed, state.consumedEntityIds); this.region = this.world.update(state.ship.x, state.ship.y);
+            this.random = new ns.Runtime.SimulationRandom(state.worldSeed ^ 0x57a1f4); this.entitySerial = 0; this.runtime.init(this);
             this.camera.x = state.ship.x; this.camera.y = state.ship.y; this.camera.zoom = 1; this.lightSpeed = ns.LightSpeed.createState(); this.bullets = []; this.enemies = []; this.effects = []; this.collisionGuards.clear(); this.impactShake = 0; this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false;
             const stats = ns.Progression.calculateShipStats(state); state.ship.hull = clamp(state.ship.hull, 0, stats.hull); state.ship.shield = clamp(state.ship.shield, 0, stats.shield); state.ship.energy = clamp(state.ship.energy, 0, stats.reactor);
             if (state.dockedAt) { const station = LANDMARKS.find(l => l.id === state.dockedAt); if (station) ns.Economy.ensureMarket(state, station); }
@@ -67,21 +69,12 @@
                 const threat = ns.Encounters.onRegionEntered(this, this.region);
                 this.notify(threat ? `CAPITAL THREAT DETECTED // ${ns.Data.BOSSES[threat.bossType].name.toUpperCase()} // OPTIONAL CONTACT MARKED` : `ENTERING ${this.region.name.toUpperCase()}`);
             }
-            this.updateCustomWaypoint();
+            this.runtime.update(this, dt);
             this.camera.zoom = travel.zoom; this.camera.x += (this.state.ship.x - this.camera.x) * Math.min(1, dt * (ns.LightSpeed.isShifted(this) ? 12 : 5)); this.camera.y += (this.state.ship.y - this.camera.y) * Math.min(1, dt * (ns.LightSpeed.isShifted(this) ? 12 : 5));
-            if (this.autosaveTimer >= 120 && this.enemies.length === 0) { this.save('AUTOSAVE COMPLETE'); this.autosaveTimer = 0; }
-            this.encounterTimer -= dt;
-            if (travel.phase === 'idle' && this.encounterTimer <= 0 && this.enemies.length === 0 && !this.state.dockedAt && Math.random() < .18 + this.region.danger * .09) {
-                const a = Math.random() * Math.PI * 2, center = { x: this.state.ship.x + Math.cos(a) * 900, y: this.state.ship.y + Math.sin(a) * 900 }, owner = ['concord', 'corsairs'].includes(this.region.faction) && Math.random() < .45 ? this.region.faction : 'bandits';
-                this.spawnEnemies(Math.min(4, 1 + Math.ceil(this.region.danger / 2)), center, owner === 'bandits' ? null : owner);
-                if (owner !== 'bandits' && ns.Expansion.patrolStatus(this.state, owner) === 'FRIENDLY') this.spawnEnemies(2, { x: center.x + 180, y: center.y + 100 });
-                this.notify(owner === 'bandits' || ns.Expansion.patrolStatus(this.state, owner) === 'HOSTILE' ? 'UNSCHEDULED CONTACTS // WEAPONS HOT' : `${owner.toUpperCase()} PATROL // TRANSPONDER ACKNOWLEDGED`);
-            }
-            if (this.encounterTimer <= 0) this.encounterTimer = 24 + Math.random() * 18;
-            if (this.uiTimer >= .2) { this.ui.renderContext(this); this.uiTimer = 0; }
+            if (this.uiTimer >= .2) this.uiTimer = 0;
         }
         setCustomWaypoint(point) {
-            const bounds = ns.World.WORLD_BOUNDS;
+            const bounds = this.world?.config?.bounds || ns.World.WORLD_BOUNDS;
             this.state.customWaypoint = { x: clamp(point.x, bounds.minX, bounds.maxX), y: clamp(point.y, bounds.minY, bounds.maxY) };
             this.save(); this.notify('CUSTOM WAYPOINT SET'); return this.state.customWaypoint;
         }
@@ -182,6 +175,7 @@
         }
         updateEffects(dt) { this.effects.forEach(effect => { effect.x += effect.vx * dt; effect.y += effect.vy * dt; effect.life -= dt; }); this.effects = this.effects.filter(effect => effect.life > 0); this.impactShake = Math.max(0, this.impactShake - dt * 24); }
         spawnEnemies(count, center, faction, role, archetype) { return ns.Encounters.spawn(this, count, center, faction, role, archetype); }
+        nextEntityId(prefix) { this.entitySerial++; return `${prefix}:${this.state.worldSeed}:${this.entitySerial}`; }
         updateEnemies(dt) { ns.Encounters.update(this, dt); }
         onPlayerHitEnemy(enemy, hit) { ns.Encounters.playerHit(this, enemy, hit); }
         onEnemyKilled(enemy, byPlayer) { if (enemy?.rewarded) return; if (enemy) enemy.rewarded = true; const playerKill = byPlayer !== false, reward = ns.Encounters.killed(this, enemy, playerKill); if (!playerKill) return; this.state.stats.kills++; ns.State.addExperience(this.state, reward.xp); ns.Contracts.recordProgress(this.state, 'kill', 1, enemy); ns.Encounters.completeRoaming(this, enemy); ns.Progression.updateAchievements(this.state); ns.Wallet.credit(this.state, { aetherium: reward.aetherium, helionite: reward.helionite }); }
@@ -268,12 +262,17 @@
             this.notify(`STATION CHARTED // ${discovered[0].name.toUpperCase()}`);
         }
         interact() {
-            const s = this.state.ship, contact = ns.Contracts.contactsFor(this.state.contracts.active).filter(item => distance(item, s) <= 190).sort((a, b) => distance(a, s) - distance(b, s))[0];
-            if (contact && distance(contact, s) <= 190) return this.startInteraction(contact, 'contract');
-            const nearby = this.world.nearbyEntities(s.x, s.y, 190).sort((a, b) => distance(a, s) - distance(b, s))[0];
-            if (!nearby) { this.notify('NO INTERACTION IN RANGE'); return; }
-            if (nearby.kind === 'station') return this.dock(nearby);
-            if (['signal', 'salvage', 'anomaly', 'worldObject'].includes(nearby.kind)) return this.startInteraction(nearby, 'world');
+            const available = this.availableInteraction(); if (!available) { this.notify('NO INTERACTION IN RANGE'); return; }
+            if (available.target.kind === 'station') return this.dock(available.target);
+            return this.startInteraction(available.target, available.source);
+        }
+        availableInteraction() {
+            if (!this.state || this.state.dockedAt || ns.LightSpeed.isTraveling(this)) return null;
+            const ship = this.state.ship, contact = ns.Contracts.contactsFor(this.state.contracts.active).filter(item => distance(item, ship) <= 190).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
+            if (contact) return { target: contact, source: 'contract', verb: 'CONTRACT' };
+            const target = this.world.nearbyEntities(ship.x, ship.y, 190).filter(entity => entity.kind === 'station' || ['signal', 'salvage', 'anomaly', 'worldObject'].includes(entity.kind)).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
+            if (!target) return null;
+            return { target, source: 'world', verb: target.kind === 'station' ? 'DOCK' : 'INTERACT' };
         }
         dock(station) {
             const rep = this.state.reputations[station.faction]; if (rep <= -50) { this.notify('DOCKING DENIED // HOSTILE STANDING'); return false; }
@@ -289,7 +288,7 @@
         onDefeat() { const result = ns.Combat.defeatConsequences(this.state, this.world); this.lightSpeed = ns.LightSpeed.createState(); this.camera.zoom = 1; this.enemies = []; this.bullets = []; this.paused = true; this.save(); this.ui.openDefeat(this, result); }
         save(message) { ns.Save.save(this.state); if (message) this.notify(message); }
         notify(message) { this.ui.showMessage(message); this.messageTimer = 3; }
-        destroy() { this.running = false; this.input.destroy(); window.removeEventListener('resize', this.onResize); }
+        destroy() { this.running = false; this.runtime.destroy(this); this.input.destroy(); this.ui.destroy?.(); window.removeEventListener('resize', this.onResize); }
     }
     ns.Game = Game;
 })(window.MiniInvadersV2);

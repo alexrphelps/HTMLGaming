@@ -52,8 +52,8 @@
         ship.x += ship.vx * dt; ship.y += ship.vy * dt;
         ensure(game).distance += speed * dt; game.state.stats.distance += speed * dt;
     }
-    function distanceToBoundary(ship) {
-        const b = ns.World.WORLD_BOUNDS, dx = Math.cos(ship.angle), dy = Math.sin(ship.angle), distances = [];
+    function distanceToBoundary(ship, game) {
+        const b = game?.world?.config?.bounds || ns.World.WORLD_BOUNDS, dx = Math.cos(ship.angle), dy = Math.sin(ship.angle), distances = [];
         if (dx > .0001) distances.push((b.maxX - ship.x) / dx); else if (dx < -.0001) distances.push((b.minX - ship.x) / dx);
         if (dy > .0001) distances.push((b.maxY - ship.y) / dy); else if (dy < -.0001) distances.push((b.minY - ship.y) / dy);
         return Math.min(...distances.filter(value => value >= 0));
@@ -71,7 +71,7 @@
         move(game, CONFIG.cruiseSpeed, 0, false); game.notify('LIGHT SPEED // VECTOR CONTROL ONLINE');
     }
     function finish(game) {
-        const travel = ensure(game), ship = game.state.ship, bounds = ns.World.WORLD_BOUNDS;
+        const travel = ensure(game), ship = game.state.ship, bounds = game.world?.config?.bounds || ns.World.WORLD_BOUNDS;
         ship.x = ns.MathUtil.clamp(ship.x, bounds.minX + CONFIG.boundaryInset, bounds.maxX - CONFIG.boundaryInset);
         ship.y = ns.MathUtil.clamp(ship.y, bounds.minY + CONFIG.boundaryInset, bounds.maxY - CONFIG.boundaryInset);
         ship.vx = Math.cos(ship.angle) * 340; ship.vy = Math.sin(ship.angle) * 340;
@@ -101,7 +101,7 @@
             ship.energy = Math.max(0, ship.energy - CONFIG.energyPerSecond * dt); ship.heat = Math.min(100, ship.heat + CONFIG.heatPerSecond * dt);
             move(game, CONFIG.cruiseSpeed, dt, true); travel.zoom = .68;
             if (ship.energy <= 0 || ship.heat >= 100) beginDeceleration(game, true, 'DRIVE RESERVES EXHAUSTED // FORCED REMATERIALIZATION');
-            else if (distanceToBoundary(ship) <= CONFIG.boundaryLookahead) beginDeceleration(game, true);
+            else if (distanceToBoundary(ship, game) <= CONFIG.boundaryLookahead) beginDeceleration(game, true);
             return;
         }
         if (travel.phase === 'decelerating') {

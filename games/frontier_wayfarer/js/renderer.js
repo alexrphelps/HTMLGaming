@@ -171,7 +171,7 @@
         }
         drawNebula(game) {
             const c = this.ctx, exposure = ns.World.boundaryExposure(game.state.ship.x, game.state.ship.y); if (exposure.proximity <= 0) return;
-            const bounds = ns.World.WORLD_BOUNDS, edges = [
+            const bounds = game.world?.config?.bounds || ns.World.WORLD_BOUNDS, edges = [
                 { axis: 'x', side: -1, screen: this.w / 2 + bounds.minX - game.camera.x }, { axis: 'x', side: 1, screen: this.w / 2 + bounds.maxX - game.camera.x },
                 { axis: 'y', side: -1, screen: this.h / 2 + bounds.minY - game.camera.y }, { axis: 'y', side: 1, screen: this.h / 2 + bounds.maxY - game.camera.y }
             ];
@@ -199,12 +199,12 @@
             c.restore();
         }
         drawRadar(game) {
-            const c = this.ctx, x = this.w - 92, y = this.h - 92, radius = 70, range = 1300 * game.state.settings.radarScale;
+            const c = this.ctx, radius = Math.min(122, this.w * .12, this.h * .17), edge = Math.max(18, radius * .31), x = this.w - radius - edge, y = this.h - radius - edge, range = 1300 * game.state.settings.radarScale, scale = radius / 70;
             c.save(); c.translate(x, y); c.fillStyle = '#02090dcc'; c.strokeStyle = '#55f0ad55'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, radius, 0, Math.PI * 2); c.fill(); c.stroke();
             c.beginPath(); c.moveTo(-radius, 0); c.lineTo(radius, 0); c.moveTo(0, -radius); c.lineTo(0, radius); c.stroke();
-            const drawBlip = (e, color, size) => { const dx = (e.x - game.state.ship.x) / range * radius, dy = (e.y - game.state.ship.y) / range * radius; if (Math.hypot(dx, dy) > radius) return; c.fillStyle = color; c.fillRect(dx - size / 2, dy - size / 2, size, size); };
+            const drawBlip = (e, color, size) => { size *= scale; const dx = (e.x - game.state.ship.x) / range * radius, dy = (e.y - game.state.ship.y) / range * radius; if (Math.hypot(dx, dy) > radius) return; c.fillStyle = color; c.fillRect(dx - size / 2, dy - size / 2, size, size); };
             game.world.nearbyEntities(game.state.ship.x, game.state.ship.y, range).forEach(e => { const definition = e.kind === 'worldObject' ? ns.Data.WORLD_OBJECT_TYPES[e.typeId] : e.kind === 'worldScenario' ? ns.Data.WORLD_SCENARIOS[e.typeId] : null; drawBlip(e, e.kind === 'station' ? ns.Data.FACTIONS[e.faction].color : e.kind === 'asteroid' ? '#56707d' : definition?.color || '#ce75ff', e.kind === 'station' ? 5 : e.kind === 'worldScenario' ? 4 : 3); });
-            game.enemies.forEach(e => drawBlip(e, '#ff4f91', 4)); const convoy = game.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0) drawBlip(convoy, '#55d7ff', 5); c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 3, 0, Math.PI * 2); c.fill(); c.restore();
+            game.enemies.forEach(e => drawBlip(e, '#ff4f91', 4)); const convoy = game.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0) drawBlip(convoy, '#55d7ff', 5); c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 3 * scale, 0, Math.PI * 2); c.fill(); c.restore();
         }
         drawPhaseOverlay(game) {
             const c = this.ctx, travel = ns.LightSpeed.ensure(game), ratio = Math.min(1, travel.timer / ns.LightSpeed.CONFIG.chargeDuration);
@@ -256,6 +256,14 @@
             c.save(); c.textAlign = 'center'; c.font = '9px "Courier New"'; c.fillStyle = '#d7e9ed'; c.fillText(`LINK // ${String(cast.name).toUpperCase()} // ${remaining.toFixed(1)}S`, x, y);
             c.fillStyle = '#142a31dd'; c.fillRect(x - width / 2, y + 7, width, 5); c.fillStyle = '#ffbd59'; c.fillRect(x - width / 2, y + 7, width * ratio, 5); c.strokeStyle = '#8d7441'; c.strokeRect(x - width / 2, y + 7, width, 5); c.restore();
         }
+        drawInteractionPrompt(game) {
+            if (game.interactionCast) return;
+            const available = game.availableInteraction?.(); if (!available) return;
+            const c = this.ctx, zoom = game.camera.zoom || 1, x = this.w / 2 + (game.state.ship.x - game.camera.x) * zoom, y = this.h / 2 + (game.state.ship.y - game.camera.y) * zoom + 48;
+            const name = String(available.target.name || available.target.kind || 'OBJECT').toUpperCase(), text = `F // ${available.verb} ${name}`;
+            c.save(); c.font = 'bold 9px "Courier New"'; c.textAlign = 'center'; const width = Math.min(240, Math.max(92, c.measureText ? c.measureText(text).width + 22 : text.length * 7));
+            c.fillStyle = '#041016dd'; c.fillRect(x - width / 2, y - 11, width, 18); c.strokeStyle = '#55f0ad88'; c.strokeRect(x - width / 2, y - 11, width, 18); c.fillStyle = '#55f0ad'; c.fillText(text, x, y + 1); c.restore();
+        }
         drawLightSpeed(game) {
             const c = this.ctx, travel = ns.LightSpeed.ensure(game), shake = game.state.settings.screenShake ? 2.2 : 0, cx = this.w / 2, cy = this.h / 2, decel = travel.phase === 'decelerating' ? Math.max(0, 1 - travel.timer / ns.LightSpeed.CONFIG.decelerationDuration) : 1;
             c.save(); c.translate(Math.sin(game.time * 73) * shake, Math.cos(game.time * 61) * shake);
@@ -284,7 +292,7 @@
             this.clear(game.region, game.camera); const c = this.ctx, zoom = game.camera.zoom || 1;
             c.save(); c.translate(this.w / 2, this.h / 2); c.scale(zoom, zoom); c.translate(-this.w / 2, -this.h / 2); this.drawWorld(game); this.drawNebula(game); this.drawContractContact(game); this.drawShip(game); c.restore();
             if (ns.LightSpeed.ensure(game).phase === 'charging') this.drawPhaseOverlay(game);
-            this.drawInteractionCast(game); this.drawRadar(game); this.drawContractWaypoint(game); this.drawCustomWaypoint(game);
+            this.drawInteractionPrompt(game); this.drawInteractionCast(game); this.drawRadar(game); this.drawContractWaypoint(game); this.drawCustomWaypoint(game);
         }
     }
     ns.Renderer = Renderer;
