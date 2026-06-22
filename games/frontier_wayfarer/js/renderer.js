@@ -217,16 +217,75 @@
             const zoom = game.camera.zoom || 1, cx = this.w / 2, cy = this.h / 2;
             const dx = (target.x - game.camera.x) * zoom, dy = (target.y - game.camera.y) * zoom;
             const distanceToTarget = Math.hypot(target.x - game.state.ship.x, target.y - game.state.ship.y);
-            const sideInset = Math.min(52, this.w * .12), topInset = Math.min(116, this.h * .28), bottomInset = Math.min(174, this.h * .28);
-            const bounds = { left: sideInset, right: this.w - sideInset, top: topInset, bottom: this.h - bottomInset };
-            const projected = { x: cx + dx, y: cy + dy };
+
+            // Option 2: at least 10% inset, but can move outward up to 20% to avoid HUD (user adjusted to .1/.2)
+            const MIN_PCT = 0.10, MAX_PCT = 0.20;
+            let leftInset = Math.floor(this.w * MIN_PCT), rightInset = Math.floor(this.w * MIN_PCT), topInset = Math.floor(this.h * MIN_PCT), bottomInset = Math.floor(this.h * MIN_PCT);
+
+            // Gather overlay rectangles (canvas-local coords) so we can both expand insets and check overlaps
+            let overlayRects = [];
+            try {
+                if (typeof document !== 'undefined' && this.canvas && this.canvas.getBoundingClientRect) {
+                    const canvasRect = this.canvas.getBoundingClientRect();
+                    const selectors = ['.top-hud', '.systems-hud', '.ability-hud', '.flight-hud-bottom', '.light-speed-map', '.cockpit-frame', '.cockpit-panel', '.start-screen'];
+                    overlayRects = selectors.map(sel => document.querySelector(sel)).filter(Boolean).map(el => el.getBoundingClientRect()).map(r => ({
+                        left: Math.max(0, r.left - canvasRect.left),
+                        right: Math.min(canvasRect.width, r.right - canvasRect.left),
+                        top: Math.max(0, r.top - canvasRect.top),
+                        bottom: Math.min(canvasRect.height, r.bottom - canvasRect.top)
+                    }));
+                    overlayRects.forEach(r => {
+                        const relLeft = r.left, relRight = r.right, relTop = r.top, relBottom = r.bottom;
+                        if (relRight > 0 && relLeft < canvasRect.width * 0.6) leftInset = Math.max(leftInset, Math.min(relRight, Math.floor(this.w * MAX_PCT)));
+                        if (relLeft < canvasRect.width && relRight > canvasRect.width * 0.4) rightInset = Math.max(rightInset, Math.min(this.w - relLeft, Math.floor(this.w * MAX_PCT)));
+                        if (relBottom > 0 && relTop < canvasRect.height * 0.6) topInset = Math.max(topInset, Math.min(relBottom, Math.floor(this.h * MAX_PCT)));
+                        if (relTop < canvasRect.height && relBottom > canvasRect.height * 0.4) bottomInset = Math.max(bottomInset, Math.min(this.h - relTop, Math.floor(this.h * MAX_PCT)));
+                    });
+                }
+            } catch (e) { /* ignore DOM issues */ }
+
+            leftInset = Math.min(leftInset, Math.floor(this.w * MAX_PCT));
+            rightInset = Math.min(rightInset, Math.floor(this.w * MAX_PCT));
+            topInset = Math.min(topInset, Math.floor(this.h * MAX_PCT));
+            bottomInset = Math.min(bottomInset, Math.floor(this.h * MAX_PCT));
+
+            const bounds = { left: leftInset, right: this.w - rightInset, top: topInset, bottom: this.h - bottomInset };
+
+            // Projected position without clamping to inner box
+            const projectedFull = { x: cx + dx, y: cy + dy };
+            const inFullViewport = !ns.LightSpeed.isShifted(game) && projectedFull.x >= 0 && projectedFull.x <= this.w && projectedFull.y >= 0 && projectedFull.y <= this.h;
+
+            // If the target is visible in the full viewport and not overlapped by HUD, show the on-screen waypoint (hide the arrow)
+            if (inFullViewport) {
+                try {
+                    const overlapped = overlayRects.some(r => projectedFull.x >= r.left && projectedFull.x <= r.right && projectedFull.y >= r.top && projectedFull.y <= r.bottom);
+                    if (!overlapped) return { x: projectedFull.x, y: projectedFull.y, angle: Math.atan2(dy, dx), onScreen: true, distance: Math.round(distanceToTarget), label: target.label || ns.Contracts.destinationName(contract), bounds };
+                } catch (e) {
+                    // if overlayRects check fails for any reason, fall back to inner-box behaviour
+                }
+            }
+
+            // Otherwise compute intersection with the inner bounds and draw the off-screen arrow there
+            const projected = projectedFull;
             const onScreen = !ns.LightSpeed.isShifted(game) && projected.x >= bounds.left && projected.x <= bounds.right && projected.y >= bounds.top && projected.y <= bounds.bottom;
             let x = projected.x, y = projected.y;
             if (!onScreen) {
-                const scaleX = dx > 0 ? (bounds.right - cx) / Math.abs(dx || 1) : (cx - bounds.left) / Math.abs(dx || 1);
-                const scaleY = dy > 0 ? (bounds.bottom - cy) / Math.abs(dy || 1) : (cy - bounds.top) / Math.abs(dy || 1);
-                const scale = Math.max(0, Math.min(scaleX, scaleY)); x = cx + dx * scale; y = cy + dy * scale;
-                if (x > this.w - 170 && y > this.h - 185) y = Math.max(bounds.top, this.h - 185);
+                const eps = 1e-6;
+                const candidates = [];
+                if (Math.abs(dx) > eps) {
+                    let t = (bounds.left - cx) / dx; let yCand = cy + dy * t; if (t >= 0 && yCand >= bounds.top && yCand <= bounds.bottom) candidates.push({ t, x: bounds.left, y: yCand });
+                    t = (bounds.right - cx) / dx; yCand = cy + dy * t; if (t >= 0 && yCand >= bounds.top && yCand <= bounds.bottom) candidates.push({ t, x: bounds.right, y: yCand });
+                }
+                if (Math.abs(dy) > eps) {
+                    let t = (bounds.top - cy) / dy; let xCand = cx + dx * t; if (t >= 0 && xCand >= bounds.left && xCand <= bounds.right) candidates.push({ t, x: xCand, y: bounds.top });
+                    t = (bounds.bottom - cy) / dy; xCand = cx + dx * t; if (t >= 0 && xCand >= bounds.left && xCand <= bounds.right) candidates.push({ t, x: xCand, y: bounds.bottom });
+                }
+                if (candidates.length) { candidates.sort((a, b) => a.t - b.t); x = candidates[0].x; y = candidates[0].y; }
+                else {
+                    const scaleX = dx > 0 ? (bounds.right - cx) / Math.abs(dx || 1) : (cx - bounds.left) / Math.abs(dx || 1);
+                    const scaleY = dy > 0 ? (bounds.bottom - cy) / Math.abs(dy || 1) : (cy - bounds.top) / Math.abs(dy || 1);
+                    const scale = Math.max(0, Math.min(scaleX, scaleY)); x = cx + dx * scale; y = cy + dy * scale;
+                }
             }
             return { x, y, angle: Math.atan2(dy, dx), onScreen, distance: Math.round(distanceToTarget), label: target.label || ns.Contracts.destinationName(contract), bounds };
         }
