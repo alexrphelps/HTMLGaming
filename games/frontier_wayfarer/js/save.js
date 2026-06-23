@@ -18,11 +18,17 @@
             stages.forEach(stage => {
                 const destination = ns.Data.LANDMARKS.find(item => item.id === stage.destination);
                 if (stage.event === 'dock' && destination) stage.target = { x: destination.x, y: destination.y };
+                if (Array.isArray(stage.choices)) stage.choices = stage.choices.map(choice => { const station = ns.Data.LANDMARKS.find(item => item.id === choice.destination); return Object.assign({}, choice, station ? { faction: station.faction, name: station.name, target: { x: station.x, y: station.y } } : {}); });
                 if (stage.search) { if (!stage.search.revealed) stage.search.radius = 1800; stage.target = { x: (stage.search.revealed ? stage.search.exact : stage.search.center).x, y: (stage.search.revealed ? stage.search.exact : stage.search.center).y }; }
-                if (stage.escort) { if (destination) stage.escort.end = { x: destination.x, y: destination.y }; const tracked = stage.escort.convoy || stage.escort.start; if (tracked) stage.target = { x: tracked.x, y: tracked.y }; }
+                if (stage.escort) { if (destination) { stage.escort.end = { x: destination.x, y: destination.y }; stage.escort.endRegion = destination.region; stage.escort.endSector = ns.Data.REGIONS.find(region => region.id === destination.region)?.grid || null; } const tracked = stage.escort.convoy || stage.escort.start; if (tracked) stage.target = { x: tracked.x, y: tracked.y }; }
             });
             if (ns.Contracts?.syncContract) ns.Contracts.syncContract(contract);
         });
+    }
+    function normalizeFactionState(data) {
+        data.reputations = data.reputations && typeof data.reputations === 'object' ? data.reputations : {};
+        data.quests = data.quests && typeof data.quests === 'object' ? data.quests : {};
+        Object.keys(ns.Data.FACTIONS).forEach(id => { data.reputations[id] = ns.MathUtil.clamp(Number(data.reputations[id]) || 0, -100, 100); data.quests[id] = Math.max(0, Math.round(Number(data.quests[id]) || 0)); });
     }
     function serialize(state) {
         const clean = JSON.parse(JSON.stringify(state)); delete clean.ship?.lightSpeed; clean.lastSaveAt = Date.now(); return JSON.stringify(clean);
@@ -145,12 +151,35 @@
             ns.Wallet.ensure(data); delete data.ship.lightSpeed; ns.Galaxies.ensureState(data);
             data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
             data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            normalizeFactionState(data); refreshContractTargets(data); data.schemaVersion = 9;
+        }
+        if (data.schemaVersion === 9) {
+            ns.Wallet.ensure(data); delete data.ship.lightSpeed; ns.Galaxies.ensureState(data); normalizeFactionState(data);
+            data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            const timer = data.contracts.active?.timer; if (timer) { timer.duration = Math.max(1, Number(timer.duration) || 1); timer.remaining = ns.MathUtil.clamp(Number(timer.remaining) || 0, 0, timer.duration); timer.started = Boolean(timer.started); timer.missed = Boolean(timer.missed); timer.hard = Boolean(timer.hard); }
+            ns.Objectives.ensure(data, true); data.schemaVersion = 10;
+        }
+        if (data.schemaVersion === 10) {
+            ns.Wallet.ensure(data); delete data.ship.lightSpeed; ns.Galaxies.ensureState(data); normalizeFactionState(data); ns.Objectives.ensure(data);
+            data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            const timer = data.contracts.active?.timer; if (timer) { timer.duration = Math.max(1, Number(timer.duration) || 1); timer.remaining = ns.MathUtil.clamp(Number(timer.remaining) || 0, 0, timer.duration); timer.started = Boolean(timer.started); timer.missed = Boolean(timer.missed); timer.hard = Boolean(timer.hard); }
+            refreshContractTargets(data); data.schemaVersion = 11;
+        }
+        if (data.schemaVersion === 11) {
+            ns.Wallet.ensure(data); delete data.ship.lightSpeed; ns.Galaxies.ensureState(data); normalizeFactionState(data); ns.Objectives.ensure(data);
+            data.contracts = Object.assign({ board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 }, data.contracts);
+            data.contracts.board = data.contracts.board.filter(contract => contract?.status !== 'complete').map(contract => { if (contract.status === 'active' || contract.status === 'failed') contract.status = 'offered'; return contract; });
+            data.ship.chassis = Object.assign({ level: 1, integrity: 140, reactorBonus: 0, cargoBonus: 0, massLimit: 52 }, data.ship.chassis);
+            data.ship.chassis.level = ns.MathUtil.clamp(Math.round(Number(data.ship.chassis.level) || 1), 1, 7);
+            const timer = data.contracts.active?.timer; if (timer) { timer.duration = Math.max(1, Number(timer.duration) || 1); timer.remaining = ns.MathUtil.clamp(Number(timer.remaining) || 0, 0, timer.duration); timer.started = Boolean(timer.started); timer.missed = Boolean(timer.missed); timer.hard = Boolean(timer.hard); }
             refreshContractTargets(data); return data;
         }
         return null;
     }
     function validate(data) {
-        return Boolean(data && data.schemaVersion === 8 && data.pilot?.wallet && data.ship && data.reputations && ns.Data.GALAXIES.some(galaxy => galaxy.id === data.galaxyId) && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
+        return Boolean(data && data.schemaVersion === 11 && data.pilot?.wallet && data.ship && data.reputations && data.mapObjectives && ns.Data.GALAXIES.some(galaxy => galaxy.id === data.galaxyId) && Number.isFinite(data.ship.x) && Number.isFinite(data.ship.y));
     }
     function save(state, storage) {
         try { (storage || localStorage).setItem(ns.SAVE_KEY, serialize(state)); state.lastSaveAt = Date.now(); return true; }

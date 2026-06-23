@@ -29,10 +29,11 @@
                 </aside>
                 <div id="abilityHud" class="ability-hud"></div>
             </div>
-            <div class="cockpit-telemetry telemetry-right"><span>M // MAP</span><span>T // TRAITS</span><span>C // CONTRACTS</span><div id="lightDriveHud" class="light-drive-hud locked" hidden aria-hidden="true"><span>R</span><strong>LIGHT DRIVE</strong><small>LICENSE LOCKED</small></div></div>
+            <div class="cockpit-telemetry telemetry-right"><span>M // MAP</span><span>T // TRAITS</span><span>C // CONTRACTS</span><div id="lightDriveHud" class="light-drive-hud locked" hidden aria-hidden="true"><span>R</span><strong>LIGHT SPEED</strong><small>LICENSE LOCKED</small></div></div>
         </div>
         <div id="lightSpeedMap" class="light-speed-map" aria-label="Light Speed galactic position"></div>
         <div id="message" class="system-message" role="status"></div>
+        <div id="stargateTransition" class="stargate-transition" aria-hidden="true"><div class="stargate-spiral clockwise"></div><div class="stargate-spiral counterclockwise"></div><strong>STATION STARGATE // TRANSLATION</strong></div>
 
         <section id="cockpitPanel" class="cockpit-panel" aria-label="Cockpit systems">
             <header class="panel-header"><div><span>WAYFARER // COCKPIT OS</span><div class="panel-title-row"><h1 id="panelTitle">STATION</h1><button id="headerUndock" class="header-undock primary" data-action="undock"><span aria-hidden="true">▲</span> UNDOCK</button></div></div><div id="menuWallet" class="wallet-strip"></div><button data-action="close" aria-label="Close panel">ESC</button></header>
@@ -53,12 +54,15 @@
     <script src="js/data.js"></script>
     <script src="js/math.js"></script>
     <script src="js/expansion.js"></script>
+    <script src="js/geometry.js"></script>
     <script src="js/galaxies.js"></script>
     <script src="js/registry.js"></script>
     <script src="js/state.js"></script>
     <script src="js/wallet.js"></script>
+    <script src="js/objectives.js"></script>
     <script src="js/unlocks.js"></script>
     <script src="js/progression.js"></script>
+    <script src="js/interactions.js"></script>
     <script src="js/world.js"></script>
     <script src="js/economy.js"></script>
     <script src="js/contracts.js"></script>

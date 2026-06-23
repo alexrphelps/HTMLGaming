@@ -10,8 +10,8 @@ const root = path.resolve(__dirname, '../..');
 const gameDir = path.join(root, 'games/frontier_wayfarer');
 const configPath = path.join(root, 'games.config.js');
 const expectedScripts = [
-  'js/namespace.js', 'js/data.js', 'js/math.js', 'js/expansion.js', 'js/galaxies.js', 'js/registry.js', 'js/state.js', 'js/wallet.js',
-  'js/unlocks.js', 'js/progression.js', 'js/world.js', 'js/economy.js', 'js/contracts.js',
+  'js/namespace.js', 'js/data.js', 'js/math.js', 'js/expansion.js', 'js/geometry.js', 'js/galaxies.js', 'js/registry.js', 'js/state.js', 'js/wallet.js', 'js/objectives.js',
+  'js/unlocks.js', 'js/progression.js', 'js/interactions.js', 'js/world.js', 'js/economy.js', 'js/contracts.js',
   'js/save.js', 'js/combat.js', 'js/abilities.js', 'js/weapons.js', 'js/encounters.js', 'js/worldEvents.js', 'js/lightSpeed.js', 'js/runtime.js', 'js/commands.js', 'js/input.js', 'js/renderer.js',
   'js/game.js', 'js/components.js', 'js/ui.js', 'js/main.js'
 ];
@@ -89,20 +89,20 @@ describe('Frontier Wayfarer integration contract', () => {
     expect(dom.window.document.getElementById('worldWallet').textContent).toContain('AE');
     expect(dom.window.document.getElementById('menuWallet').textContent).toContain('SS');
     expect(dom.window.document.getElementById('abilityHud').children).toHaveLength(4);
-    expect(dom.window.document.getElementById('lightDriveHud').textContent).toContain('ASTERION');
+    expect(dom.window.document.getElementById('lightDriveHud').textContent).toContain('LIGHT SPEED');
     expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(true);
     expect(() => dom.window.miniInvadersV2Game.renderer.render(dom.window.miniInvadersV2Game)).not.toThrow();
     dom.window.miniInvadersV2Game.lightSpeed.phase = 'cruising';
     expect(() => dom.window.miniInvadersV2Game.renderer.render(dom.window.miniInvadersV2Game)).not.toThrow();
     dom.window.miniInvadersV2Game.ui.updateHud(dom.window.miniInvadersV2Game);
     expect(dom.window.document.getElementById('lightSpeedMap').classList.contains('active')).toBe(true);
-    expect(dom.window.document.querySelectorAll('#lightSpeedMap .map-region')).toHaveLength(30);
+    expect(dom.window.document.querySelectorAll('#lightSpeedMap .map-region')).toHaveLength(dom.window.miniInvadersV2Game.world.config.regions.length);
     dom.window.miniInvadersV2Game.lightSpeed.phase = 'idle';
     dom.window.miniInvadersV2Game.ui.updateHud(dom.window.miniInvadersV2Game);
     expect(dom.window.document.getElementById('lightSpeedMap').classList.contains('active')).toBe(false);
     dom.window.miniInvadersV2Game.ui.openPanel(dom.window.miniInvadersV2Game, 'navigation');
     expect(dom.window.document.querySelector('.galaxy-map')).not.toBeNull();
-    expect(dom.window.document.querySelectorAll('.galaxy-map .map-region')).toHaveLength(30);
+    expect(dom.window.document.querySelectorAll('.galaxy-map .map-region')).toHaveLength(dom.window.miniInvadersV2Game.world.config.regions.length);
     expect(dom.window.document.querySelector('.map-hazard').textContent).toContain('SECTOR ENVELOPE');
     expect(dom.window.document.getElementById('headerUndock').hidden).toBe(false);
     expect(dom.window.document.querySelectorAll('[data-action="undock"]')).toHaveLength(1);
@@ -175,6 +175,43 @@ describe('Frontier Wayfarer integration contract', () => {
     dom.window.close();
   });
 
+  test('shows the blocked destination faction and station when a friendly issuer cannot dock there', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2;
+    game.newCareer();
+    game.state.progression.tutorialStep = 2;
+    game.state.reputations.concord = -50;
+    const concord = ns.Data.LANDMARKS.find(item => item.id === 'helion_bastion');
+    game.state.contracts.board = [{
+      id: 'access:ui',
+      type: 'haul',
+      issuer: 'independents',
+      name: 'Guild Relief Drop',
+      description: 'A Frontier Guilds contract routed into Concord space.',
+      reward: { aetherium: 100, sunshards: 0, helionite: 0 },
+      xp: 40,
+      risk: 2,
+      status: 'offered',
+      target: { x: concord.x, y: concord.y },
+      destination: concord.id,
+      stages: [{ id: 'access:ui:0', type: 'haul', event: 'dock', destination: concord.id, target: { x: concord.x, y: concord.y }, status: 'active', progress: 0, required: 1 }]
+    }];
+    game.ui.openPanel(game, 'contracts');
+    game.ui.focusedContractId = 'access:ui';
+    game.ui.renderPanel(game);
+    const dropdown = dom.window.document.querySelector('.contract-dropdown');
+    const stage = dropdown.querySelector('.contract-stage');
+    const warning = dropdown.querySelector('.contract-access-warning');
+    const accept = dropdown.querySelector('[data-action="accept-contract"]');
+    expect(stage.textContent).toContain('ACTIVE');
+    expect(stage.textContent).toContain('Helion Bastion');
+    expect(stage.getAttribute('style')).toContain(ns.Data.FACTIONS.concord.color);
+    expect(warning.textContent).toContain('DOCKING DENIED AT HELION BASTION');
+    expect(warning.textContent).toContain('CONCORD');
+    expect(accept.disabled).toBe(true);
+    expect(accept.textContent).toBe('HELION BASTION LOCKED');
+    dom.window.close();
+  });
+
   test('completes a derived tutorial contact at its assigned waypoint', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game;
     game.newCareer(); game.ui.openPanel(game, 'contracts'); dom.window.document.querySelector('[data-action="view-contract"]').click(); dom.window.document.querySelector('[data-action="accept-contract"]').click();
@@ -222,6 +259,16 @@ describe('Frontier Wayfarer integration contract', () => {
     game.interact(); expect(game.state.pilot.wallet.unbanked.aetherium).toBe(before + 35); expect(game.state.consumedEntityIds).toContain(salvage.id); dom.window.close();
   });
 
+  test('consumes authored beacons after one completed interaction', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, beacon = dom.window.MiniInvadersV2.Galaxies.landmarkById(game?.state || dom.window.MiniInvadersV2.State.createState(), 'cold_start_beacon');
+    game.newCareer(); game.undock(); const target = dom.window.MiniInvadersV2.Galaxies.landmarkById(game.state, 'cold_start_beacon');
+    game.state.ship.x = target.x; game.state.ship.y = target.y; game.world.update(target.x, target.y);
+    expect(game.interact()).toBe(true); game.updateInteraction(5);
+    expect(game.state.consumedEntityIds).toContain('cold_start_beacon'); expect(game.world.loadedEntities().some(entity => entity.id === 'cold_start_beacon')).toBe(false);
+    const restored = new dom.window.MiniInvadersV2.World.WorldService(dom.window.MiniInvadersV2.Galaxies.worldSeed(game.state), game.state.consumedEntityIds, dom.window.MiniInvadersV2.Galaxies.worldConfig(game.state)); restored.update(target.x, target.y);
+    expect(restored.loadedEntities().some(entity => entity.id === 'cold_start_beacon')).toBe(false); expect(beacon.id).toBe('cold_start_beacon'); dom.window.close();
+  });
+
   test('renders interaction prompts and cast progress beneath the ship only when relevant', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.undock(); game.world.chunks.forEach(chunk => { chunk.entities = chunk.entities.filter(entity => entity.kind === 'asteroid'); }); game.renderer.ctx.fillText = jest.fn();
     game.renderer.drawInteractionPrompt(game); expect(game.renderer.ctx.fillText).not.toHaveBeenCalled();
@@ -242,7 +289,7 @@ describe('Frontier Wayfarer integration contract', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, drawModel = jest.spyOn(dom.window.MiniInvadersV2.Renderer.prototype, 'drawShipModel'); game.newCareer(); game.ui.openPanel(game, 'ship');
     expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(true);
     expect(game.ui.panelBody.querySelectorAll('.ship-console > section')).toHaveLength(3); expect(game.ui.panelBody.querySelector('.ship-portrait svg')).toBeNull(); expect(game.ui.panelBody.querySelector('#shipPreviewCanvas')).not.toBeNull(); expect(drawModel).toHaveBeenCalledWith(game, expect.objectContaining({ rotation: 0, static: true }));
-    expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('ENGINE'); expect(game.ui.panelBody.querySelectorAll('.ship-area-hotspot')).toHaveLength(4); expect(game.ui.panelBody.querySelector('.mission-system-grid')).not.toBeNull(); expect(game.ui.panelBody.textContent).toContain('WEAPONS AND UTILITY');
+    expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('ENGINE'); expect(game.ui.panelBody.querySelectorAll('.ship-area-hotspot')).toHaveLength(4); expect(game.ui.panelBody.querySelector('.mission-system-grid')).not.toBeNull(); expect(game.ui.panelBody.textContent).toContain('WEAPONS AND ABILITIES'); expect(game.ui.panelBody.querySelectorAll('.mission-tabs button')).toHaveLength(2);
     game.state.ship.slots.engine = 'light_drive'; game.ui.updateHud(game); expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(false);
     game.ui.panelBody.querySelector('[data-action="select-ship-area"][data-id="cargo"]').click(); expect(game.ui.panelBody.querySelector('.core-focus h2').textContent).toBe('CARGO'); expect(game.ui.panelBody.querySelectorAll('.core-focus > .ship-system-card')).toHaveLength(1); expect(dom.window.document.getElementById('lightDriveHud').hidden).toBe(false);
     const css = read('css/style.css'); expect(css).toContain('.mission-system-grid { display: grid; grid-template-columns: repeat(2'); expect(css).toContain('.panel-body.ship-view { overflow: hidden;'); expect(css).toContain('.header-undock { min-width:'); drawModel.mockRestore(); dom.window.close();
@@ -252,6 +299,20 @@ describe('Frontier Wayfarer integration contract', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.ui.openPanel(game, 'navigation');
     expect(game.ui.panelBody.querySelectorAll('.map-region span')).toHaveLength(1); expect(game.ui.panelBody.querySelector('.map-player').dataset.tooltip).toBe('YOU'); expect([...game.ui.panelBody.querySelectorAll('.map-point')].some(point => point.dataset.tooltip === 'UNKNOWN')).toBe(true);
     const greenline = ns.Data.LANDMARKS.find(item => item.id === 'greenline_exchange'); game.state.ship.x = greenline.x; game.state.ship.y = greenline.y; game.ui.closePanel(); game.state.dockedAt = null; game.paused = false; game.chartNearbyStations(); expect(game.state.discoveries).toContain('greenline_exchange'); game.ui.openPanel(game, 'navigation'); expect([...game.ui.panelBody.querySelectorAll('.map-point')].some(point => point.dataset.tooltip.startsWith('Greenline Exchange //'))).toBe(true); dom.window.close();
+  });
+
+  test('renders locked-slot info, faction color cues, requested trade goods, and filtered owned modules', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer();
+    game.ui.openPanel(game, 'ship'); expect([...game.ui.panelBody.querySelectorAll('.slot-info')].some(button => button.title.includes('Unlock Shift'))).toBe(true);
+    game.ui.openPanel(game, 'navigation'); expect([...game.ui.panelBody.querySelectorAll('.map-region.unknown')].every(region => region.getAttribute('style').includes('#667179'))).toBe(true);
+    game.ui.openPanel(game, 'contracts'); expect(game.ui.panelBody.querySelector('.contract-card .faction-badge')).not.toBeNull();
+    game.state.progression.tutorialStep = 2; game.state.contracts.completed = 3; game.state.pilot.level = 6; game.state.visitedRegions.push('anomaly_rim'); game.state.pilot.wallet.banked = { aetherium: 10000, sunshards: 1000, helionite: 1000 }; game.ui.openPanel(game, 'trade');
+    expect(game.ui.panelBody.querySelector('.trade-header .faction-badge')).not.toBeNull(); expect(game.ui.panelBody.querySelector('.market-grid article.requested')).not.toBeNull();
+    const buy = game.ui.panelBody.querySelector('[data-action="buy-module"]'), moduleId = buy.dataset.id; buy.click();
+    expect(game.state.ship.ownedModules).toContain(moduleId); expect([...game.ui.panelBody.querySelectorAll('.module-offer')].some(offer => offer.textContent.includes('OWNED') && offer.textContent.includes(ns.Data.MODULES[moduleId].name))).toBe(true);
+    game.ui.openPanel(game, 'station'); game.ui.openPanel(game, 'trade');
+    expect([...game.ui.panelBody.querySelectorAll('.module-offer')].some(offer => offer.textContent.includes(ns.Data.MODULES[moduleId].name))).toBe(false);
+    dom.window.close();
   });
 });
 
@@ -319,27 +380,66 @@ describe('Frontier Wayfarer scalable extension seams', () => {
 });
 
 describe('Frontier Wayfarer world and progression', () => {
-  test('defines thirty regions, eight careers, two powers plus neutrals, and four complete trait disciplines', () => {
+  test('defines an authored 8x8 catalog, eight careers, eight factions, and four complete trait disciplines', () => {
     const ns = runtime();
-    expect(ns.Data.REGIONS).toHaveLength(30); expect(ns.Data.CONTRACT_TYPES).toHaveLength(8); expect(Object.keys(ns.Data.FACTIONS)).toHaveLength(3);
+    expect(ns.Data.REGIONS).toHaveLength(64); expect(ns.Data.CONTRACT_TYPES).toHaveLength(8); expect(Object.keys(ns.Data.FACTIONS)).toHaveLength(8);
+    expect(ns.Data.FACTIONS.independents.short).toBe('FRONTIER');
+    expect(ns.Data.FACTIONS.aster_collective.color).toBe('#4f8dff');
+    expect(new Set(Object.values(ns.Data.FACTIONS).map(faction => faction.color)).size).toBe(Object.keys(ns.Data.FACTIONS).length);
     ['ace', 'engineer', 'pathfinder', 'operator'].forEach(id => {
       const traits = ns.Data.TRAITS.filter(t => t.discipline === id); expect(traits).toHaveLength(7); expect(traits.filter(t => t.capstone)).toHaveLength(1); expect(traits.filter(t => t.specialization)).toHaveLength(2);
     });
   });
 
-  test('covers the expanded 5x6 envelope with large non-overlapping regions and new landmarks', () => {
+  test('covers the coordinate-preserving 8x8 envelope with non-overlapping authored regions', () => {
     const ns = runtime(), bounds = ns.World.WORLD_BOUNDS;
-    expect(bounds).toEqual({ minX: -33750, maxX: 33750, minY: -18000, maxY: 46800 });
+    const outerExpansionRegions = ['northwatch_void', 'pale_crown', 'riven_halo', 'coldfire_span', 'starless_arch', 'aurora_shelf', 'blackglass_north', 'far_north_reach', 'westward_shoal', 'red_margin', 'guildward_edge', 'pilgrim_margin', 'duskwater_edge', 'nullward_drop', 'sunward_gate', 'opal_front', 'brightwater_reach', 'helion_outmarch', 'fracture_bloom', 'corsair_lee', 'amber_shoal', 'longlight_verge', 'violet_outreach', 'deadlight_margin', 'eastern_terminus', 'southwatch_abyss', 'ashen_crown', 'quiet_pilgrimage', 'emerald_terminus', 'dawnfall_shelf', 'orchid_depths', 'black_sun_verge', 'far_south_reach'];
+    expect(bounds).toEqual({ minX: -47250, maxX: 60750, minY: -28800, maxY: 57600 });
     const cells = new Set(ns.Data.REGIONS.map(region => `${region.x},${region.y}`));
-    expect(cells.size).toBe(30);
+    expect(cells.size).toBe(64);
     ns.Data.REGIONS.forEach(region => {
       expect(region).toMatchObject({ w: 13500, h: 10800, remoteness: expect.any(Number), economy: expect.any(Object), backdrop: expect.any(String) });
       expect(ns.World.regionAt(region.x + 6750, region.y + 5400).id).toBe(region.id);
     });
     ns.Data.LANDMARKS.forEach(landmark => expect(ns.World.regionAt(landmark.x, landmark.y).id).toBe(landmark.region));
-    ns.Data.REGIONS.filter(region => region.column === 0 || region.column === 4 || region.row === 0 || region.row === 5).forEach(region => expect(region.danger).toBeGreaterThanOrEqual(4));
+    ns.Data.REGIONS.filter(region => region.column === 0 || region.column === 7 || region.row === 0 || region.row === 7).forEach(region => expect(region.danger).toBeGreaterThanOrEqual(3));
+    outerExpansionRegions.forEach(regionId => expect(ns.Data.LANDMARKS.some(item => item.type === 'station' && item.region === regionId)).toBe(true));
     ['frostglass_relay', 'crown_anchorage', 'eventide_scar', 'wreckline_harbor', 'eventide_heart'].forEach(id => expect(ns.Data.LANDMARKS.some(item => item.id === id)).toBe(true));
     expect(ns.World.regionAt(0, 0).id).toBe('trade_belt');
+  });
+
+  test('separates current-galaxy static landmarks and gives B-G local station and beacon names', () => {
+    const ns = runtime();
+    ns.Data.GALAXIES.forEach(galaxy => {
+      const state = ns.State.createState(907); state.galaxyId = galaxy.id; state.visitedGalaxies = [galaxy.id]; ns.Galaxies.ensureState(state);
+      const landmarks = ns.Galaxies.availableLandmarks(state).filter(item => ['station', 'anomaly'].includes(item.type));
+      const names = landmarks.map(item => item.name);
+      expect(new Set(names).size).toBe(names.length);
+      if (galaxy.id !== 'galaxy_a') {
+        expect(names).not.toContain('Waypoint Zero');
+        expect(names).not.toContain('Cold Start Beacon');
+      }
+      for (let i = 0; i < landmarks.length; i++) for (let j = 0; j < i; j++) {
+        if (landmarks[i].region !== landmarks[j].region) continue;
+        const min = (landmarks[i].type === 'station' ? 105 : 65) + (landmarks[j].type === 'station' ? 105 : 65) + 50;
+        expect(ns.MathUtil.distance(landmarks[i], landmarks[j])).toBeGreaterThanOrEqual(min);
+      }
+    });
+  });
+
+  test('can generate contract boards from newly added expansion-sector stations', () => {
+    const ns = runtime(), state = ns.State.createState(77), station = ns.Data.LANDMARKS.find(item => item.id === 'guildward_station');
+    state.ship.ownedModules.push('light_drive'); state.contracts.completed = 6; state.progression.tutorialStep = 2; state.dockedAt = station.id;
+    expect(ns.Galaxies.availableLandmarks(state).some(item => item.id === station.id)).toBe(true);
+    const board = ns.Contracts.refreshBoard(state, station);
+    expect(board.length).toBeGreaterThan(0);
+    board.forEach(contract => {
+      expect(contract.origin).toBe(station.id);
+      ns.Contracts.ensureStages(contract).forEach(stage => {
+        if (stage.destination) expect(ns.Data.LANDMARKS.some(item => item.id === stage.destination)).toBe(true);
+        if (stage.region) expect(ns.Data.REGIONS.some(region => region.id === stage.region)).toBe(true);
+      });
+    });
   });
 
   test('generates chunks deterministically and shifts the floating origin', () => {
@@ -350,7 +450,7 @@ describe('Frontier Wayfarer world and progression', () => {
 
   test('defines and deterministically generates region-appropriate living-world content', () => {
     const ns = runtime();
-    expect(Object.keys(ns.Data.WORLD_OBJECT_TYPES)).toEqual(expect.arrayContaining(['derelict_hauler', 'survey_probe', 'memorial_beacon', 'emergency_supply_pod', 'smuggler_dead_drop', 'unstable_prism']));
+    expect(Object.keys(ns.Data.WORLD_OBJECT_TYPES)).toEqual(expect.arrayContaining(['derelict_hauler', 'survey_probe', 'memorial_beacon', 'emergency_supply_pod', 'smuggler_dead_drop', 'unstable_prism', 'sealed_module_cache', 'battlefield_hardware_crate', 'prism_tech_cache', 'ancient_armory_fragment']));
     expect(Object.keys(ns.Data.WORLD_SCENARIOS)).toEqual(expect.arrayContaining(['distress_call', 'border_skirmish', 'raider_sweep', 'abandoned_worksite']));
     ns.Data.REGIONS.forEach(region => {
       ns.World.eligibleDefinitions(ns.Data.WORLD_OBJECT_TYPES, region, false).forEach(definition => { expect(definition.backdrops[region.backdrop]).toBeGreaterThan(0); expect(region.danger).toBeGreaterThanOrEqual(definition.minDanger); });
@@ -380,6 +480,15 @@ describe('Frontier Wayfarer world and progression', () => {
     const restored = new ns.World.WorldService(733, state.consumedEntityIds); restored.update(0, 0); expect(restored.loadedEntities().some(entity => state.consumedEntityIds.includes(entity.id))).toBe(false);
   });
 
+  test('module caches add owned modules or duplicate fallback salvage through world-object pickup', () => {
+    const ns = runtime(), state = ns.State.createState(734), world = new ns.World.WorldService(734); world.update(0, 0); state.dockedAt = null; state.progression.tutorialStep = 2; state.contracts.completed = 12; state.pilot.level = 12; state.stats.kills = 40; state.visitedRegions.push('anomaly_rim'); state.progression.bossesDefeated = { foundry_ark: 1 };
+    const chunk = Array.from(world.chunks.values()).find(item => item.key === '0,0'), messages = [], game = { state, world, region: ns.Data.REGIONS.find(region => region.id === 'anomaly_rim'), enemies: [], spawnEnemies() {}, notify(message) { messages.push(message); } };
+    const cache = { id: 'world-object:cache:test', kind: 'worldObject', typeId: 'sealed_module_cache', name: 'Sealed Module Cache', x: 20, y: 20, region: 'anomaly_rim' }; chunk.entities.push(cache);
+    const before = state.ship.ownedModules.length; expect(ns.WorldEvents.interact(game, cache)).toBe(true); expect(state.ship.ownedModules.length).toBe(before + 1); expect(messages.at(-1)).toContain('MODULE CACHE OPEN'); expect(state.consumedEntityIds).toContain(cache.id);
+    const duplicate = { id: 'world-object:cache:dupe', kind: 'worldObject', typeId: 'sealed_module_cache', name: 'Sealed Module Cache', x: 20, y: 20, region: 'anomaly_rim' }; chunk.entities.push(duplicate);
+    const owned = state.ship.ownedModules.length, bank = ns.Wallet.total(state).aetherium + ns.Wallet.total(state).helionite + ns.Wallet.total(state).sunshards; expect(ns.WorldEvents.interact(game, duplicate)).toBe(true); expect(state.ship.ownedModules.length).toBe(owned); expect(ns.Wallet.total(state).aetherium + ns.Wallet.total(state).helionite + ns.Wallet.total(state).sunshards).toBeGreaterThan(bank);
+  });
+
   test('deterministically resolves genuine and false distress calls and composes faction skirmishes', () => {
     const ns = runtime(), makeGame = () => { const state = ns.State.createState(991); state.dockedAt = null; const calls = []; return { state, region: ns.Data.REGIONS.find(region => region.id === 'outlaw_expanse'), enemies: [], world: { consumeEntity: () => true }, spawnEnemies(...args) { calls.push(args); }, notify(message) { this.message = message; }, save() {}, ui: { renderAll() {} }, calls }; };
     const definition = ns.Data.WORLD_SCENARIOS.distress_call, falseGame = makeGame(), genuineGame = makeGame(); let falseEntity, genuineEntity;
@@ -400,7 +509,7 @@ describe('Frontier Wayfarer world and progression', () => {
 
   test('uses the requested asteroid belt while keeping the starting sector lighter', () => {
     const ns = runtime(), byGrid = grid => ns.Data.REGIONS.find(region => region.grid === grid);
-    ['A1', 'B1', 'B2', 'D2', 'D3', 'E3', 'E4'].forEach(grid => expect(byGrid(grid).asteroidDensity).toBe(1.6)); expect(byGrid('C2').asteroidDensity).toBe(.75);
+    const regions = ns.Galaxies.worldRegions(ns.State.createState(42)); ['B2', 'C2', 'C3', 'E3', 'E4', 'F4', 'F5'].forEach(grid => expect(regions.find(region => region.grid === grid).asteroidDensity).toBe(1.6)); expect(regions.find(region => region.id === 'trade_belt').asteroidDensity).toBe(.75);
     const trade = ns.World.generateChunk(42, 0, 0), belt = ns.World.generateChunk(42, 8, 0);
     const count = chunk => chunk.entities.filter(entity => entity.kind === 'asteroid').length;
     expect(count(trade)).toBeGreaterThanOrEqual(3); expect(count(belt)).toBeGreaterThan(count(trade));
@@ -418,16 +527,16 @@ describe('Frontier Wayfarer world and progression', () => {
     const x = large.x; world.updateAsteroids(1); expect(large.x).not.toBe(x);
     const first = world.damageAsteroid(large, 90); expect(first.fragments).toHaveLength(2); expect(first.fragments.every(entity => entity.tier === 'medium')).toBe(true);
     const mediumResult = world.damageAsteroid(first.fragments[0], 45); expect(mediumResult.fragments).toHaveLength(2); expect(mediumResult.fragments[0].tier).toBe('small');
-    const small = mediumResult.fragments[0], smallId = small.id; expect(world.damageAsteroid(small, 20).reward).toBe(2);
+    const small = mediumResult.fragments[0], smallId = small.id; expect(world.damageAsteroid(small, 20)).toMatchObject({ destroyed: true, asteroid: { tier: 'small' } });
     world.update(9000, 0); world.update(0, 0); expect(world.loadedEntities().some(entity => entity.id === smallId)).toBe(false);
     expect(new ns.World.WorldService(42).asteroidRecords.size).toBe(0);
   });
 
   test('reports a soft nebula boundary while preserving the nearest valid region', () => {
-    const ns = runtime(), bounds = ns.World.WORLD_BOUNDS;
-    expect(ns.World.boundaryExposure(bounds.maxX - 100, 0)).toMatchObject({ active: false, depth: 0 });
-    expect(ns.World.boundaryExposure(bounds.maxX + 250, 0)).toMatchObject({ active: true, depth: 250, proximity: 1 });
-    expect(ns.World.regionAt(bounds.maxX + 5000, 0).id).toBe('concordat_reach');
+    const ns = runtime(), state = ns.State.createState(42), config = ns.World.createConfig(ns.Galaxies.worldConfig(state)), bounds = config.bounds;
+    expect(ns.World.boundaryExposure(bounds.maxX - 100, 0, config)).toMatchObject({ active: false, depth: 0 });
+    expect(ns.World.boundaryExposure(bounds.maxX + 250, 0, config)).toMatchObject({ active: true, depth: 250, proximity: 1 });
+    expect(config.regions).toContain(ns.World.regionAt(bounds.maxX + 5000, 0, config));
   });
 
   test('aims ship heading from viewport center to the mouse pointer', () => {
@@ -471,6 +580,7 @@ describe('Frontier Wayfarer world and progression', () => {
     state.progression.tutorialStep = 1; expect(ns.Unlocks.evaluate(state)).toMatchObject({ tradeTier: 1, guildBoard: true, abilitySlots: { abilityShift: true } });
     state.progression.tutorialStep = 2; state.contracts.completed = 3; expect(ns.Unlocks.evaluate(state)).toMatchObject({ shields: true, tradeTier: 2, abilitySlots: { abilitySpace: true } });
     state.discoveries.push('signal:1:1'); expect(ns.Unlocks.evaluate(state).abilitySlots.abilityQ).toBe(true);
+    state.galaxyCharts.galaxy_a = { discoveries: ['signal:1:1'] }; state.discoveries = ['waypoint_zero']; expect(ns.Unlocks.evaluate(state).abilitySlots.abilityQ).toBe(true);
     state.pilot.allegiance = 'concord'; expect(ns.Unlocks.evaluate(state).abilitySlots.abilityE).toBe(true);
     state.pilot.level = 4; state.contracts.completed = 5; expect(ns.Unlocks.evaluate(state).lightDrive).toBe(true);
   });
@@ -527,8 +637,21 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const buy = ns.Economy.price(state, station, 'food', 'buy'); const sell = ns.Economy.price(state, station, 'food', 'sell');
     expect(buy).toBeGreaterThan(sell); expect(buy).toBeGreaterThan(0); const aetherium = state.pilot.wallet.banked.aetherium;
     expect(ns.Economy.trade(state, station, 'food', 1)).toBe(true); expect(state.ship.cargo.food).toBe(1); expect(state.pilot.wallet.banked.aetherium).toBe(aetherium - buy);
-    expect(ns.Economy.trade(state, station, 'food', -1)).toBe(true); expect(state.ship.cargo.food).toBe(0);
+    expect(ns.Economy.trade(state, station, 'food', -1)).toBe(ns.Economy.requestsCommodity(state, station, 'food'));
     expect(ns.Unlocks.commodityVisible(state, ns.Data.COMMODITIES.medicine)).toBe(false); expect(ns.Unlocks.commodityVisible(state, ns.Data.COMMODITIES.relics)).toBe(false);
+    state.progression.tutorialStep = 2; state.contracts.completed = 3; state.pilot.level = 6; state.visitedRegions.push('anomaly_rim'); ns.Economy.inventoryFor(state, station);
+    const request = ns.Economy.inventoryFor(state, station).requests.find(id => ns.Unlocks.commodityVisible(state, ns.Data.COMMODITIES[id])), beforeRep = state.reputations[station.faction]; state.ship.cargo[request] = 1;
+    expect(ns.Economy.trade(state, station, request, -1)).toBe(true); expect(state.reputations[station.faction]).toBeGreaterThan(beforeRep);
+  });
+
+  test('sells only non-equipped paid modules into the banked wallet', () => {
+    const ns = runtime(), state = ns.State.createState(303), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero');
+    state.ship.ownedModules.push('pulse_mk2', 'heat_sink'); state.pilot.wallet.banked = { aetherium: 0, sunshards: 0, helionite: 0 };
+    expect(ns.Economy.sellModule(state, 'pulse_mk1', station)).toMatchObject({ ok: false, reason: 'equipped' });
+    expect(ns.Economy.sellModule(state, 'heat_sink', station)).toMatchObject({ ok: true });
+    expect(state.ship.ownedModules).not.toContain('heat_sink'); expect(state.pilot.wallet.banked.aetherium).toBeGreaterThan(0);
+    ns.Progression.equipModule(state, 'primary2', 'pulse_mk2'); expect(ns.Economy.sellModule(state, 'pulse_mk2', station)).toMatchObject({ ok: false, reason: 'equipped' }); expect(state.ship.ownedModules).toContain('pulse_mk2');
+    state.ship.slots.cargo = null; expect(ns.Economy.sellModule(state, 'cargo_mk1', station)).toMatchObject({ ok: false, reason: 'starter' });
   });
 
   test('creates serializable contracts and applies reputation/allegiance consequences', () => {
@@ -664,12 +787,12 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     expect(contract.escort).toMatchObject({ phase: 'rendezvous', convoy: null, end: { x: -3450, y: -1350 } }); expect(ns.MathUtil.distance(contract.escort.start, contract.escort.end)).toBeLessThanOrEqual(1800.01); expect(contract.target).toEqual(contract.escort.start);
   });
 
-  test('migrates legacy diamonds, weapons, shields, coordinates, loadouts, hull ownership, and galaxy state into schema v8', () => {
+  test('migrates legacy diamonds, weapons, shields, coordinates, loadouts, hull ownership, and galaxy state into schema v11', () => {
     const ns = runtime(); const legacy = ns.State.createState(31); legacy.schemaVersion = 1; legacy.pilot.diamonds = 777; delete legacy.pilot.wallet; delete legacy.customWaypoint;
     legacy.ship.x = 100; legacy.ship.y = 200;
     legacy.ship.slots.secondary = 'seeker_rack'; legacy.ship.slots.defense = 'shield_mk1'; legacy.ship.ownedModules.push('shield_mk1');
     const migrated = ns.Save.migrate(legacy);
-    expect(migrated.schemaVersion).toBe(8); expect(migrated).toMatchObject({ galaxyId: 'galaxy_a', visitedGalaxies: ['galaxy_a'] }); expect(migrated.ship).toMatchObject({ x: 150, y: 300, activeHullId: 'wayfarer', ownedHullIds: ['wayfarer'] }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull(); expect(migrated.customWaypoint).toBeNull();
+    expect(migrated.schemaVersion).toBe(11); expect(migrated).toMatchObject({ galaxyId: 'galaxy_a', visitedGalaxies: ['galaxy_a'] }); expect(migrated.ship).toMatchObject({ x: 150, y: 300, activeHullId: 'wayfarer', ownedHullIds: ['wayfarer'] }); expect(migrated.pilot.wallet.banked).toEqual({ aetherium: 777, sunshards: 0, helionite: 0 }); expect(migrated.ship.slots.utility4).toBeNull(); expect(migrated.customWaypoint).toBeNull();
     expect(migrated.ship.slots.primary2).toBe('seeker_rack'); expect(migrated.ship.slots.defense).toBe('shield_balanced'); expect(migrated.ship.ownedModules).toContain('afterburner');
   });
 
@@ -724,12 +847,12 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const ns = runtime(); const state = ns.State.createState(33); state.progression.tutorialStep = 2; state.contracts.completed = 3; state.discoveries.push('signal:2:2');
     state.ship.ownedModules.push('blink_drive', 'shield_overcharger', 'shield_scout'); state.ship.slots.abilityQ = 'blink_drive'; state.ship.slots.abilitySpace = 'shield_overcharger';
     const game = { state, world: new ns.World.WorldService(33), enemies: [], notify: jest.fn(), onEnemyKilled: jest.fn() }; game.world.update(state.ship.x, state.ship.y);
-    state.ship.x = ns.World.WORLD_BOUNDS.maxX - 10; state.ship.angle = 0; expect(ns.Abilities.activate(game, 'abilityQ')).toBe(true); expect(state.ship.x).toBe(ns.World.WORLD_BOUNDS.maxX + 340);
+    state.ship.x = ns.World.WORLD_BOUNDS.maxX - 10; state.ship.angle = 0; expect(ns.Abilities.activate(game, 'abilityQ')).toBe(true); expect(state.ship.x).toBe(ns.World.WORLD_BOUNDS.maxX + 340); expect(game.blinkEffect).toMatchObject({ life: .35, maxLife: .35, from: expect.any(Object), to: expect.any(Object) });
     expect(ns.Abilities.activate(game, 'abilitySpace')).toBe(false); state.ship.slots.defense = 'shield_scout'; state.ship.shield = 55;
     expect(ns.Abilities.activate(game, 'abilitySpace')).toBe(true); expect(state.ship.overshield).toBe(70);
   });
 
-  test('nebula damage bypasses shields and player bullets mine final asteroid fragments', () => {
+  test('nebula damage bypasses shields and asteroid destruction no longer awards direct credits', () => {
     const ns = runtime({ includeGame: true }); const state = ns.State.createState(72); state.ship.shield = 55;
     expect(ns.Combat.applyHullDamage(state, 25)).toBe(false); expect(state.ship.hull).toBe(115); expect(state.ship.shield).toBe(55);
     const world = new ns.World.WorldService(72); world.update(state.ship.x, state.ship.y);
@@ -737,7 +860,7 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const before = state.pilot.wallet.unbanked.aetherium;
     const game = { state, world, enemies: [], effects: [], bullets: [{ x: asteroid.x, y: asteroid.y, vx: 0, vy: 0, radius: 4, damage: asteroid.hull, life: 1, enemy: false }], spawnImpact: jest.fn() };
     ns.Game.prototype.updateBullets.call(game, 0);
-    expect(game.bullets).toHaveLength(0); expect(game.spawnImpact).toHaveBeenCalled(); expect(state.pilot.wallet.unbanked.aetherium).toBe(before + 2);
+    expect(game.bullets).toHaveLength(0); expect(game.spawnImpact).toHaveBeenCalled(); expect(state.pilot.wallet.unbanked.aetherium).toBe(before);
     expect(world.loadedEntities()).not.toContain(asteroid);
   });
 
@@ -823,11 +946,11 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     }));
   });
 
-  test('fits four distinct utilities and preserves them through schema v8 saves', () => {
+  test('fits four distinct utilities and preserves them through schema v11 saves', () => {
     const ns = runtime(), state = ns.State.createState(82); state.ship.chassis.massLimit = 200; const utilities = ['repair_drones', 'sensor_array', 'heat_sink', 'cargo_pods']; state.ship.ownedModules.push(...utilities);
     utilities.forEach((id, index) => expect(ns.Progression.equipModule(state, `utility${index + 1}`, id)).toBe(true));
     expect(Object.values(state.ship.slots).filter(id => utilities.includes(id))).toEqual(expect.arrayContaining(utilities));
-    const loaded = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(loaded.schemaVersion).toBe(8); expect(loaded.ship.slots.utility4).toBe('cargo_pods'); expect(ns.Progression.calculateShipStats(loaded).cargo).toBeGreaterThan(14);
+    const loaded = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(loaded.schemaVersion).toBe(11); expect(loaded.ship.slots.utility4).toBe('cargo_pods'); expect(ns.Progression.calculateShipStats(loaded).cargo).toBeGreaterThan(14);
   });
 
   test('equips the Asterion Light Drive from the real ship panel after purchase', () => {
@@ -855,8 +978,16 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
 
   test('labels mission-system slots with their behavior and keybinds', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.state.progression.tutorialStep = 2; game.state.contracts.completed = 3; game.state.discoveries.push('signal:test'); game.state.pilot.allegiance = 'concord'; game.state.ship.ownedModules.push('light_drive'); game.state.ship.slots.engine = 'light_drive'; game.ui.openPanel(game, 'ship');
-    const text = game.ui.panelBody.textContent; ['Primary weapon 1 (Left Click)', 'Primary weapon 2 (Right Click)', 'Passive Utility 1', 'Passive Utility 4', 'Triggered Ability 1 (Space)', 'Triggered Ability 2 (Q)', 'Triggered Ability 3 (E)', 'Triggered Ability 4 (Shift)'].forEach(label => expect(text).toContain(label));
-    expect(text).toContain('ACTIVATION COST'); dom.window.close();
+    let text = game.ui.panelBody.textContent; ['Primary weapon 1 (Left Click)', 'Primary weapon 2 (Right Click)', 'Triggered Ability 1 (Space)', 'Triggered Ability 2 (Q)', 'Triggered Ability 3 (E)', 'Triggered Ability 4 (Shift)'].forEach(label => expect(text).toContain(label));
+    game.ui.panelBody.querySelector('[data-action="ship-mission-tab"][data-id="utility"]').click(); text = game.ui.panelBody.textContent; ['Passive Utility 1', 'Passive Utility 4'].forEach(label => expect(text).toContain(label)); expect(text).not.toContain('Primary weapon 1 (Left Click)'); dom.window.close();
+  });
+
+  test('keeps the Q ability panel visible before the slot is unlocked', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game;
+    game.newCareer(); game.state.progression.tutorialStep = 2; game.state.contracts.completed = 3; game.ui.openPanel(game, 'ship');
+    const text = game.ui.panelBody.textContent;
+    expect(text).toContain('Triggered Ability 2 (Q)');
+    dom.window.close();
   });
 
   test('explains when a purchased Asterion Light Drive would exceed the mass limit', () => {
@@ -895,7 +1026,8 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const minorState = ns.State.createState(84); minorState.progression.tutorialStep = 2; const minorBoard = ns.Contracts.refreshBoard(minorState, minor); expect(minorBoard.length).toBeGreaterThanOrEqual(3); expect(minorBoard.length).toBeLessThanOrEqual(6);
     const first = ns.Economy.inventoryFor(state, major), other = ns.Economy.inventoryFor(state, minor); expect(first).not.toEqual(other); expect(ns.Economy.inventoryFor(state, major)).toBe(first);
     state.playTime = ns.Economy.INVENTORY_CYCLE_SECONDS; const rotated = ns.Economy.inventoryFor(state, major); expect(rotated.cycle).toBe(1); expect(rotated).not.toBe(first);
-    const unstocked = Object.keys(ns.Data.COMMODITIES).find(id => !rotated.commodities.includes(id) && ns.Unlocks.commodityVisible(state, ns.Data.COMMODITIES[id])); state.ship.cargo[unstocked] = 1; expect(ns.Economy.trade(state, major, unstocked, -1)).toBe(true);
+    const requested = rotated.requests.find(id => ns.Unlocks.commodityVisible(state, ns.Data.COMMODITIES[id])); expect(requested).toBeTruthy(); const beforeRep = state.reputations[major.faction]; state.ship.cargo[requested] = 1; expect(ns.Economy.trade(state, major, requested, -1)).toBe(true); expect(state.reputations[major.faction]).toBeGreaterThan(beforeRep);
+    const unrequested = Object.keys(ns.Data.COMMODITIES).find(id => !rotated.requests.includes(id) && ns.Unlocks.commodityVisible(state, ns.Data.COMMODITIES[id])); state.ship.cargo[unrequested] = 1; expect(ns.Economy.trade(state, major, unrequested, -1)).toBe(false);
     const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(state))); expect(restored.marketInventories[major.id]).toEqual(rotated);
   });
 
@@ -911,9 +1043,9 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     expect(result.lostResources).toEqual({ aetherium: 90, sunshards: 4, helionite: 2 }); expect(state.pilot.wallet.banked.aetherium).toBe(1000); expect(state.ship.cargo).toEqual({}); expect(Object.keys(state.ship.moduleDamage).length).toBeGreaterThan(0); expect(state.pilot.level).toBe(1);
   });
 
-  test('owns, purchases, switches, and capacity-gates nine distinct player hulls', () => {
+  test('owns, purchases, switches, and capacity-gates seventeen distinct player hulls', () => {
     const ns = runtime(), state = ns.State.createState(901), guild = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'); state.progression.tutorialStep = 2; state.contracts.completed = 3; state.pilot.wallet.banked = { aetherium: 10000, sunshards: 100, helionite: 100 };
-    expect(Object.keys(ns.Data.HULLS)).toHaveLength(9); expect(ns.Progression.buyHull(state, 'guild_mule', guild)).toBe(true); expect(state.ship.ownedHullIds).toContain('guild_mule');
+    expect(Object.keys(ns.Data.HULLS)).toHaveLength(17); expect(new Set(Object.values(ns.Data.HULLS).map(hull => hull.tier))).toEqual(new Set([1, 2, 3, 4, 5, 6, 7])); expect(ns.Progression.buyHull(state, 'guild_mule', guild)).toBe(true); expect(state.ship.ownedHullIds).toContain('guild_mule');
     const wayfarer = ns.Progression.calculateShipStats(state); expect(ns.Progression.switchHull(state, 'guild_mule')).toEqual({ ok: true }); const mule = ns.Progression.calculateShipStats(state); expect(mule.hull).toBeGreaterThan(wayfarer.hull); expect(mule.cargo).toBeGreaterThan(wayfarer.cargo); expect(mule.maxSpeed).toBeLessThan(wayfarer.maxSpeed);
     state.ship.ownedHullIds.push('concord_kestrel'); state.ship.cargo.food = 20; expect(ns.Progression.checkSwitchHull(state, 'concord_kestrel')).toMatchObject({ ok: false, reason: 'cargo' });
   });
@@ -938,8 +1070,8 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
   });
 
   test('generates deterministic optional briefings and stores dismissible debriefs', () => {
-    const ns = runtime(), state = ns.State.createState(903), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'); state.progression.tutorialStep = 2; const board = ns.Contracts.refreshBoard(state, station), offer = board[0]; expect(offer.briefing).toEqual(ns.Expansion.briefing(offer, station));
-    ns.Contracts.accept(state, offer.id); ns.Contracts.ensureStages(state.contracts.active).forEach(stage => { stage.status = 'complete'; stage.progress = stage.required; }); ns.Contracts.syncContract(state.contracts.active); const completed = ns.Contracts.complete(state); expect(completed.debrief).toMatchObject({ outcome: expect.any(String), response: expect.any(String), payment: expect.any(Object) }); expect(state.progression.pendingDebrief).toBe(completed.id);
+    const ns = runtime(), state = ns.State.createState(903), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'); state.progression.tutorialStep = 2; const board = ns.Contracts.refreshBoard(state, station), offer = board[0]; expect(offer.briefing).toEqual(ns.Expansion.briefing(offer, station)); expect(offer.briefing).toMatchObject({ route: expect.any(String), complication: expect.any(String), tone: expect.any(String), finePrint: expect.any(String) });
+    ns.Contracts.accept(state, offer.id); ns.Contracts.ensureStages(state.contracts.active).forEach(stage => { stage.status = 'complete'; stage.progress = stage.required; }); ns.Contracts.syncContract(state.contracts.active); const completed = ns.Contracts.complete(state); expect(completed.debrief).toMatchObject({ outcome: expect.any(String), response: expect.any(String), consequence: expect.any(String), payment: expect.any(Object) }); expect(state.progression.pendingDebrief).toBe(completed.id);
   });
 
   test('locks each post-capstone specialization against its competing choice', () => {
@@ -951,6 +1083,15 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const rangerYard = ns.Data.LANDMARKS.find(item => item.id === 'shatterline_post'), concordYard = ns.Data.LANDMARKS.find(item => item.id === 'helion_bastion'), corsairYard = ns.Data.LANDMARKS.find(item => item.id === 'rust_orbit'), rimYard = ns.Data.LANDMARKS.find(item => item.id === 'rim_observatory');
     expect(ns.Expansion.hullAvailable(state, ns.Data.HULLS.meridian_ranger, rangerYard)).toBe(true); expect(ns.Expansion.hullAvailable(state, ns.Data.HULLS.concord_lancer, concordYard)).toBe(true); expect(ns.Expansion.hullAvailable(state, ns.Data.HULLS.corsair_ravager, corsairYard)).toBe(true); expect(ns.Expansion.hullAvailable(state, ns.Data.HULLS.prism_eidolon, rimYard)).toBe(true);
     state.ship.activeHullId = 'meridian_ranger'; const ranger = ns.Progression.calculateShipStats(state); state.ship.activeHullId = 'prism_eidolon'; const eidolon = ns.Progression.calculateShipStats(state); expect(ranger).toMatchObject({ massLimit: 58, energyRecharge: 18 }); expect(ranger.sensor).toBeGreaterThan(1100); expect(eidolon.reactor).toBeGreaterThan(ranger.reactor); expect(eidolon.shield).toBeGreaterThanOrEqual(ranger.shield);
+  });
+
+  test('unlocks late tier five through seven hulls at authored shipyards', () => {
+    const ns = runtime(), state = ns.State.createState(906);
+    state.pilot.level = 14; state.stats.kills = 90; state.visitedGalaxies = ns.Data.GALAXIES.map(galaxy => galaxy.id); state.progression.bossesDefeated = { foundry_ark: 1 };
+    Object.assign(state.reputations, { aster_collective: 25, orchid_synod: 25, auric_combine: 25, cyan_nomads: 25, gemini_directorate: 25, concord: 45, corsairs: 50 });
+    [['aster_cartograph', 'aster_archive'], ['orchid_riftneedle', 'orchid_spindle'], ['auric_vaultbarge', 'auric_exchange'], ['cyan_salvage_lantern', 'cyan_freeport'], ['gemini_echelon_spear', 'gemini_crown'], ['concord_solar_bulwark', 'sunfall_citadel'], ['frontier_horizon_ark', 'waypoint_zero'], ['null_crown_reaver', 'nullwake_hold']].forEach(([hullId, stationId]) => {
+      expect(ns.Expansion.hullAvailable(state, ns.Data.HULLS[hullId], ns.Data.LANDMARKS.find(item => item.id === stationId))).toBe(true);
+    });
   });
 
   test('defines the fixed seven-galaxy route graph and preserves separate local charts across travel', () => {
@@ -969,17 +1110,18 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     expect(ns.Galaxies.travel(state, 'galaxy_c')).toMatchObject({ ok: false, reason: 'no-direct-route' });
     expect(ns.Galaxies.travel(state, 'galaxy_b')).toMatchObject({ ok: true, destination: { code: 'B' } });
     expect(state).toMatchObject({ galaxyId: 'galaxy_b', dockedAt: 'waypoint_zero', visitedGalaxies: ['galaxy_a', 'galaxy_b'] }); expect(ns.Galaxies.worldSeed(state)).not.toBe(galaxyASeed); expect(state.discoveries).not.toContain('galaxy-a-only');
-    state.ship.x = 987; state.discoveries.push('galaxy-b-only'); expect(ns.Galaxies.travel(state, 'galaxy_a')).toMatchObject({ ok: true, destination: { code: 'A' } });
+    state.ship.x = 987; state.discoveries.push('galaxy-b-only'); state.lastStargateTravelAt = 0; expect(ns.Galaxies.travel(state, 'galaxy_a')).toMatchObject({ ok: true, destination: { code: 'A' } });
     expect(state.ship.x).toBe(321); expect(state.discoveries).toContain('galaxy-a-only'); expect(state.discoveries).not.toContain('galaxy-b-only');
     state.contracts.active = { id: 'gate-blocker' }; expect(ns.Galaxies.travel(state, 'galaxy_b')).toMatchObject({ ok: false, reason: 'active-contract' });
   });
 
-  test('restricts the Gateheart and Atlas systems to Tier IV hulls and guarantees them at unlocked major markets', () => {
+  test('restricts the Gateheart and Atlas systems to Tier IV or later hulls and guarantees them at unlocked major markets', () => {
     const ns = runtime(), state = ns.State.createState(1202), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero');
     const modules = [ns.Galaxies.GATE_REACTOR, ns.Galaxies.GATE_ENGINE]; state.ship.ownedModules.push(...modules); state.ship.chassis.massLimit = 220;
     expect(Object.values(ns.Data.HULLS).filter(hull => hull.tier === 4).map(hull => hull.id)).toEqual(['meridian_ranger', 'concord_lancer', 'corsair_ravager', 'prism_eidolon']);
     expect(ns.Progression.checkEquipModule(state, 'reactor', ns.Galaxies.GATE_REACTOR)).toMatchObject({ ok: false, reason: 'hull-tier' });
     state.ship.activeHullId = 'meridian_ranger'; state.ship.ownedHullIds.push('meridian_ranger'); expect(ns.Progression.equipModule(state, 'reactor', ns.Galaxies.GATE_REACTOR)).toBe(true); expect(ns.Progression.equipModule(state, 'engine', ns.Galaxies.GATE_ENGINE)).toBe(true); expect(ns.Galaxies.gateStatus(state).ready).toBe(true);
+    state.ship.ownedHullIds.push('frontier_horizon_ark'); expect(ns.Progression.checkSwitchHull(state, 'frontier_horizon_ark')).toMatchObject({ ok: true });
     expect(ns.Progression.checkSwitchHull(state, 'wayfarer')).toMatchObject({ ok: false, reason: 'hull-tier' });
     state.progression.bossesDefeated = { foundry_ark: 1 }; const inventory = ns.Economy.inventoryFor(state, station); expect(inventory.modules).toEqual(expect.arrayContaining(modules));
   });
@@ -988,15 +1130,15 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.ui.openPanel(game, 'navigation');
     expect([...game.ui.panelBody.querySelectorAll('[data-action="navigation-view"]')].map(button => button.textContent.trim())).toEqual(['LOCAL MAP']);
     game.state.ship.activeHullId = 'meridian_ranger'; game.state.ship.ownedHullIds.push('meridian_ranger'); game.state.ship.slots.reactor = ns.Galaxies.GATE_REACTOR; game.state.ship.slots.engine = ns.Galaxies.GATE_ENGINE; game.ui.renderPanel(game);
-    expect([...game.ui.panelBody.querySelectorAll('[data-action="navigation-view"]')].map(button => button.textContent.trim())).toEqual(['LOCAL MAP', 'STATION STARGATE']);
+    expect([...game.ui.panelBody.querySelectorAll('[data-action="navigation-view"]')].map(button => button.textContent.trim())).toEqual(['LOCAL MAP', 'STATION STARGATE']); expect(game.ui.panelBody.querySelector('.map-layout.navigation-view-frame')).not.toBeNull();
     game.ui.panelBody.querySelector('[data-action="navigation-view"][data-id="stargate"]').click();
-    expect(game.ui.panelBody.querySelectorAll('.stargate-node')).toHaveLength(7); expect(game.ui.panelBody.querySelector('#stargateOverlay')).not.toBeNull(); expect(game.ui.panelBody.querySelector('.stargate-confirm').textContent).toContain('STATION STARGATE TRAVEL');
-    game.ui.panelBody.querySelector('.stargate-confirm').click(); expect(game.state.galaxyId).toBe('galaxy_b'); expect(game.ui.activeTab).toBe('navigation'); expect(game.ui.navigationView).toBe('stargate'); dom.window.close();
+    expect(game.ui.panelBody.classList.contains('navigation-view')).toBe(true); expect(game.ui.panelBody.querySelector('.stargate-console.navigation-view-frame')).not.toBeNull(); expect(game.ui.panelBody.querySelectorAll('.stargate-node')).toHaveLength(7); expect(game.ui.panelBody.querySelector('#stargateOverlay')).not.toBeNull(); expect(game.ui.panelBody.querySelector('.stargate-confirm').textContent).toContain('STATION STARGATE TRAVEL');
+    jest.useFakeTimers(); game.ui.panelBody.querySelector('.stargate-confirm').click(); expect(dom.window.document.getElementById('stargateTransition').classList.contains('active')).toBe(true); jest.advanceTimersByTime(1500); expect(game.state.galaxyId).toBe('galaxy_b'); expect(game.ui.activeTab).toBe('navigation'); expect(game.ui.navigationView).toBe('stargate'); jest.advanceTimersByTime(1500); jest.useRealTimers(); dom.window.close();
   });
 
   test('migrates schema-seven careers into Galaxy A without losing the active local chart', () => {
     const ns = runtime(), legacy = ns.State.createState(1203); legacy.schemaVersion = 7; legacy.ship.x = 444; delete legacy.galaxyId; delete legacy.visitedGalaxies; delete legacy.galaxyCharts; delete legacy.lastStargateTravelAt;
-    const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 8, galaxyId: 'galaxy_a', visitedGalaxies: ['galaxy_a'], ship: { x: 444 } });
+    const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 11, galaxyId: 'galaxy_a', visitedGalaxies: ['galaxy_a'], ship: { x: 444 } });
   });
 
   test('derives Tier IV reactor, engine, and defense tradeoffs including Light Speed capability', () => {
@@ -1006,20 +1148,40 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
     ns.Progression.equipModule(state, 'engine', 'vector_dancer'); expect(ns.Progression.calculateShipStats(state).strafeScale).toBeGreaterThan(1); ns.Progression.equipModule(state, 'engine', 'siege_drive'); expect(ns.Progression.calculateShipStats(state).collisionResistance).toBe(.45);
   });
 
-  test('runs lock, ramp, charge, ion status, and flak interception weapon behaviors', () => {
-    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.state.ship.chassis.massLimit = 220; game.state.ship.chassis.reactorBonus = 500; game.state.ship.energy = 500; game.state.ship.ownedModules.push('solar_repeater', 'bloodhound_rack', 'prism_nova_coil', 'ion_needler', 'flak_array'); const target = ns.Encounters.create(game, 'bandit', game.state.ship.x + 300, game.state.ship.y); game.enemies = [target];
+  test('routes late cargo and defense module effects through derived ship stats', () => {
+    const ns = runtime(), state = ns.State.createState(916);
+    state.ship.chassis.massLimit = 260; state.ship.ownedModules.push('cyan_tow_rig', 'horizon_deep_hold', 'gemini_interdictor_screen', 'deadplate_citadel');
+    expect(ns.Progression.equipModule(state, 'cargo', 'cyan_tow_rig')).toBe(true);
+    expect(ns.Progression.equipModule(state, 'defense', 'gemini_interdictor_screen')).toBe(true);
+    const screened = ns.Progression.calculateShipStats(state);
+    expect(screened).toMatchObject({ cargo: 42, interactionRange: 210, sensor: 1010, shield: 205, heavyStability: .12 });
+    expect(ns.Progression.equipModule(state, 'cargo', 'horizon_deep_hold')).toBe(true);
+    const deepHold = ns.Progression.calculateShipStats(state);
+    expect(deepHold).toMatchObject({ cargo: 72, interactionRange: 90, sensor: 1070 });
+    expect(ns.Progression.equipModule(state, 'defense', 'deadplate_citadel')).toBe(true);
+    const plated = ns.Progression.calculateShipStats(state);
+    expect(plated).toMatchObject({ shield: 0, hull: 320, armor: .38 });
+  });
+
+  test('runs lock, ramp, charge, ion, flak, mine, siphon, and vortex weapon behaviors', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.state.ship.chassis.massLimit = 260; game.state.ship.chassis.reactorBonus = 500; game.state.ship.energy = 500; game.state.ship.ownedModules.push('solar_repeater', 'bloodhound_rack', 'prism_nova_coil', 'ion_needler', 'flak_array', 'shard_minecaster', 'horizon_singularity_lance'); const target = ns.Encounters.create(game, 'bandit', game.state.ship.x + 300, game.state.ship.y); game.enemies = [target];
     game.state.ship.slots.primary1 = 'solar_repeater'; ns.Weapons.control(game, 'primary1', true, .4); expect(game.weaponRamps.primary1.value).toBeGreaterThan(1); ns.Weapons.control(game, 'primary1', false, .5); expect(game.weaponRamps.primary1.value).toBe(1);
     game.weaponCooldowns.primary1 = 0; game.state.ship.slots.primary1 = 'bloodhound_rack'; ns.Weapons.control(game, 'primary1', true, .81); expect(game.bullets.at(-1)).toMatchObject({ type: 'missile', color: '#ff315c', targetId: target.id });
     game.weaponCooldowns.primary1 = 0; game.state.ship.slots.primary1 = 'prism_nova_coil'; ns.Weapons.control(game, 'primary1', true, 1.2); ns.Weapons.control(game, 'primary1', false, .01); expect(game.bullets.at(-1)).toMatchObject({ type: 'nova', pierce: 2, splash: 95 });
     ns.Weapons.playerHit(game, { status: { disabled: 1.35, slow: .45 } }, target); expect(target.disabled).toBe(1.35);
-    const flak = { x: 0, y: 0, enemy: false, antiProjectile: true, proximity: 60, life: 1 }, missile = { x: 20, y: 0, enemy: true, type: 'missile', life: 1 }; game.bullets = [flak, missile]; ns.Weapons.updateProjectile(game, flak, .1); expect(missile.life).toBe(0); dom.window.close();
+    const flak = { x: 0, y: 0, enemy: false, antiProjectile: true, proximity: 60, life: 1 }, missile = { x: 20, y: 0, enemy: true, type: 'missile', life: 1 }; game.bullets = [flak, missile]; ns.Weapons.updateProjectile(game, flak, .1); expect(missile.life).toBe(0);
+    const mineTarget = ns.Encounters.create(game, 'bandit', game.state.ship.x + 70, game.state.ship.y); game.enemies = [mineTarget]; game.weaponCooldowns.primary1 = 0; game.state.ship.slots.primary1 = 'shard_minecaster'; expect(ns.Weapons.fire(game, 'primary1')).toBe(true);
+    const mine = game.bullets.at(-1); mine.x = mineTarget.x; mine.y = mineTarget.y; const hullBefore = mineTarget.hull; ns.Weapons.updateProjectile(game, mine, .1); expect(mine.life).toBe(0); expect(mineTarget.hull).toBeLessThan(hullBefore);
+    const vortexTarget = ns.Encounters.create(game, 'bandit', game.state.ship.x + 120, game.state.ship.y), neighbor = ns.Encounters.create(game, 'interceptor', game.state.ship.x + 230, game.state.ship.y); game.enemies = [vortexTarget, neighbor]; game.state.ship.energy = 20; game.state.ship.heat = 30;
+    ns.Weapons.playerHit(game, { damage: 10, splash: 115, siphon: { energy: 10, heat: 8 }, vortex: { radius: 190, pull: 85 }, color: '#d8f7ff' }, vortexTarget);
+    expect(game.state.ship.energy).toBeGreaterThan(20); expect(game.state.ship.heat).toBeLessThan(30); expect(Math.hypot(neighbor.vx || 0, neighbor.vy || 0)).toBeGreaterThan(0); dom.window.close();
   });
 
   test('runs specialist roles and persists destructible capital-boss state', () => {
     const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.region = ns.Data.REGIONS.find(region => region.danger === 5); const ally = ns.Encounters.create(game, 'bandit', 200, 0); ally.hull = 10; const tender = ns.Encounters.create(game, 'support_tender', 220, 0); game.enemies = [ally, tender]; ns.Encounters.update(game, .1); expect(ally.hull).toBeGreaterThan(10);
     expect(['foundry_ark', 'solar_bastion', 'eclipse_cruiser'].map(id => ns.Data.BOSSES[id].controller)).toEqual(['foundry', 'bastion', 'eclipse']);
-    const contract = { bossType: 'foundry_ark', target: { x: 400, y: 0 }, encounterId: 'capital:test', bossState: null }, boss = ns.Encounters.spawnBoss(game, contract); expect(Object.keys(boss.components)).toEqual(expect.arrayContaining(['bay_port', 'bay_starboard'])); const component = ns.Data.BOSSES.foundry_ark.components[0]; ns.Encounters.playerHit(game, boss, { x: boss.x + component.x, y: boss.y + component.y, damage: component.hull }); expect(boss.components.bay_port).toBe(0); boss.hull = boss.maxHull * .3; ns.Encounters.update(game, .1); expect(contract.bossState).toMatchObject({ phase: 3, components: { bay_port: 0 }, queuedPattern: { type: 'mine-ring' } });
-    const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(game.state))); expect(restored.schemaVersion).toBe(8); dom.window.close();
+    const contract = { bossType: 'foundry_ark', target: { x: 400, y: 0 }, encounterId: 'capital:test', bossState: null }, boss = ns.Encounters.spawnBoss(game, contract); expect(Object.keys(boss.components)).toEqual(expect.arrayContaining(['bay_port', 'bay_starboard'])); const component = ns.Data.BOSSES.foundry_ark.components[0], componentPoint = ns.Geometry.componentPoint(boss, component); ns.Encounters.playerHit(game, boss, { x: componentPoint.x, y: componentPoint.y, componentId: component.id, damage: component.hull }); expect(boss.components.bay_port).toBe(0); boss.hull = boss.maxHull * .3; ns.Encounters.update(game, .1); expect(contract.bossState).toMatchObject({ phase: 3, components: { bay_port: 0 }, queuedPattern: { type: 'mine-ring' } });
+    const restored = ns.Save.migrate(JSON.parse(ns.Save.serialize(game.state))); expect(restored.schemaVersion).toBe(11); dom.window.close();
   });
 
   test('generates risk-six capital contracts and seeded optional roaming rematches', () => {
@@ -1030,6 +1192,149 @@ describe('Frontier Wayfarer economy, careers, persistence, and defeat', () => {
   });
 
   test('migrates schema-five careers into the capital-threat save contract', () => {
-    const ns = runtime(), legacy = ns.State.createState(908); legacy.schemaVersion = 5; delete legacy.progression.bossesDefeated; delete legacy.progression.roamingThreat; delete legacy.progression.nextRoamingThreatAt; const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 8, galaxyId: 'galaxy_a', progression: { bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 } });
+    const ns = runtime(), legacy = ns.State.createState(908); legacy.schemaVersion = 5; delete legacy.progression.bossesDefeated; delete legacy.progression.roamingThreat; delete legacy.progression.nextRoamingThreatAt; const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy))); expect(migrated).toMatchObject({ schemaVersion: 11, galaxyId: 'galaxy_a', progression: { bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 } });
+  });
+
+  test('unlocks five persistent enclave factions while keeping rivalries symmetric', () => {
+    const ns = runtime(), state = ns.State.createState(1401);
+    expect(ns.Galaxies.availableFactions(state).map(item => item.id)).toEqual(['concord', 'corsairs', 'independents']);
+    expect(ns.Galaxies.availableLandmarks(state).some(item => item.id === 'aster_archive')).toBe(false);
+    state.visitedGalaxies.push('galaxy_c', 'galaxy_d', 'galaxy_e', 'galaxy_f', 'galaxy_g'); state.galaxyId = 'galaxy_a';
+    expect(ns.Galaxies.availableFactions(state)).toHaveLength(8); expect(ns.Galaxies.availableLandmarks(state).filter(item => item.unlockGalaxy)).toHaveLength(5);
+    Object.values(ns.Data.FACTIONS).forEach(faction => (faction.hostileTo || []).forEach(rival => expect(ns.Data.FACTIONS[rival].hostileTo).toContain(faction.id)));
+    const stationRegions = new Set(ns.Data.LANDMARKS.filter(item => item.type === 'station' && !item.unlockGalaxy).map(item => item.region)); expect(stationRegions.size).toBe(63);
+  });
+
+  test('applies distinct galaxy belts and exposes every procedural backdrop', () => {
+    const ns = runtime(), state = ns.State.createState(1402);
+    ns.Data.GALAXIES.forEach(galaxy => { state.galaxyId = galaxy.id; if (!state.visitedGalaxies.includes(galaxy.id)) state.visitedGalaxies.push(galaxy.id); const regions = ns.Galaxies.worldRegions(state), belt = regions.filter(region => region.asteroidDensity === 1.6).map(region => region.grid); expect(new Set(belt)).toEqual(new Set(galaxy.beltSectors)); expect(galaxy.backdrop).toEqual(expect.any(String)); });
+    expect(ns.Data.GALAXIES.find(item => item.id === 'galaxy_d').backdrop).toBe('nebula-cloud'); expect(ns.Data.GALAXIES.find(item => item.id === 'galaxy_f').backdrop).toBe('corner-black-hole');
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); dom.window.MiniInvadersV2.Data.GALAXIES.forEach(galaxy => expect(() => game.renderer.clear(game.region, game.camera, galaxy)).not.toThrow()); dom.window.close();
+  });
+
+  test('blocks faction contracts only when required stations deny docking', () => {
+    const ns = runtime(), state = ns.State.createState(1403), concord = ns.Data.LANDMARKS.find(item => item.id === 'helion_bastion'), corsair = ns.Data.LANDMARKS.find(item => item.id === 'rust_orbit'); state.progression.tutorialStep = 2;
+    const single = { id: 'access:single', type: 'haul', issuer: 'corsairs', status: 'offered', target: { x: concord.x, y: concord.y }, destination: concord.id, stages: [{ id: 'access:single:0', type: 'haul', event: 'dock', destination: concord.id, target: { x: concord.x, y: concord.y }, status: 'active', progress: 0, required: 1 }] };
+    state.pilot.allegiance = 'corsairs'; state.reputations.concord = -49; state.contracts.board = [single]; expect(ns.Expansion.patrolStatus(state, 'concord')).toBe('HOSTILE'); expect(ns.Contracts.accept(state, single.id)).toBe(true);
+    state.contracts.active = null; state.reputations.concord = -50; expect(ns.Contracts.accept(state, single.id)).toBe(false);
+    const choice = { id: 'access:choice', type: 'choice', issuer: 'independents', status: 'offered', target: { x: concord.x, y: concord.y }, stages: [{ id: 'choice:0', type: 'choice', event: 'dock', status: 'active', progress: 0, required: 1, choices: [{ destination: concord.id, faction: 'concord', name: concord.name, target: { x: concord.x, y: concord.y } }, { destination: corsair.id, faction: 'corsairs', name: corsair.name, target: { x: corsair.x, y: corsair.y } }] }] };
+    state.contracts.board = [choice]; state.reputations.corsairs = -49; expect(ns.Contracts.accept(state, choice.id)).toBe(true); state.reputations.corsairs = -50; expect(ns.Contracts.dockingWarning(state)).not.toBeNull(); state.reputations.concord = -49; expect(ns.Contracts.dockingWarning(state)).toBeNull();
+  });
+
+  test('generates and resolves all five fixed-pay faction-choice templates', () => {
+    const ns = runtime(), state = ns.State.createState(1404), station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'); state.progression.tutorialStep = 2; state.contracts.completed = 8; state.ship.ownedModules.push('light_drive'); state.visitedGalaxies.push('galaxy_c','galaxy_d','galaxy_e','galaxy_f','galaxy_g');
+    ns.Contracts.CHOICE_TEMPLATES.forEach((template, index) => { const contract = ns.Contracts.generateChoice(state, station, index, ns.MathUtil.seeded(900 + index), template); expect(contract).toMatchObject({ type: 'choice', template, stages: [{ status: 'active' }, { status: 'pending', choices: expect.any(Array) }] }); expect(contract.stages[1].choices).toHaveLength(2); expect(new Set(contract.stages[1].choices.map(choice => choice.faction)).size).toBe(2); });
+    const contract = ns.Contracts.generateChoice(state, station, 9, ns.MathUtil.seeded(999), 'lost_cargo_choice'); state.contracts.active = contract; contract.status = 'active'; const contact = ns.Contracts.contactFor(contract); expect(ns.Contracts.recordProgress(state, contact.event, 1, contact)).toBe(false); const chosen = ns.Contracts.activeStages(contract)[0].choices[1], chosenStation = ns.Data.LANDMARKS.find(item => item.id === chosen.destination); expect(ns.Contracts.recordProgress(state, 'dock', 1, chosenStation)).toBe(true); expect(contract.reputationRecipient).toBe(chosen.faction);
+  });
+
+  test('starts timed work on undock and applies soft, hard, and on-time payment rules', () => {
+    const ns = runtime(), make = (hard, missed) => { const state = ns.State.createState(hard ? 1500 : 1501); state.dockedAt = 'waypoint_zero'; state.progression.tutorialStep = 2; const contract = { id: `timer:${hard}:${missed}`, type: 'haul', issuer: 'independents', name: 'Timed Freight', reward: { aetherium: 100, sunshards: 0, helionite: 0 }, xp: 20, risk: 3, status: 'active', timer: { duration: 60, remaining: missed ? 0 : 20, started: true, missed, hard }, stages: [{ id: 'timer:stage', type: 'haul', event: 'dock', destination: 'waypoint_zero', target: { x: 0, y: 0 }, status: 'complete', progress: 1, required: 1 }] }; state.contracts.active = contract; return state; };
+    const onTime = make(false, false); ns.Contracts.complete(onTime); expect(onTime.pilot.wallet.banked.aetherium).toBe(385);
+    const soft = make(false, true); ns.Contracts.complete(soft); expect(soft.pilot.wallet.banked.aetherium).toBe(350);
+    const hard = make(true, true); const before = hard.pilot.wallet.banked.aetherium; ns.Contracts.complete(hard); expect(hard.pilot.wallet.banked.aetherium).toBe(before); expect(hard.reputations.independents).toBe(7);
+    const pending = make(false, false); pending.contracts.active.timer.started = false; expect(ns.Contracts.updateTimer(pending, 10)).toBe(false); expect(pending.contracts.active.timer.remaining).toBe(20); expect(ns.Contracts.startTimer(pending)).toBe(true); ns.Contracts.updateTimer(pending, 5); expect(pending.contracts.active.timer.remaining).toBe(15);
+  });
+
+  test('keeps escort rendezvous within two sectors and accelerates close formations', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.state.progression.tutorialStep = 2; game.state.contracts.completed = 4; game.state.dockedAt = null;
+    const station = ns.Data.LANDMARKS.find(item => item.id === 'waypoint_zero'), escorts = Array.from({ length: 250 }, (_, index) => ns.Contracts.generate(game.state, station, index)).filter(contract => contract.type === 'escort'); expect(escorts.length).toBeGreaterThan(0);
+    escorts.forEach(contract => { const escort = contract.stages[0].escort, start = ns.Data.REGIONS.find(region => region.id === escort.startRegion), end = ns.Data.REGIONS.find(region => region.id === escort.endRegion), gap = Math.max(Math.abs(start.column-end.column),Math.abs(start.row-end.row)); expect(gap).toBeGreaterThanOrEqual(1); expect(gap).toBeLessThanOrEqual(2); });
+    const contract = escorts[0]; game.state.contracts.active = contract; const convoy = ns.Contracts.startEscort(game.state); Object.assign(game.state.ship, { x: convoy.x, y: convoy.y, vx: 260, vy: 0 }); game.updateContract(.5); expect(contract.escort.speed).toBeGreaterThan(ns.Contracts.ESCORT_CONFIG.speed);
+    Object.assign(game.state.ship, { x: convoy.x + 800, y: convoy.y, vx: 0, vy: 0 }); contract.escort.grace = 3.9; game.contractWarningTimer = 0; game.updateContract(.1); expect(game.ui.message.textContent).toContain('ESCORT LINK CRITICAL'); expect(game.ui.message.classList).toContain('convoy-warning'); convoy.hull = convoy.maxHull * .35; game.updateContract(.1); expect(game.ui.message.textContent).toContain('CONVOY HULL CRITICAL'); game.ui.updateHud(game); expect(dom.window.document.getElementById('objective').classList).toContain('convoy-warning'); dom.window.close();
+  });
+
+  test('uses 90/240 interaction ranges and requires a cast for distress recovery', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.undock(); expect(ns.Progression.calculateShipStats(game.state).interactionRange).toBe(90);
+    game.state.ship.ownedModules.push('tractor_lattice'); expect(ns.Progression.equipModule(game.state, 'utility1', 'tractor_lattice')).toBe(true); expect(ns.Progression.calculateShipStats(game.state).interactionRange).toBe(240);
+    const signal = game.world.spawnTransient({ id: 'distress:cast', kind: 'worldScenario', typeId: 'distress_call', name: 'Pilot Recovery Signal', x: game.state.ship.x + 200, y: game.state.ship.y, radius: 22, region: game.region.id }); expect(signal).not.toBeNull(); expect(ns.WorldEvents.update(game)).toBe(false); expect(game.world.loadedEntities()).toContain(signal); expect(game.availableInteraction().target).toBe(signal); game.interact(); expect(game.interactionCast).toMatchObject({ id: signal.id, duration: 4 }); dom.window.close();
+  });
+
+  test('drops interactable minerals instead of direct asteroid currency', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.undock(); game.random = { chance: () => true, next: () => .1, range: (min) => min }; const before = ns.Wallet.total(game.state);
+    const mineral = game.handleAsteroidResult({ destroyed: true, asteroid: { tier: 'small', x: game.state.ship.x + 40, y: game.state.ship.y, vx: 0, vy: 0 } }); expect(mineral).toMatchObject({ typeId: 'mineral_chunk', reward: { aetherium: 2 } }); expect(ns.Wallet.total(game.state)).toEqual(before); expect(game.availableInteraction().target).toBe(mineral); expect(read('js/renderer.js').match(/style === 'mineral'[^\n]+/)[0]).not.toContain('strokeRect'); game.completeInteraction(mineral, 'world'); expect(game.state.pilot.wallet.unbanked.aetherium).toBe(2); dom.window.close();
+  });
+
+  test('runs Deep Freeze tiers, reduced weapon costs, and combined Light Speed payment', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.undock(); game.state.contracts.completed = 5; game.state.ship.ownedModules.push('deep_freeze_mk1'); game.state.ship.slots.abilitySpace = 'deep_freeze_mk1'; game.state.ship.heat = 80; game.state.ship.energy = 80; expect(ns.Abilities.activate(game, 'abilitySpace')).toBe(true); expect(game.state.ship.heat).toBe(45); expect(ns.Abilities.heatScale(game.state)).toBe(.2);
+    game.state.ship.slots.primary1 = 'pulse_mk1'; game.weaponCooldowns.primary1 = 0; game.state.ship.energy = 80; game.state.ship.heat = 0; expect(ns.Weapons.fire(game, 'primary1')).toBe(true); expect(game.state.ship.energy).toBeCloseTo(80 - 7 * .7); expect(game.state.ship.heat).toBeCloseTo(9 * .7 * .2);
+    game.state.pilot.wallet.banked = { aetherium: 0, sunshards: 3, helionite: 4 }; game.state.pilot.wallet.unbanked = { aetherium: 0, sunshards: 2, helionite: 1 }; expect(ns.Wallet.canAffordCombined(game.state, { sunshards: 5, helionite: 5 })).toBe(true); expect(ns.Wallet.debitCombined(game.state, { sunshards: 5, helionite: 5 })).toBe(true); expect(ns.Wallet.total(game.state)).toEqual({ aetherium: 0, sunshards: 0, helionite: 0 }); dom.window.close();
+  });
+
+  test('hits rendered boss geometry and creates differentiated death salvage effects', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.undock(); const boss = ns.Encounters.create(game, 'foundry_ark', game.state.ship.x + 200, game.state.ship.y, { angle: -Math.PI / 2 }); const hit = ns.Geometry.segmentPolygonHit({ x: boss.x - 120, y: boss.y }, { x: boss.x + 120, y: boss.y }, boss, 3); expect(hit).not.toBeNull(); expect(ns.Geometry.fragments(boss).length).toBeGreaterThan(ns.Geometry.fragments(ns.Encounters.create(game, 'interceptor', 0, 0)).length);
+    game.random = { chance: () => true, next: () => .1, range: (min) => min }; game.spawnEnemyDeath(boss); expect(game.effects.some(effect => effect.fragment)).toBe(true); expect(game.world.loadedEntities().some(entity => entity.typeId === 'capital_salvage')).toBe(true); dom.window.close();
+  });
+
+  test('renders contained Trade cards, contract telemetry, Light Speed text, and fixed Stargate hover', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.state.progression.tutorialStep = 2; game.state.contracts.completed = 5; game.state.ship.ownedModules.push('heat_sink'); game.ui.openPanel(game, 'station'); expect(game.ui.panelBody.querySelectorAll('.station-facts span')).toHaveLength(3); game.ui.openPanel(game, 'trade'); expect(game.ui.panelBody.querySelector('.trade-console')).not.toBeNull(); expect(game.ui.panelBody.querySelectorAll('.module-offer-action button').length).toBeGreaterThan(0); expect(game.ui.panelBody.querySelector('.module-offer-body .module-stats')).not.toBeNull(); expect(game.ui.panelBody.querySelector('.owned-module-grid')).not.toBeNull(); expect(game.ui.panelBody.querySelector('[data-action="sell-module"][data-id="heat_sink"]').textContent).toContain('SELL'); expect(game.ui.panelBody.textContent).toContain('RESALE COUNTER'); game.ui.updateHud(game); expect(dom.window.document.getElementById('lightDriveHud').textContent).toContain('LIGHT SPEED'); const css = read('css/style.css'); expect(css).toContain('.stargate-node:hover:not(:disabled)'); expect(css).toContain('transform: translate(-50%, -50%)'); dom.window.close();
+  });
+});
+
+describe('Frontier Wayfarer irregular galaxies, relics, and map objectives', () => {
+  test('uses seven unique contiguous 8x8 masks with 48 to 56 active sectors', () => {
+    const ns = runtime(), masks = ns.Data.GALAXIES.map(galaxy => galaxy.mask.join(''));
+    expect(new Set(masks).size).toBe(7);
+    ns.Data.GALAXIES.forEach(galaxy => {
+      const active = []; galaxy.mask.forEach((row, y) => [...row].forEach((cell, x) => { if (cell === '#') active.push([x, y]); }));
+      expect(active.length).toBeGreaterThanOrEqual(48); expect(active.length).toBeLessThanOrEqual(56); expect(galaxy.mask.every(row => row.length === 8)).toBe(true);
+      const open = [active[0]], seen = new Set([active[0].join(',')]);
+      while (open.length) { const [x, y] = open.shift(); [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => { const key = `${x+dx},${y+dy}`; if (galaxy.mask[y+dy]?.[x+dx] === '#' && !seen.has(key)) { seen.add(key); open.push([x+dx,y+dy]); } }); }
+      expect(seen.size).toBe(active.length);
+      const state = ns.State.createState(401); state.galaxyId = galaxy.id; if (!state.visitedGalaxies.includes(galaxy.id)) state.visitedGalaxies.push(galaxy.id); const regions = ns.Galaxies.worldRegions(state); expect(regions).toHaveLength(active.length); ns.Galaxies.availableLandmarks(state).forEach(landmark => expect(regions.some(region => region.id === landmark.region)).toBe(true));
+    });
+  });
+
+  test('generates five stable per-galaxy objectives while preserving Galaxy A equipment goals', () => {
+    const ns = runtime(), first = ns.State.createState(402), repeat = ns.State.createState(402), other = ns.State.createState(403);
+    ns.Data.GALAXIES.forEach(galaxy => { const definitions = ns.Objectives.definitionsFor(first, galaxy.id); expect(definitions).toHaveLength(5); expect(new Set(definitions.map(item => item.family)).size).toBe(5); });
+    expect(ns.Objectives.definitionsFor(first, 'galaxy_a').slice(0, 2).map(item => item.id)).toEqual(['light_speed_engine', 'stargate_pair']);
+    expect(ns.Objectives.definitionsFor(repeat, 'galaxy_d')).toEqual(ns.Objectives.definitionsFor(first, 'galaxy_d'));
+    expect(ns.Objectives.definitionsFor(other, 'galaxy_d')).not.toEqual(ns.Objectives.definitionsFor(first, 'galaxy_d'));
+    ns.Data.GALAXIES.forEach(galaxy => ns.Objectives.definitionsFor(first, galaxy.id).forEach(objective => { const range = ns.Objectives.REWARD_RANGES[objective.difficulty]; Object.entries(objective.reward).forEach(([currency, value]) => { expect(value).toBeGreaterThanOrEqual(range[currency][0]); expect(value).toBeLessThanOrEqual(range[currency][1]); }); if (objective.family === 'relic') expect(ns.Objectives.relicFor(first, galaxy.id).present).toBe(true); }));
+  });
+
+  test('pays completed objectives once and migrates legacy totals into the current galaxy', () => {
+    const ns = runtime(), state = ns.State.createState(404), objective = ns.Objectives.definitionsFor(state, 'galaxy_a')[0], before = state.pilot.wallet.banked.aetherium;
+    state.ship.ownedModules.push('light_drive'); let result = ns.Objectives.evaluate(state, 'galaxy_a'); expect(result.completed.map(item => item.id)).toContain(objective.id); expect(state.pilot.wallet.banked.aetherium).toBe(before + objective.reward.aetherium);
+    result = ns.Objectives.evaluate(state, 'galaxy_a'); expect(result.completed).toHaveLength(0); expect(state.pilot.wallet.banked.aetherium).toBe(before + objective.reward.aetherium);
+    const legacy = ns.State.createState(405); legacy.schemaVersion = 9; delete legacy.mapObjectives; legacy.contracts.completed = 12; legacy.stats.kills = 88; legacy.stats.trades = 9; legacy.progression.bossesDefeated = { marauder_carrier: 2 }; const migrated = ns.Save.migrate(JSON.parse(ns.Save.serialize(legacy)));
+    expect(migrated.mapObjectives.progress.galaxy_a).toMatchObject({ contracts: 12, kills: 88, trades: 9, bosses: 2 });
+  });
+
+  test('creates at most one deterministic drifting Ancient Relic and pays its exact field reward', () => {
+    const ns = runtime(); let state = null, relic = null;
+    for (let seed = 1; seed < 500 && !relic?.present; seed++) { state = ns.State.createState(seed); relic = ns.Objectives.relicFor(state, 'galaxy_a'); }
+    expect(relic.present).toBe(true); const world = new ns.World.WorldService(ns.Galaxies.worldSeed(state), [], ns.Galaxies.worldConfig(state)); world.update(relic.x, relic.y); const loaded = world.loadedEntities().filter(entity => entity.typeId === 'ancient_relic'); expect(loaded).toHaveLength(1);
+    const entity = loaded[0], old = { x: entity.x, y: entity.y, rotation: entity.rotation }; world.updateAsteroids(1); expect({ x: entity.x, y: entity.y, rotation: entity.rotation }).not.toEqual(old);
+    const game = { state, world, region: ns.World.regionAt(entity.x, entity.y, world.config), enemies: [], notify: jest.fn(), save: jest.fn(), ui: { renderAll: jest.fn() }, spawnEnemies: jest.fn() }, before = ns.Wallet.total(state);
+    expect(ns.WorldEvents.interact(game, entity)).toBe(true); const after = ns.Wallet.total(state); expect(after).toEqual({ aetherium: before.aetherium + 500, sunshards: before.sunshards + 150, helionite: before.helionite + 100 }); expect(state.mapObjectives.progress.galaxy_a.relic).toBe(1); expect(world.loadedEntities().filter(item => item.typeId === 'ancient_relic')).toHaveLength(0);
+  });
+
+  test('rejects missing-sector waypoints and groups faction cards by standing', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); const missing = dom.window.MiniInvadersV2.Data.REGIONS.find(region => region.grid === 'A1');
+    expect(game.setCustomWaypoint({ x: missing.x + 100, y: missing.y + 100 })).toBeNull(); expect(game.ui.message.textContent).toContain('NO NAVIGABLE SECTOR');
+    game.state.reputations.concord = 20; game.state.reputations.independents = 0; game.state.reputations.corsairs = -10; game.ui.openPanel(game, 'factions'); const rows = game.ui.panelBody.querySelectorAll('.faction-standing-row'); expect(rows).toHaveLength(2); expect(rows[0].querySelector('h2').textContent).toBe('FRIENDLY'); expect(rows[0].textContent.indexOf('Helion Concord')).toBeLessThan(rows[0].textContent.indexOf('Frontier Guilds')); expect(rows[1].textContent).toContain('Null Corsairs'); dom.window.close();
+  });
+
+  test('contains the Local Map in a no-scroll fitted stage with an enlarged details panel', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game; game.newCareer(); game.ui.openPanel(game, 'navigation');
+    expect(game.ui.panelBody.classList.contains('navigation-view')).toBe(true); expect(game.ui.panelBody.classList.contains('navigation-local-view')).toBe(true); expect(game.ui.panelBody.querySelector('.map-stage > .galaxy-map')).not.toBeNull();
+    const css = read('css/style.css'); expect(css).toContain('grid-template-rows:auto minmax(0,1fr)'); expect(css).toContain('repeat(2,minmax(0,190px))'); expect(css).toContain('.navigation-view .navigation-view-frame'); expect(css).toContain('clamp(310px,25vw,370px)'); expect(css).toContain('.navigation-local-view .map-stage'); expect(css).toContain('aspect-ratio:1 / 1');
+    dom.window.close();
+  });
+
+  test('marks the current stargate node and enforces the persisted sixty-second cooldown', () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.state.ship.activeHullId = 'meridian_ranger'; game.state.ship.ownedHullIds.push('meridian_ranger'); game.state.ship.slots.reactor = ns.Galaxies.GATE_REACTOR; game.state.ship.slots.engine = ns.Galaxies.GATE_ENGINE; game.ui.openPanel(game, 'navigation'); game.ui.panelBody.querySelector('[data-action="navigation-view"][data-id="stargate"]').click();
+    expect(game.ui.panelBody.querySelectorAll('.stargate-player-marker')).toHaveLength(1); expect(game.ui.panelBody.querySelector('.stargate-node.current .stargate-player-marker').textContent).toBe('YOU');
+    expect(ns.Galaxies.travel(game.state, 'galaxy_b')).toMatchObject({ ok: true }); game.state.dockedAt = 'waypoint_zero'; expect(ns.Galaxies.travel(game.state, 'galaxy_a')).toMatchObject({ ok: false, reason: 'cooldown', remaining: expect.any(Number) });
+    game.useState(game.state); game.ui.navigationView = 'stargate'; game.ui.selectedGalaxyId = 'galaxy_a'; game.ui.openPanel(game, 'navigation'); expect(game.ui.panelBody.querySelector('.stargate-confirm').textContent).toContain('COOLDOWN'); game.ui.panelBody.querySelector('.stargate-confirm').click(); expect(game.ui.message.textContent).toContain('COOLDOWN'); dom.window.close();
+  });
+
+  test('updates the stargate cooldown countdown without unrelated state changes', async () => {
+    const dom = bootDom(), game = dom.window.miniInvadersV2Game, ns = dom.window.MiniInvadersV2; game.newCareer(); game.state.ship.activeHullId = 'meridian_ranger'; game.state.ship.ownedHullIds.push('meridian_ranger'); game.state.ship.slots.reactor = ns.Galaxies.GATE_REACTOR; game.state.ship.slots.engine = ns.Galaxies.GATE_ENGINE; game.state.lastStargateTravelAt = Date.now(); game.ui.openPanel(game, 'navigation'); game.ui.panelBody.querySelector('[data-action="navigation-view"][data-id="stargate"]').click();
+    const localTab = game.ui.panelBody.querySelector('[data-action="navigation-view"][data-id="local"]'), galaxyNode = game.ui.panelBody.querySelector('.stargate-node'); expect(game.ui.panelBody.querySelector('.stargate-confirm').textContent).toContain('COOLDOWN 60S');
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    expect(game.ui.panelBody.querySelector('.stargate-confirm').textContent).toContain('COOLDOWN 59S'); expect(game.ui.panelBody.querySelector('[data-action="navigation-view"][data-id="local"]')).toBe(localTab); expect(game.ui.panelBody.querySelector('.stargate-node')).toBe(galaxyNode);
+    dom.window.close();
   });
 });

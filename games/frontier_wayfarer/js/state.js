@@ -8,7 +8,7 @@
 
     function createState(seed) {
         return {
-            schemaVersion: 8,
+            schemaVersion: 11,
             worldSeed: Number.isFinite(seed) ? seed : Math.floor(Math.random() * 0x7fffffff),
             galaxyId: 'galaxy_a',
             visitedGalaxies: ['galaxy_a'],
@@ -25,11 +25,11 @@
                 slots: Object.assign({}, DEFAULT_SLOTS), ownedModules: ['pulse_mk1', 'reactor_mk1', 'drive_mk1', 'cargo_mk1'],
                 moduleDamage: {}, abilityCooldowns: {}, abilityEffects: {}, cargo: {}, insured: false
             },
-            reputations: { concord: 0, corsairs: 0, independents: 5 },
+            reputations: Object.fromEntries(Object.keys(ns.Data.FACTIONS).map(id => [id, id === 'independents' ? 5 : 0])),
             economy: {},
             marketInventories: {},
             contracts: { board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 },
-            quests: { independents: 0, concord: 0, corsairs: 0 },
+            quests: Object.fromEntries(Object.keys(ns.Data.FACTIONS).map(id => [id, 0])),
             progression: { tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 },
             discoveries: ['waypoint_zero'],
             customWaypoint: null,
@@ -37,6 +37,7 @@
             visitedRegions: ['trade_belt'],
             dockedAt: 'waypoint_zero',
             stats: { kills: 0, discoveries: 0, contracts: 0, trades: 0, repairs: 0, distance: 0 },
+            mapObjectives: { definitions: {}, progress: {}, paid: {} },
             settings: { volume: 0.5, screenShake: true, radarScale: 1 },
             lastSaveAt: Date.now()
         };

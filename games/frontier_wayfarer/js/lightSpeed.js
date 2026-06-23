@@ -18,7 +18,7 @@
     function integrity(ship) { return (ship.hull || 0) + (ship.shield || 0) + (ship.overshield || 0); }
     function canCharge(game) {
         const travel = ensure(game), panelOpen = Boolean(game.ui?.panel?.classList?.contains('active'));
-        return Boolean(game.state && fitted(game) && !game.state.dockedAt && !panelOpen && travel.phase === 'idle' && travel.cooldown <= 0 && game.state.ship.energy > 0 && game.state.ship.heat < 100 && ns.Wallet.canAfford(game.state, CONFIG.activationCost));
+        return Boolean(game.state && fitted(game) && !game.state.dockedAt && !panelOpen && travel.phase === 'idle' && travel.cooldown <= 0 && game.state.ship.energy > 0 && game.state.ship.heat < 100 && ns.Wallet.canAffordCombined(game.state, CONFIG.activationCost));
     }
     function beginCharge(game) {
         if (!canCharge(game)) return false;
@@ -56,7 +56,10 @@
         const b = game?.world?.config?.bounds || ns.World.WORLD_BOUNDS, dx = Math.cos(ship.angle), dy = Math.sin(ship.angle), distances = [];
         if (dx > .0001) distances.push((b.maxX - ship.x) / dx); else if (dx < -.0001) distances.push((b.minX - ship.x) / dx);
         if (dy > .0001) distances.push((b.maxY - ship.y) / dy); else if (dy < -.0001) distances.push((b.minY - ship.y) / dy);
-        return Math.min(...distances.filter(value => value >= 0));
+        const rectangular = Math.min(...distances.filter(value => value >= 0)), config = game?.world?.config;
+        if (!config?.regions) return rectangular;
+        for (let distance = 0; distance <= Math.min(rectangular, CONFIG.boundaryLookahead + 800); distance += 100) if (!ns.World.containsPoint(ship.x + dx * distance, ship.y + dy * distance, config)) return distance;
+        return rectangular;
     }
     function interrupt(game, message) {
         const travel = ensure(game); travel.phase = 'idle'; travel.timer = 0; travel.cooldown = CONFIG.retryDelay; travel.zoom = 1;
@@ -64,7 +67,7 @@
     }
     function enter(game) {
         const travel = ensure(game), ship = game.state.ship;
-        if (!ns.Wallet.debit(game.state, CONFIG.activationCost)) return interrupt(game, 'ASTERION DRIVE // ACTIVATION RESOURCES LOST');
+        if (!ns.Wallet.debitCombined(game.state, CONFIG.activationCost)) return interrupt(game, 'ASTERION DRIVE // ACTIVATION RESOURCES LOST');
         game.save?.();
         travel.phase = 'cruising'; travel.timer = 0; travel.zoom = .68;
         game.enemies = []; game.bullets = []; game.effects = [];
@@ -98,7 +101,7 @@
             return;
         }
         if (travel.phase === 'cruising') {
-            ship.energy = Math.max(0, ship.energy - CONFIG.energyPerSecond * dt); ship.heat = Math.min(100, ship.heat + CONFIG.heatPerSecond * dt);
+            ship.energy = Math.max(0, ship.energy - CONFIG.energyPerSecond * dt); ship.heat = Math.min(100, ship.heat + CONFIG.heatPerSecond * ns.Abilities.heatScale(game.state) * dt);
             move(game, CONFIG.cruiseSpeed, dt, true); travel.zoom = .68;
             if (ship.energy <= 0 || ship.heat >= 100) beginDeceleration(game, true, 'DRIVE RESERVES EXHAUSTED // FORCED REMATERIALIZATION');
             else if (distanceToBoundary(ship, game) <= CONFIG.boundaryLookahead) beginDeceleration(game, true);
@@ -118,7 +121,7 @@
         if (travel.phase === 'cruising') return { label: 'R // DECELERATE', className: 'active' };
         if (travel.phase === 'decelerating') return { label: 'REMATERIALIZING', className: 'charging' };
         if (travel.cooldown > 0) return { label: `COOLDOWN ${travel.cooldown.toFixed(1)}S`, className: 'cooling' };
-        if (!ns.Wallet.canAfford(game.state, CONFIG.activationCost)) return { label: 'NEED 5 SS + 5 HE', className: 'locked' };
+        if (!ns.Wallet.canAffordCombined(game.state, CONFIG.activationCost)) return { label: 'NEED 5 SS + 5 HE', className: 'locked' };
         if (game.state.ship.energy <= 0 || game.state.ship.heat >= 100) return { label: 'DRIVE RESERVES EXHAUSTED', className: 'locked' };
         return { label: 'R // LIGHT SPEED', className: 'ready' };
     }

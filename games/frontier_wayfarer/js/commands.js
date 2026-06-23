@@ -10,7 +10,7 @@
         },
         upgradeChassis(state) {
             if (!state.dockedAt) return result(false, 'dock-required');
-            if (state.ship.chassis.level >= 5) return result(false, 'maximum-level');
+            if (state.ship.chassis.level >= 7) return result(false, 'maximum-level');
             const cost = { aetherium: state.ship.chassis.level * 700, helionite: state.ship.chassis.level * 5 };
             if (!ns.Wallet.canAfford(state, cost)) return result(false, 'insufficient-credits', { cost });
             if (!ns.Wallet.debit(state, cost)) return result(false, 'payment-failed', { cost });

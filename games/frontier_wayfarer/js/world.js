@@ -10,7 +10,7 @@
     function catalogBounds() { return boundsFor(ns.Registry?.all('region') || REGIONS); }
     function createConfig(options) {
         const config = options || {}, regions = config.regions || ns.Registry?.all('region') || REGIONS;
-        return { regions, landmarks: config.landmarks || ns.Registry?.all('landmark') || LANDMARKS, worldObjects: config.worldObjects || ns.Registry?.all('worldObject') || Object.values(WORLD_OBJECT_TYPES), worldEvents: config.worldEvents || ns.Registry?.all('worldEvent') || Object.values(WORLD_SCENARIOS), chunkSize: config.chunkSize || CHUNK_SIZE, loadRadius: Number.isInteger(config.loadRadius) ? config.loadRadius : LOAD_RADIUS, bounds: config.bounds || boundsFor(regions) };
+        return { regions, landmarks: config.landmarks || ns.Registry?.all('landmark') || LANDMARKS, worldObjects: config.worldObjects || ns.Registry?.all('worldObject') || Object.values(WORLD_OBJECT_TYPES), worldEvents: config.worldEvents || ns.Registry?.all('worldEvent') || Object.values(WORLD_SCENARIOS), relic: config.relic || null, chunkSize: config.chunkSize || CHUNK_SIZE, loadRadius: Number.isInteger(config.loadRadius) ? config.loadRadius : LOAD_RADIUS, bounds: config.bounds || boundsFor(regions) };
     }
     class EntityStore {
         constructor() { this.byId = new Map(); this.byKind = new Map(); this.byRegion = new Map(); this.byFaction = new Map(); this.byChunk = new Map(); }
@@ -29,19 +29,28 @@
         small: { radius: 16, radiusVariance: 4, hull: 20, speed: 18, child: null }
     };
 
-    function boundaryExposure(x, y, bounds) {
-        bounds = bounds || WORLD_BOUNDS;
-        const outsideX = Math.max(bounds.minX - x, 0, x - bounds.maxX);
-        const outsideY = Math.max(bounds.minY - y, 0, y - bounds.maxY);
-        const depth = Math.hypot(outsideX, outsideY);
-        const insideDistance = depth ? -depth : Math.min(x - bounds.minX, bounds.maxX - x, y - bounds.minY, bounds.maxY - y);
+    function containsPoint(x, y, config) { return (config?.regions || REGIONS).some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h); }
+    function rectDistance(x, y, region) { const dx = Math.max(region.x - x, 0, x - (region.x + region.w)), dy = Math.max(region.y - y, 0, y - (region.y + region.h)); return Math.hypot(dx, dy); }
+    function boundaryExposure(x, y, config) {
+        if (config && Number.isFinite(config.minX)) config = { bounds: config, regions: REGIONS };
+        config = config || { bounds: WORLD_BOUNDS, regions: REGIONS }; const regions = config.regions || REGIONS, active = regions.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+        const depth = active ? 0 : Math.min(...regions.map(region => rectDistance(x, y, region)));
+        let insideDistance = -depth;
+        if (active) {
+            const adjacent = (column, row) => regions.some(region => region.column === column && region.row === row), distances = [];
+            if (!adjacent(active.column - 1, active.row)) distances.push(x - active.x);
+            if (!adjacent(active.column + 1, active.row)) distances.push(active.x + active.w - x);
+            if (!adjacent(active.column, active.row - 1)) distances.push(y - active.y);
+            if (!adjacent(active.column, active.row + 1)) distances.push(active.y + active.h - y);
+            insideDistance = distances.length ? Math.min(...distances) : 900;
+        }
         return { depth, insideDistance, active: depth > 0, proximity: clamp((900 - insideDistance) / 900, 0, 1) };
     }
     function regionAt(x, y, config) {
         const bounds = config?.bounds || WORLD_BOUNDS, regions = config?.regions || REGIONS;
         const safeX = clamp(x, bounds.minX + 1, bounds.maxX - 1);
         const safeY = clamp(y, bounds.minY + 1, bounds.maxY - 1);
-        return regions.find(r => safeX >= r.x && safeX < r.x + r.w && safeY >= r.y && safeY < r.y + r.h) || regions[0];
+        return regions.find(r => safeX >= r.x && safeX < r.x + r.w && safeY >= r.y && safeY < r.y + r.h) || regions.slice().sort((a, b) => rectDistance(x, y, a) - rectDistance(x, y, b))[0];
     }
     function chunkKey(cx, cy) { return `${cx},${cy}`; }
     function asteroidTier(seed, cx, cy, index) {
@@ -90,15 +99,46 @@
             variant: definition.ambushChance && hash(seed, cx, cy, salt + 2) < definition.ambushChance ? 'guarded' : 'standard'
         };
     }
+    function staticRadius(entity) {
+        if (entity.kind === 'station') return 105;
+        if (entity.kind === 'anomaly') return 65;
+        if (entity.kind === 'worldScenario') return entity.radius || 30;
+        if (entity.kind === 'worldObject') return entity.radius || 22;
+        return entity.radius || 0;
+    }
+    function resolveStaticOverlaps(entities, region, seed, cx, cy, chunkSize) {
+        const staticKinds = new Set(['station', 'anomaly', 'worldObject', 'worldScenario']);
+        const staticEntities = entities.filter(entity => staticKinds.has(entity.kind));
+        for (let pass = 0; pass < 5; pass++) {
+            let changed = false;
+            for (let i = 0; i < staticEntities.length; i++) {
+                for (let j = 0; j < i; j++) {
+                    const a = staticEntities[i], b = staticEntities[j];
+                    if (a.region !== b.region) continue;
+                    const min = staticRadius(a) + staticRadius(b) + 54, actual = distance(a, b);
+                    if (actual >= min) continue;
+                    const angle = actual > 0 ? Math.atan2(a.y - b.y, a.x - b.x) : hash(seed, cx, cy, i * 97 + j) * Math.PI * 2;
+                    const push = min - actual + 8;
+                    a.x += Math.cos(angle) * push;
+                    a.y += Math.sin(angle) * push;
+                    const radius = staticRadius(a) + 80;
+                    a.x = clamp(a.x, Math.max(cx * chunkSize + radius, region.x + radius), Math.min((cx + 1) * chunkSize - radius, region.x + region.w - radius));
+                    a.y = clamp(a.y, Math.max(cy * chunkSize + radius, region.y + radius), Math.min((cy + 1) * chunkSize - radius, region.y + region.h - radius));
+                    changed = true;
+                }
+            }
+            if (!changed) break;
+        }
+    }
     function generateChunk(seed, cx, cy, options) {
         const config = options?.regions ? options : createConfig(options), chunkSize = config.chunkSize, bounds = config.bounds;
         const center = { x: (cx + .5) * chunkSize, y: (cy + .5) * chunkSize };
-        const region = regionAt(center.x, center.y, config);
+        const activeCell = containsPoint(center.x, center.y, config), region = regionAt(center.x, center.y, config);
         const entities = [];
         const baseAsteroids = 5 + Math.floor(hash(seed, cx, cy, 1) * (7 + region.danger * 2));
         const asteroidCount = Math.max(3, Math.round(baseAsteroids * (region.asteroidDensity || 1)));
-        for (let i = 0; i < asteroidCount; i++) entities.push(makeAsteroid(seed, cx, cy, i, chunkSize));
-        const insideWorld = center.x >= bounds.minX && center.x < bounds.maxX && center.y >= bounds.minY && center.y < bounds.maxY;
+        if (activeCell) for (let i = 0; i < asteroidCount; i++) entities.push(makeAsteroid(seed, cx, cy, i, chunkSize));
+        const insideWorld = activeCell && center.x >= bounds.minX && center.x < bounds.maxX && center.y >= bounds.minY && center.y < bounds.maxY;
         const openingRoute = region.id === 'trade_belt' && distance(center, { x: 0, y: 0 }) < 2500;
         const objectChance = .08 + region.danger * .02 + region.remoteness * .015;
         if (insideWorld && hash(seed, cx, cy, 3) < objectChance) {
@@ -119,6 +159,9 @@
         }
         config.landmarks.filter(l => Math.floor(l.x / chunkSize) === cx && Math.floor(l.y / chunkSize) === cy)
             .forEach(l => entities.push(Object.assign({ radius: l.type === 'station' ? 105 : 65, kind: l.type }, l)));
+        const relic = config.relic;
+        if (relic?.present && Math.floor(relic.x / chunkSize) === cx && Math.floor(relic.y / chunkSize) === cy) entities.push(Object.assign({}, relic));
+        resolveStaticOverlaps(entities, region, seed, cx, cy, chunkSize);
         return { key: chunkKey(cx, cy), cx, cy, region: region.id, entities };
     }
 
@@ -157,6 +200,11 @@
             this.loadedEntities().filter(entity => entity.kind === 'asteroid').forEach(entity => {
                 entity.x += entity.vx * dt; entity.y += entity.vy * dt; entity.rotation += entity.spin * dt;
             });
+            this.loadedEntities().filter(entity => entity.typeId === 'ancient_relic').forEach(entity => {
+                const region = this.config.regions.find(item => item.id === entity.region); entity.x += entity.vx * dt; entity.y += entity.vy * dt; entity.rotation += entity.spin * dt;
+                if (region && (entity.x < region.x + 80 || entity.x > region.x + region.w - 80)) { entity.vx *= -1; entity.x = clamp(entity.x, region.x + 80, region.x + region.w - 80); }
+                if (region && (entity.y < region.y + 80 || entity.y > region.y + region.h - 80)) { entity.vy *= -1; entity.y = clamp(entity.y, region.y + 80, region.y + region.h - 80); }
+            });
         }
         splitAsteroid(entity) {
             const spec = ASTEROID_TIERS[entity.tier]; if (!spec?.child) return [];
@@ -169,12 +217,17 @@
             });
         }
         damageAsteroid(entity, damage) {
-            if (!entity || entity.kind !== 'asteroid' || entity.hull <= 0) return { hit: false, destroyed: false, reward: 0, fragments: [] };
-            entity.hull -= Math.max(0, damage); if (entity.hull > 0) return { hit: true, destroyed: false, reward: 0, fragments: [] };
-            const chunk = Array.from(this.chunks.values()).find(value => value.entities.includes(entity)); if (!chunk) return { hit: true, destroyed: true, reward: 0, fragments: [] };
+            if (!entity || entity.kind !== 'asteroid' || entity.hull <= 0) return { hit: false, destroyed: false, fragments: [] };
+            entity.hull -= Math.max(0, damage); if (entity.hull > 0) return { hit: true, destroyed: false, fragments: [] };
+            const chunk = Array.from(this.chunks.values()).find(value => value.entities.includes(entity)); if (!chunk) return { hit: true, destroyed: true, asteroid: entity, fragments: [] };
             const fragments = this.splitAsteroid(entity); this.entities.remove(entity, chunk.key); chunk.entities.splice(chunk.entities.indexOf(entity), 1, ...fragments); fragments.forEach(fragment => this.entities.add(fragment, chunk.key));
             this.asteroidRecords.set(entity.rootId, chunk.entities.filter(value => value.kind === 'asteroid' && value.rootId === entity.rootId).map(value => Object.assign({}, value)));
-            return { hit: true, destroyed: true, reward: fragments.length ? 0 : 2, fragments };
+            return { hit: true, destroyed: true, asteroid: Object.assign({}, entity), fragments };
+        }
+        spawnTransient(entity) {
+            if (!entity?.id || this.entities.byId.has(entity.id)) return null;
+            const chunk = Array.from(this.chunks.values()).find(value => entity.x >= value.cx * this.config.chunkSize && entity.x < (value.cx + 1) * this.config.chunkSize && entity.y >= value.cy * this.config.chunkSize && entity.y < (value.cy + 1) * this.config.chunkSize);
+            if (!chunk) return null; chunk.entities.push(entity); this.entities.add(entity, chunk.key); return entity;
         }
         syncEntities() {
             const present = new Set();
@@ -184,15 +237,15 @@
         loadedEntities(kind) { this.syncEntities(); return kind ? this.entities.query(this.entities.byKind, kind) : this.entities.all(); }
         nearbyEntities(x, y, radius, kind) { return this.loadedEntities(kind).filter(e => distance({ x, y }, e) <= radius); }
         consumeEntity(state, entity) {
-            if (!entity || !['signal', 'salvage', 'worldObject', 'worldScenario'].includes(entity.kind) || this.consumedEntityIds.has(entity.id)) return false;
+            if (!entity || !['signal', 'salvage', 'anomaly', 'worldObject', 'worldScenario'].includes(entity.kind) || this.consumedEntityIds.has(entity.id)) return false;
             this.consumedEntityIds.add(entity.id); state.consumedEntityIds = Array.from(this.consumedEntityIds);
             for (const chunk of this.chunks.values()) { const index = chunk.entities.indexOf(entity); if (index >= 0) { this.entities.remove(entity, chunk.key); chunk.entities.splice(index, 1); break; } }
             return true;
         }
         nearestStation(x, y, predicate) { return LANDMARKS.filter(l => l.type === 'station' && (!predicate || predicate(l))).sort((a, b) => distance({ x, y }, a) - distance({ x, y }, b))[0]; }
         toScreen(x, y, camera, viewport) { return { x: viewport.w / 2 + x - camera.x, y: viewport.h / 2 + y - camera.y }; }
-        discover(state, entity) { if (!entity || state.discoveries.includes(entity.id)) return false; state.discoveries.push(entity.id); state.stats.discoveries++; return true; }
+        discover(state, entity) { if (!entity || state.discoveries.includes(entity.id)) return false; state.discoveries.push(entity.id); state.stats.discoveries++; ns.Objectives?.record(state, 'discoveries', 1); return true; }
     }
 
-    ns.World = { CHUNK_SIZE, LOAD_RADIUS, WORLD_BOUNDS, ASTEROID_TIERS, boundsFor, catalogBounds, createConfig, EntityStore, boundaryExposure, regionAt, eligibleDefinitions, weightedDefinition, generateChunk, WorldService };
+    ns.World = { CHUNK_SIZE, LOAD_RADIUS, WORLD_BOUNDS, ASTEROID_TIERS, boundsFor, catalogBounds, createConfig, EntityStore, containsPoint, boundaryExposure, regionAt, eligibleDefinitions, weightedDefinition, generateChunk, WorldService };
 })(window.MiniInvadersV2);

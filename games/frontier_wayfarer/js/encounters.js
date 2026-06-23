@@ -1,6 +1,6 @@
 (function (ns) {
     const { distance } = ns.MathUtil;
-    function isFaction(faction) { return faction === 'concord' || faction === 'corsairs'; }
+    function isFaction(faction) { return Boolean(ns.Data.FACTIONS[faction] && faction !== 'independents'); }
     function hostileToPlayer(state, enemy) {
         if (enemy.faction === 'bandits') return true;
         return enemy.aggroed || ns.Expansion.patrolStatus(state, enemy.faction) === 'HOSTILE';
@@ -8,7 +8,7 @@
     function opposing(a, b) {
         if (!a || !b || a === b) return false;
         if (a === 'bandits' || b === 'bandits') return true;
-        return ns.Data.FACTIONS[a]?.hostileTo === b;
+        return (ns.Data.FACTIONS[a]?.hostileTo || []).includes(b) || (ns.Data.FACTIONS[b]?.hostileTo || []).includes(a);
     }
     function definition(id) { return ns.Data.ENEMY_TYPES[id] || ns.Data.BOSSES[id] || ns.Data.ENEMY_TYPES.bandit; }
     function create(game, id, x, y, options) {
@@ -25,7 +25,8 @@
             const angle = i / Math.max(1, count) * Math.PI * 2, row = Math.ceil(i / 2), side = i === 0 ? 0 : i % 2 ? -1 : 1;
             const x = formation ? center.x + direction.x * (spawnDistance + row * 45) + lateral.x * side * row * 55 : center.x + Math.cos(angle) * (280 + i * 35), y = formation ? center.y + direction.y * (spawnDistance + row * 45) + lateral.y * side * row * 55 : center.y + Math.sin(angle) * (280 + i * 35);
             let type = archetype;
-            if (!type && faction === 'concord') type = 'concord_patrol'; else if (!type && faction === 'corsairs') type = 'corsair_raider';
+            const factionPatrols = { concord: 'concord_patrol', corsairs: 'corsair_raider', aster_collective: 'aster_scout', orchid_synod: 'orchid_cultivator', auric_combine: 'auric_enforcer', cyan_nomads: 'cyan_skiff', gemini_directorate: 'gemini_spear' };
+            if (!type && factionPatrols[faction]) type = factionPatrols[faction];
             if (!type) {
                 const danger = game.region?.danger || 1, regular = ['bandit', 'interceptor', 'gunship', 'missile_skiff', 'striker'];
                 const specialists = Object.values(ns.Data.ENEMY_TYPES).filter(def => def.minDanger && danger >= def.minDanger && (!faction || def.faction === faction || def.faction === 'bandits')).map(def => def.id);
@@ -119,8 +120,8 @@
     function playerHit(game, enemy, hit) {
         const damage = typeof hit === 'number' ? hit : hit.damage, def = definition(enemy.archetype);
         if (isFaction(enemy.faction) && !enemy.aggroed && ns.Expansion.patrolStatus(game.state, enemy.faction) !== 'HOSTILE') game.state.reputations[enemy.faction] = ns.MathUtil.clamp(game.state.reputations[enemy.faction] - 2, -100, 100);
-        enemy.aggroed = true; const component = typeof hit === 'object' && ((def.components || []).find(item => item.id === hit.componentId && (enemy.components?.[item.id] || 0) > 0) || (def.components || []).filter(item => (enemy.components?.[item.id] || 0) > 0).sort((a, b) => distance({ x: enemy.x + a.x, y: enemy.y + a.y }, hit) - distance({ x: enemy.x + b.x, y: enemy.y + b.y }, hit))[0]);
-        if (component && distance({ x: enemy.x + component.x, y: enemy.y + component.y }, hit) <= 24) { enemy.components[component.id] = Math.max(0, enemy.components[component.id] - damage); if (enemy.components[component.id] <= 0) game.notify(`${def.name.toUpperCase()} // ${component.name.toUpperCase()} DESTROYED`); return; }
+        enemy.aggroed = true; const component = typeof hit === 'object' && ((def.components || []).find(item => item.id === hit.componentId && (enemy.components?.[item.id] || 0) > 0) || (def.components || []).filter(item => (enemy.components?.[item.id] || 0) > 0).sort((a, b) => distance(ns.Geometry.componentPoint(enemy, a), hit) - distance(ns.Geometry.componentPoint(enemy, b), hit))[0]);
+        if (component && distance(ns.Geometry.componentPoint(enemy, component), hit) <= ns.Geometry.componentPoint(enemy, component).radius + 6) { enemy.components[component.id] = Math.max(0, enemy.components[component.id] - damage); if (enemy.components[component.id] <= 0) game.notify(`${def.name.toUpperCase()} // ${component.name.toUpperCase()} DESTROYED`); return; }
         const applied = enemy.shielded ? damage * .3 : damage; enemy.hull -= applied;
     }
     function killed(game, enemy, byPlayer) {

@@ -1,5 +1,9 @@
 (function (ns) {
-    function hasAnomaly(state) { return state.discoveries.some(id => id.includes('signal:') || ['cold_start_beacon', 'silent_crown', 'glass_wake'].includes(id)); }
+    function hasAnomaly(state) {
+        const anomalyIds = ['cold_start_beacon', 'silent_crown', 'glass_wake'];
+        const pools = [state.discoveries || [], ...Object.values(state.galaxyCharts || {}).map(chart => chart?.discoveries || [])];
+        return pools.some(discoveries => discoveries.some(id => id.includes('signal:') || anomalyIds.includes(id)));
+    }
     function evaluate(state) {
         const tutorial = state.progression?.tutorialStep || 0;
         const anomaly = hasAnomaly(state);
@@ -27,13 +31,22 @@
     function requirementMet(state, requirement) {
         if (!requirement || requirement === 'starter') return true;
         const u = evaluate(state);
+        const capitalKill = Object.keys(state.progression?.bossesDefeated || {}).some(id => ns.Data.BOSSES[id]?.capital);
         return {
             trade1: u.tradeTier >= 1, contracts3: state.contracts.completed >= 3,
             trade2: u.tradeTier >= 2, concord10: state.reputations.concord >= 10, corsairs10: state.reputations.corsairs >= 10,
             anomaly: u.anomaly, combat: u.combat, shield: u.shields,
             faction25: u.factionStanding, rim: u.rim, lightDrive: u.lightDrive, mechanic: Boolean(state.pilot.achievements.master_mechanic),
             capital: Object.keys(state.progression?.bossesDefeated || {}).some(id => !ns.Data.BOSSES[id]?.capital),
-            capitalVeteran: Object.keys(state.progression?.bossesDefeated || {}).some(id => ns.Data.BOSSES[id]?.capital)
+            capitalVeteran: capitalKill,
+            asterLate: state.visitedGalaxies.includes('galaxy_c') && state.reputations.aster_collective >= 20,
+            orchidLate: state.visitedGalaxies.includes('galaxy_d') && state.reputations.orchid_synod >= 20,
+            auricLate: state.visitedGalaxies.includes('galaxy_e') && state.reputations.auric_combine >= 20,
+            cyanLate: state.visitedGalaxies.includes('galaxy_f') && state.reputations.cyan_nomads >= 20,
+            geminiLate: state.visitedGalaxies.includes('galaxy_g') && state.reputations.gemini_directorate >= 20,
+            concordCapital: state.reputations.concord >= 40 && capitalKill,
+            allGalaxies: state.pilot.level >= 14 && state.visitedGalaxies.length >= 7 && capitalKill,
+            nullCrown: state.stats.kills >= 80 && state.reputations.corsairs >= 45 && capitalKill
         }[requirement] || false;
     }
     function moduleVisible(state, module) { return state.ship.ownedModules.includes(module.id) || requirementMet(state, module.unlock); }

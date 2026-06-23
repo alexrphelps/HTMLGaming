@@ -41,13 +41,13 @@
         render(game) {
             const visible = ns.LightSpeed.fitted(game);
             this.root.hidden = !visible; this.root.setAttribute('aria-hidden', String(!visible));
-            const drive = ns.LightSpeed.status(game), module = ns.LightSpeed.drive(game), name = module.lightSpeed ? module.name.replace(/ DRIVE$/i, '').toUpperCase() : 'ASTERION';
-            this.root.className = `light-drive-hud ${drive.className}`; this.key.textContent = 'R'; this.name.textContent = name; this.status.firstChild.nodeValue = drive.label; this.cost.textContent = '5 SS + 5 HE';
+            const drive = ns.LightSpeed.status(game);
+            this.root.className = `light-drive-hud ${drive.className}`; this.key.textContent = 'R'; this.name.textContent = 'LIGHT SPEED'; this.status.firstChild.nodeValue = drive.label; this.cost.textContent = '5 SS + 5 HE';
         }
     }
     class Objective extends Component {
         mount(root, context) { super.mount(root, context); this.title = root.querySelector('strong'); this.detail = root.querySelector('span'); return this; }
-        render(title, detail) { this.title.textContent = title; this.detail.textContent = detail; }
+        render(title, detail, warning) { this.title.textContent = title; this.detail.textContent = detail; this.root.classList.toggle('convoy-warning', Boolean(warning)); }
     }
     class TemplatePanel extends Component {
         constructor(render) { super(); this.renderTemplate = render; }

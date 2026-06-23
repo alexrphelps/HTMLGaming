@@ -1,8 +1,13 @@
 (function (ns) {
     const F = {
-        concord: { id: 'concord', name: 'Helion Concord', short: 'CONCORD', color: '#55d7ff', hostileTo: 'corsairs', description: 'A disciplined security compact defending the inner systems.' },
-        corsairs: { id: 'corsairs', name: 'Null Corsairs', short: 'CORSAIRS', color: '#ff4f91', hostileTo: 'concord', description: 'A predatory alliance of raiders, smugglers, and free captains.' },
-        independents: { id: 'independents', name: 'Frontier Guilds', short: 'GUILDS', color: '#55f0ad', hostileTo: null, description: 'Mechanics, traders, salvagers, and settlers keeping the frontier alive.' }
+        concord: { id: 'concord', name: 'Helion Concord', short: 'CONCORD', color: '#55d7ff', hostileTo: ['corsairs', 'orchid_synod', 'gemini_directorate'], joinable: true, description: 'A disciplined security compact defending the inner systems.' },
+        corsairs: { id: 'corsairs', name: 'Null Corsairs', short: 'CORSAIRS', color: '#ff4f91', hostileTo: ['concord', 'aster_collective', 'auric_combine'], joinable: true, description: 'A predatory alliance of raiders, smugglers, and free captains.' },
+        independents: { id: 'independents', name: 'Frontier Guilds', short: 'FRONTIER', color: '#55f0ad', hostileTo: [], joinable: false, description: 'Mechanics, traders, salvagers, and settlers keeping the frontier alive.' },
+        aster_collective: { id: 'aster_collective', name: 'Aster Collective', short: 'ASTER', color: '#4f8dff', hostileTo: ['corsairs', 'auric_combine', 'gemini_directorate'], joinable: true, unlockGalaxy: 'galaxy_c', description: 'Cartographers and research flotillas who treat every unknown signal as shared knowledge.' },
+        orchid_synod: { id: 'orchid_synod', name: 'Orchid Synod', short: 'ORCHID', color: '#dc7cff', hostileTo: ['concord', 'auric_combine', 'cyan_nomads'], joinable: true, unlockGalaxy: 'galaxy_d', description: 'Rift technologists who cultivate anomaly matter through ritual precision.' },
+        auric_combine: { id: 'auric_combine', name: 'Auric Combine', short: 'AURIC', color: '#ffd05b', hostileTo: ['corsairs', 'aster_collective', 'orchid_synod'], joinable: true, unlockGalaxy: 'galaxy_e', description: 'A profit-bound industrial league that prices routes, secrets, and loyalties.' },
+        cyan_nomads: { id: 'cyan_nomads', name: 'Cyan Nomads', short: 'CYAN', color: '#55f4dc', hostileTo: ['orchid_synod', 'gemini_directorate'], joinable: true, unlockGalaxy: 'galaxy_f', description: 'Migratory salvage fleets whose moving harbors recognize no permanent border.' },
+        gemini_directorate: { id: 'gemini_directorate', name: 'Gemini Directorate', short: 'GEMINI', color: '#aa8cff', hostileTo: ['concord', 'aster_collective', 'cyan_nomads'], joinable: true, unlockGalaxy: 'galaxy_g', description: 'A twin-command military state seeking one doctrine across every reachable galaxy.' }
     };
 
     const REGION_W = 13500, REGION_H = 10800, WORLD_MIN_X = -33750, WORLD_MIN_Y = -18000;
@@ -15,7 +20,7 @@
     };
     const R = (id, name, column, row, color, danger, faction, backdrop, travelTier, remoteness, asteroidDensity) => ({
         id, name, x: WORLD_MIN_X + column * REGION_W, y: WORLD_MIN_Y + row * REGION_H,
-        w: REGION_W, h: REGION_H, column, row, grid: `${String.fromCharCode(65 + column)}${row + 1}`,
+        w: REGION_W, h: REGION_H, column: column + 1, row: row + 1, grid: `${String.fromCharCode(66 + column)}${row + 2}`,
         color, danger, faction, remoteness: remoteness || 0, asteroidDensity: asteroidDensity || 1,
         economy: Object.assign({}, ECONOMIES[backdrop]), backdrop, travelTier: travelTier || 0
     });
@@ -51,6 +56,12 @@
         R('dawnwall_verge', 'Dawnwall Verge', 3, 5, '#57bce8', 5, 'concord', 'core', 1, 3),
         R('eventide_deep', 'Eventide Deep', 4, 5, '#8d55c9', 5, 'independents', 'anomaly', 1, 3)
     ];
+    [
+        ['northwatch_void','Northwatch Void',-1,-1,'#7d5dac',5,'independents','anomaly'], ['pale_crown','Pale Crown',0,-1,'#8abed4',5,'independents','anomaly'], ['riven_halo','Riven Halo',1,-1,'#b187d8',5,'independents','anomaly'], ['coldfire_span','Coldfire Span',2,-1,'#62b9d2',4,'concord','frontier'], ['starless_arch','Starless Arch',3,-1,'#706e9f',5,'independents','null'], ['aurora_shelf','Aurora Shelf',4,-1,'#75d8d0',4,'independents','frontier'], ['blackglass_north','Blackglass North',5,-1,'#855f9d',5,'corsairs','null'], ['far_north_reach','Far North Reach',6,-1,'#7196b8',5,'independents','frontier'],
+        ['westward_shoal','Westward Shoal',-1,0,'#ba6d83',5,'corsairs','null'], ['red_margin','Red Margin',-1,1,'#c84e74',4,'corsairs','null'], ['guildward_edge','Guildward Edge',-1,2,'#56bda0',3,'independents','frontier'], ['pilgrim_margin','Pilgrim Margin',-1,3,'#b49c70',4,'independents','belt'], ['duskwater_edge','Duskwater Edge',-1,4,'#9362b7',5,'independents','anomaly'], ['nullward_drop','Nullward Drop',-1,5,'#9b355e',5,'corsairs','null'],
+        ['sunward_gate','Sunward Gate',5,0,'#69cbe9',4,'concord','core'], ['opal_front','Opal Front',6,0,'#a27de1',5,'independents','anomaly'], ['brightwater_reach','Brightwater Reach',5,1,'#65d9c2',3,'independents','frontier'], ['helion_outmarch','Helion Outmarch',6,1,'#59bfe8',4,'concord','core'], ['fracture_bloom','Fracture Bloom',5,2,'#c46be8',5,'independents','anomaly'], ['corsair_lee','Corsair Lee',6,2,'#d84d78',5,'corsairs','null'], ['amber_shoal','Amber Shoal',5,3,'#d4ad61',4,'independents','belt'], ['longlight_verge','Longlight Verge',6,3,'#68cfd2',4,'independents','frontier'], ['violet_outreach','Violet Outreach',5,4,'#a861d3',5,'independents','anomaly'], ['deadlight_margin','Deadlight Margin',6,4,'#85415f',5,'corsairs','null'], ['last_meridian','Last Meridian',5,5,'#54b894',5,'independents','frontier'], ['eastern_terminus','Eastern Terminus',6,5,'#508bad',5,'independents','frontier'],
+        ['southwatch_abyss','Southwatch Abyss',-1,6,'#713850',5,'corsairs','null'], ['ashen_crown','Ashen Crown',0,6,'#9d5269',5,'corsairs','null'], ['quiet_pilgrimage','Quiet Pilgrimage',1,6,'#9e916e',4,'independents','belt'], ['emerald_terminus','Emerald Terminus',2,6,'#48a984',4,'independents','frontier'], ['dawnfall_shelf','Dawnfall Shelf',3,6,'#5bacd0',4,'concord','core'], ['orchid_depths','Orchid Depths',4,6,'#9955c2',5,'independents','anomaly'], ['black_sun_verge','Black Sun Verge',5,6,'#733c67',5,'independents','null'], ['far_south_reach','Far South Reach',6,6,'#617c9d',5,'independents','frontier']
+    ].forEach(([id,name,column,row,color,danger,faction,backdrop]) => REGIONS.push(R(id,name,column,row,color,danger,faction,backdrop,1,3)));
 
     const WORLD_OBJECT_TYPES = {
         derelict_hauler: { id: 'derelict_hauler', name: 'Derelict Hauler', backdrops: { belt: 4, frontier: 5, null: 3, anomaly: 1 }, minDanger: 1, interactionDuration: 3, style: 'derelict', color: '#ffbd59', reward: { aetherium: 42 }, dangerScale: { aetherium: 9 }, helioniteAt: 3, xp: 18, rewardType: 'salvage' },
@@ -58,11 +69,14 @@
         memorial_beacon: { id: 'memorial_beacon', name: 'Memorial Beacon', backdrops: { belt: 1, core: 1, frontier: 3, null: 2, anomaly: 3 }, minDanger: 2, interactionDuration: 4, style: 'beacon', color: '#b8d5dc', reward: { sunshards: 4 }, xp: 45, rewardType: 'discovery' },
         emergency_supply_pod: { id: 'emergency_supply_pod', name: 'Emergency Supply Pod', backdrops: { belt: 5, core: 3, frontier: 4 }, minDanger: 1, interactionDuration: 3, style: 'pod', color: '#55f0ad', reward: { aetherium: 32 }, dangerScale: { aetherium: 4 }, xp: 12, rewardType: 'salvage' },
         smuggler_dead_drop: { id: 'smuggler_dead_drop', name: 'Smuggler Dead Drop', backdrops: { null: 7 }, minDanger: 3, interactionDuration: 4, style: 'drop', color: '#ff4f91', reward: { aetherium: 65, sunshards: 2, helionite: 2 }, dangerScale: { aetherium: 8 }, xp: 24, rewardType: 'salvage', ambushChance: .45 },
-        unstable_prism: { id: 'unstable_prism', name: 'Unstable Prism', backdrops: { anomaly: 8 }, minDanger: 4, interactionDuration: 5, style: 'prism', color: '#ce75ff', reward: { sunshards: 11 }, dangerScale: { sunshards: 1 }, xp: 55, rewardType: 'discovery', heat: 34, energyDrain: 22 }
+        unstable_prism: { id: 'unstable_prism', name: 'Unstable Prism', backdrops: { anomaly: 8 }, minDanger: 4, interactionDuration: 5, style: 'prism', color: '#ce75ff', reward: { sunshards: 11 }, dangerScale: { sunshards: 1 }, xp: 55, rewardType: 'discovery', heat: 34, energyDrain: 22 },
+        mineral_chunk: { id: 'mineral_chunk', name: 'Mineral Fragment', backdrops: {}, dynamic: true, interactionDuration: 1.25, style: 'mineral', color: '#8ff5df', reward: {}, rewardType: 'salvage' },
+        capital_salvage: { id: 'capital_salvage', name: 'Capital Salvage', backdrops: {}, dynamic: true, interactionDuration: 4, style: 'salvage-crate', color: '#ffbd59', reward: {}, rewardType: 'salvage', xp: 30 },
+        ancient_relic: { id: 'ancient_relic', name: 'Ancient Relic', backdrops: {}, dynamic: true, interactionDuration: 6, style: 'ancient-relic', color: '#b88cff', reward: { aetherium: 500, sunshards: 150, helionite: 100 }, rewardType: 'discovery', xp: 150 }
     };
 
     const WORLD_SCENARIOS = {
-        distress_call: { id: 'distress_call', name: 'Distress Call', backdrops: { core: 3, frontier: 6, null: 5 }, minDanger: 2, triggerRadius: 420, style: 'distress', color: '#ffbd59', falseSignalChance: { core: .15, frontier: .34, null: .68 } },
+        distress_call: { id: 'distress_call', name: 'Pilot Recovery Signal', backdrops: { core: 3, frontier: 6, null: 5 }, minDanger: 2, triggerRadius: 420, interactionDuration: 4, requiresInteraction: true, style: 'distress', color: '#ffbd59', falseSignalChance: { core: .15, frontier: .34, null: .68 } },
         border_skirmish: { id: 'border_skirmish', name: 'Border Skirmish', backdrops: { core: 3, null: 3 }, minDanger: 4, triggerRadius: 520, style: 'crossfire', color: '#f2f7ff', hostile: true },
         raider_sweep: { id: 'raider_sweep', name: 'Raider Sweep', backdrops: { frontier: 4, null: 5 }, minDanger: 3, triggerRadius: 500, style: 'warning', color: '#ff597f', hostile: true },
         abandoned_worksite: { id: 'abandoned_worksite', name: 'Abandoned Worksite', backdrops: { belt: 5, frontier: 4 }, minDanger: 1, triggerRadius: 380, style: 'worksite', color: '#8faab3', companionObject: 'emergency_supply_pod' }
@@ -104,8 +118,65 @@
         { id: 'pilgrims_end_beacon', type: 'anomaly', name: "Pilgrim's End Beacon", x: -15390, y: 43344, region: 'pilgrims_end', faction: 'independents' },
         { id: 'terminus_exchange', type: 'station', name: 'Terminus Exchange', x: 2295, y: 42912, region: 'terminus_reach', faction: 'independents', major: true },
         { id: 'dawnwall_bastion', type: 'station', name: 'Dawnwall Bastion', x: 10530, y: 39780, region: 'dawnwall_verge', faction: 'concord', major: true },
-        { id: 'eventide_heart', type: 'anomaly', name: 'Eventide Heart', x: 29700, y: 40104, region: 'eventide_deep', faction: 'independents' }
+        { id: 'eventide_heart', type: 'anomaly', name: 'Eventide Heart', x: 29700, y: 40104, region: 'eventide_deep', faction: 'independents' },
+        { id: 'frostglass_haven', type: 'station', name: 'Frostglass Haven', x: -27000, y: -12600, region: 'frostglass_reach', faction: 'independents' },
+        { id: 'zenith_rest', type: 'station', name: 'Zenith Rest', x: 0, y: -12600, region: 'zenith_grave', faction: 'independents' },
+        { id: 'luminous_dock', type: 'station', name: 'Luminous Dock', x: 27000, y: -12600, region: 'luminous_verge', faction: 'independents' },
+        { id: 'prism_wilds_station', type: 'station', name: 'Prism Wilds Station', x: 27000, y: 9000, region: 'prism_wilds', faction: 'independents' },
+        { id: 'far_meridian_exchange', type: 'station', name: 'Far Meridian Exchange', x: 0, y: 19800, region: 'far_meridian', faction: 'independents' },
+        { id: 'scar_haven', type: 'station', name: 'Scar Haven', x: 27000, y: 19800, region: 'eventide_scar', faction: 'independents' },
+        { id: 'gilded_exchange', type: 'station', name: 'Gilded Exchange', x: -13500, y: 30600, region: 'gilded_expanse', faction: 'independents' },
+        { id: 'chasm_watch', type: 'station', name: 'Chasm Watch', x: 27000, y: 30600, region: 'violet_chasm', faction: 'independents' },
+        { id: 'pilgrims_end_station', type: 'station', name: "Pilgrim's End Station", x: -13500, y: 41400, region: 'pilgrims_end', faction: 'independents' },
+        { id: 'eventide_deep_station', type: 'station', name: 'Eventide Deep Station', x: 27000, y: 41400, region: 'eventide_deep', faction: 'independents' },
+        { id: 'aster_archive', type: 'station', name: 'Aster Archive', x: 11800, y: 9400, region: 'anomaly_rim', faction: 'aster_collective', major: true, unlockGalaxy: 'galaxy_c' },
+        { id: 'orchid_spindle', type: 'station', name: 'Orchid Spindle', x: 29200, y: -15000, region: 'luminous_verge', faction: 'orchid_synod', major: true, unlockGalaxy: 'galaxy_d' },
+        { id: 'auric_exchange', type: 'station', name: 'Auric Exchange', x: -10800, y: 28600, region: 'gilded_expanse', faction: 'auric_combine', major: true, unlockGalaxy: 'galaxy_e' },
+        { id: 'cyan_freeport', type: 'station', name: 'Cyan Freeport', x: 2800, y: 22000, region: 'far_meridian', faction: 'cyan_nomads', major: true, unlockGalaxy: 'galaxy_f' },
+        { id: 'gemini_crown', type: 'station', name: 'Gemini Crown', x: 29700, y: 43000, region: 'eventide_deep', faction: 'gemini_directorate', major: true, unlockGalaxy: 'galaxy_g' }
     ];
+    const regionById = id => REGIONS.find(region => region.id === id);
+    function station(id, name, regionId, faction, offsetX, offsetY, major, unlockGalaxy) {
+        const region = regionById(regionId), landmark = { id, type: 'station', name, x: region.x + 6750 + (offsetX || 0), y: region.y + 5400 + (offsetY || 0), region: regionId, faction };
+        if (major) landmark.major = true;
+        if (unlockGalaxy) landmark.unlockGalaxy = unlockGalaxy;
+        return landmark;
+    }
+    [
+        ['voidwatch_haven', 'Voidwatch Haven', 'northwatch_void', 'independents', -1600, -900, true],
+        ['pale_crown_station', 'Pale Crown Station', 'pale_crown', 'independents', 1100, -650],
+        ['riven_halo_gate', 'Riven Halo Gate', 'riven_halo', 'independents', -1400, 780],
+        ['coldfire_bastion', 'Coldfire Bastion', 'coldfire_span', 'concord', 1280, -960, true],
+        ['starless_anchor', 'Starless Anchor', 'starless_arch', 'independents', -980, 720],
+        ['aurora_shelf_station', 'Aurora Shelf Station', 'aurora_shelf', 'independents', 1460, -540],
+        ['blackglass_keep', 'Blackglass Keep', 'blackglass_north', 'corsairs', -1320, -760, true],
+        ['northreach_exchange', 'Northreach Exchange', 'far_north_reach', 'independents', 900, 840],
+        ['westward_den', 'Westward Den', 'westward_shoal', 'corsairs', -880, -420],
+        ['red_margin_hold', 'Red Margin Hold', 'red_margin', 'corsairs', 1320, 600],
+        ['guildward_station', 'Guildward Station', 'guildward_edge', 'independents', -1040, -720],
+        ['pilgrim_margin_depot', 'Pilgrim Margin Depot', 'pilgrim_margin', 'independents', 1180, 540],
+        ['duskwater_watch', 'Duskwater Watch', 'duskwater_edge', 'independents', -1400, 920],
+        ['nullward_bastion', 'Nullward Bastion', 'nullward_drop', 'corsairs', 1240, -860, true],
+        ['sunward_gate_station', 'Sunward Gate Station', 'sunward_gate', 'concord', -1140, -720],
+        ['opal_frontier_dock', 'Opal Frontier Dock', 'opal_front', 'independents', 1380, 700],
+        ['brightwater_harbor', 'Brightwater Harbor', 'brightwater_reach', 'independents', -1320, 540],
+        ['outmarch_bastion', 'Outmarch Bastion', 'helion_outmarch', 'concord', 1180, -620, true],
+        ['fracture_bloom_station', 'Fracture Bloom Station', 'fracture_bloom', 'independents', -960, -900],
+        ['corsair_lee_haven', 'Corsair Lee Haven', 'corsair_lee', 'corsairs', 1420, 820],
+        ['amber_shoal_exchange', 'Amber Shoal Exchange', 'amber_shoal', 'independents', -1280, -520],
+        ['longlight_station', 'Longlight Station', 'longlight_verge', 'independents', 1080, 760],
+        ['violet_outreach_spindle', 'Violet Outreach Spindle', 'violet_outreach', 'independents', -1420, 980],
+        ['deadlight_redoubt', 'Deadlight Redoubt', 'deadlight_margin', 'corsairs', 880, -860, true],
+        ['eastern_terminus_station', 'Eastern Terminus Station', 'eastern_terminus', 'independents', -1180, 540],
+        ['southwatch_hold', 'Southwatch Hold', 'southwatch_abyss', 'corsairs', -1340, -920, true],
+        ['ashen_crown_station', 'Ashen Crown Station', 'ashen_crown', 'corsairs', 920, 700],
+        ['quiet_pilgrimage_station', 'Quiet Pilgrimage Station', 'quiet_pilgrimage', 'independents', -960, -760],
+        ['emerald_terminus_port', 'Emerald Terminus Port', 'emerald_terminus', 'independents', 1440, 620],
+        ['dawnfall_bastion', 'Dawnfall Bastion', 'dawnfall_shelf', 'concord', -1220, -760, true],
+        ['orchid_depths_station', 'Orchid Depths Station', 'orchid_depths', 'independents', 1020, 920],
+        ['black_sun_station', 'Black Sun Station', 'black_sun_verge', 'independents', -1360, 580],
+        ['southreach_exchange', 'Southreach Exchange', 'far_south_reach', 'independents', 1260, -680]
+    ].forEach(args => LANDMARKS.push(station(...args)));
 
     const COMMODITIES = {
         food: { id: 'food', name: 'Nutrient Packs', basePrice: 18, color: '#55f0ad', legal: true },
@@ -137,19 +208,24 @@
         sensor_array: { id: 'sensor_array', name: 'Far-Sight Array', slot: 'utility', mass: 3, sensor: 450, cost: C(280, 8), tier: 2, unlock: 'anomaly' },
         heat_sink: { id: 'heat_sink', name: 'Phase Heat Sink', slot: 'utility', mass: 4, cooling: 9, cost: C(300, 5), tier: 2, unlock: 'contracts3' },
         cargo_pods: { id: 'cargo_pods', name: 'External Cargo Pods', slot: 'utility', mass: 6, cargo: 8, cost: C(260), tier: 1, unlock: 'trade1' },
+        tractor_lattice: { id: 'tractor_lattice', name: 'Tractor Lattice', slot: 'utility', mass: 4, interactionRange: 150, cost: C(360, 6), tier: 2, unlock: 'contracts3' },
         afterburner: { id: 'afterburner', name: 'Vector Afterburner', slot: 'ability', mass: 4, cost: C(180, 0, 4), tier: 1, unlock: 'trade1', ability: { type: 'afterburner', cooldown: 6, duration: 1.8, energy: 20 } },
         blink_drive: { id: 'blink_drive', name: 'Blink Drive', slot: 'ability', mass: 5, cost: C(220, 18, 0), tier: 2, unlock: 'anomaly', ability: { type: 'blink', cooldown: 8, distance: 350, energy: 25 } },
         shield_overcharger: { id: 'shield_overcharger', name: 'Shield Overcharger', slot: 'ability', mass: 5, cost: C(260, 12, 8), tier: 2, unlock: 'shield', ability: { type: 'overshield', cooldown: 14, duration: 6, amount: 70, energy: 30 } },
         emp_wave: { id: 'emp_wave', name: 'EMP Wave', slot: 'ability', mass: 6, cost: C(280, 0, 20), tier: 2, unlock: 'combat', ability: { type: 'emp', cooldown: 12, duration: 4, radius: 320, damage: 25, energy: 28 } },
         repair_swarm: { id: 'repair_swarm', name: 'Repair Swarm', slot: 'ability', mass: 5, cost: C(320, 14, 0), tier: 2, unlock: 'mechanic', ability: { type: 'repair', cooldown: 30, duration: 6, amount: 40, energy: 35 } },
-        phase_cloak: { id: 'phase_cloak', name: 'Phase Cloak', slot: 'ability', mass: 7, cost: C(480, 30, 15), tier: 3, unlock: 'rim', ability: { type: 'cloak', cooldown: 20, duration: 5, energy: 40 } }
+        phase_cloak: { id: 'phase_cloak', name: 'Phase Cloak', slot: 'ability', mass: 7, cost: C(480, 30, 15), tier: 3, unlock: 'rim', ability: { type: 'cloak', cooldown: 20, duration: 5, energy: 40 } },
+        deep_freeze_mk1: { id: 'deep_freeze_mk1', name: 'Deep Freeze I', slot: 'ability', mass: 5, cost: C(380, 8, 6), tier: 2, unlock: 'contracts3', ability: { type: 'deepFreeze', cooldown: 18, duration: 5, energy: 18, heatVent: 35, heatScale: .2 } },
+        deep_freeze_mk2: { id: 'deep_freeze_mk2', name: 'Deep Freeze II', slot: 'ability', mass: 6, cost: C(700, 18, 18), tier: 3, unlock: 'rim', ability: { type: 'deepFreeze', cooldown: 17, duration: 7.5, energy: 22, heatVent: 50, heatScale: .15 } },
+        deep_freeze_mk3: { id: 'deep_freeze_mk3', name: 'Deep Freeze III', slot: 'ability', mass: 7, cost: C(1200, 35, 45), tier: 4, unlock: 'capital', ability: { type: 'deepFreeze', cooldown: 16, duration: 10, energy: 26, heatVent: 65, heatScale: .1 } }
     };
     const MODULE_DESCRIPTIONS = {
         pulse_mk1: 'Reliable short-cycle pulse weapon with forgiving power demand.', pulse_mk2: 'Higher-output pulse cannon built for sustained combat.', rail_driver: 'Heavy precision driver trading cadence for decisive impact.', seeker_rack: 'Slow-cycling guided ordnance with exceptional burst damage.',
         reactor_mk1: 'Starter arc core supplying the Wayfarer energy reserve.', reactor_mk2: 'Expanded reactor core for weapon and active-module endurance.', drive_mk1: 'Balanced vector drive for routine frontier flight.', drive_mk2: 'Reinforced drive delivering stronger acceleration authority.', light_drive: 'Asterion phase engine enabling controlled inter-sector Light Speed.',
         shield_scout: 'Fast-recharging light screen with a short recovery delay.', shield_balanced: 'General-purpose shield balancing capacity and recovery.', shield_bulwark: 'Massive defensive screen with deliberately slow recovery.', shield_prism: 'Experimental screen optimized for rapid regeneration.',
-        cargo_mk1: 'Compact internal lattice for routine freight.', cargo_mk2: 'Expanded hold structure for contract and trade operations.', repair_drones: 'Autonomous drones that restore damaged hull over time.', sensor_array: 'Long-baseline scanner extending contact detection range.', heat_sink: 'Phase vents that sharply improve weapon heat dissipation.', cargo_pods: 'External pods adding capacity at a meaningful mass cost.',
-        afterburner: 'Short vector surge for pursuit and disengagement.', blink_drive: 'Instant short-range translation along the current vector.', shield_overcharger: 'Temporary reserve screen for emergency defense.', emp_wave: 'Radial disruption pulse that damages and disables hostiles.', repair_swarm: 'Active repair cloud restoring hull during a timed cycle.', phase_cloak: 'Brief phase masking that breaks hostile firing solutions.'
+        cargo_mk1: 'Compact internal lattice for routine freight.', cargo_mk2: 'Expanded hold structure for contract and trade operations.', repair_drones: 'Autonomous drones that restore damaged hull over time.', sensor_array: 'Long-baseline scanner extending contact detection range.', heat_sink: 'Phase vents that sharply improve weapon heat dissipation.', cargo_pods: 'External pods adding capacity at a meaningful mass cost.', tractor_lattice: 'A gravitic collector that extends every non-station interaction link to 240 KM.',
+        afterburner: 'Short vector surge for pursuit and disengagement.', blink_drive: 'Instant short-range translation along the current vector.', shield_overcharger: 'Temporary reserve screen for emergency defense.', emp_wave: 'Radial disruption pulse that damages and disables hostiles.', repair_swarm: 'Active repair cloud restoring hull during a timed cycle.', phase_cloak: 'Brief phase masking that breaks hostile firing solutions.',
+        deep_freeze_mk1: 'Emergency cryogenic venting suppresses ship-wide heat generation for five seconds.', deep_freeze_mk2: 'Reinforced cryogenic routing sustains a seven-and-a-half-second freeze window.', deep_freeze_mk3: 'Capital-grade thermal inversion holds ship-wide heat generation near zero for ten seconds.'
     };
     Object.values(MODULES).forEach(module => { module.description = MODULE_DESCRIPTIONS[module.id] || 'Wayfarer-compatible ship module.'; });
 
@@ -200,7 +276,12 @@
     const QUESTS = {
         independents: ['A Ship of Your Own', 'The Long Haul', 'Keep the Lights On', 'Beyond the Rim'],
         concord: ['Badge of Passage', 'Secure the Shatterline', 'The Corsair Ledger', 'A Law Worth Keeping'],
-        corsairs: ['A Useful Stranger', 'Cut the Helion Line', 'A Captain Owes Nothing', 'Crown of Static']
+        corsairs: ['A Useful Stranger', 'Cut the Helion Line', 'A Captain Owes Nothing', 'Crown of Static'],
+        aster_collective: ['First Light', 'The Unwritten Map', 'Horizons in Trust', 'A Sky Without Owners'],
+        orchid_synod: ['Seed of the Rift', "Concord's Glass", 'The Blooming War', 'Garden at the Edge'],
+        auric_combine: ['Entry Fee', 'Margin of Error', 'Hostile Acquisition', 'The Golden Rule'],
+        cyan_nomads: ['Borrowed Harbor', 'Wreck Rights', 'No Fixed Star', 'Fleet Without Borders'],
+        gemini_directorate: ['Two Voices', 'One Vector', 'Veil Doctrine', 'The Final Accord']
     };
 
     ns.Data = { FACTIONS: F, REGIONS, LANDMARKS, WORLD_OBJECT_TYPES, WORLD_SCENARIOS, COMMODITIES, MODULES, TRAITS, CONTRACT_TYPES, QUESTS };

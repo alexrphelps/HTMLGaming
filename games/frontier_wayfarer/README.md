@@ -13,7 +13,7 @@ This game is the open-universe evolution of Mini Invaders: a single-player top-d
 
 The intended player fantasy is:
 
-1. Fly one personal ship across seven connected galaxies, each retaining a persistent thirty-region local chart.
+1. Fly one personal ship across seven connected galaxies, each retaining a persistent irregular 8-by-8 local chart and seeded objectives.
 2. Aim directly with the mouse while managing inertia, heat, energy, shields, cargo, and module loadout.
 3. Progress through contracts, discoveries, combat, factions, trade, salvaging, and ship upgrades.
 4. Grow a long-lived career that survives defeat, with losses focused on unbanked rewards, cargo risk, and repairable module damage.
@@ -60,12 +60,13 @@ Out of scope unless explicitly requested:
 
 ### World Structure
 
-- Galaxy A is the original 5-by-6 chart of thirty dense authored regions. Six fixed stargate destinations reuse that authored local-chart structure with distinct procedural seeds and persistent chart state.
+- Each galaxy uses a unique contiguous 8-by-8 sector mask with 48 to 56 active authored regions. The original thirty sectors retain their IDs and world coordinates inside the expanded chart.
 - Each region occupies a 13,500-by-10,800 sector inside the finite 67,500-by-64,800 world envelope.
 - World streaming is deterministic around a saved world seed.
 - Chunk generation and floating-origin behavior are part of the technical contract and should not be casually removed.
 - Region traversal is seamless; this is not an encounter-map structure.
 - The mid-game Asterion Light Drive shifts travel into a separate interaction-free visual layer while preserving the ship's real world coordinates.
+- `galaxies.js` owns sector masks and stargate travel; `objectives.js` owns deterministic per-career map objectives, Ancient Relic placement, progress, and rewards.
 
 ### Economy
 
@@ -255,7 +256,7 @@ Current UI contract:
 
 ## Intergalactic Stargates
 
-- The existing thirty-region chart is Galaxy A, Meridian Reach. Six additional fixed galaxies form a persistent seven-node station-stargate network.
+- Meridian Reach and the six additional fixed galaxies each use a persistent irregular 8-by-8 local chart within the seven-node station-stargate network.
 - Intergalactic travel requires the Gateheart Singularity Core and Atlas Stargate Engine fitted together on a Tier IV specialist hull.
 - The Station Stargate inner tab only appears inside Navigation while docked with the complete compatible drive pair.
 - Stargate routes are one hop at a time. Each galaxy keeps its own local position, discoveries, visited regions, market state, contract board, and procedural world seed.
@@ -334,8 +335,8 @@ High-level ownership map:
 
 ## Persistence Contract
 
-- Current save schema version is `6`.
-- Schema 3 careers scale saved world and contract coordinates into the larger 5-by-6 universe before landmark-linked destinations are refreshed.
+- Current save schema version is `11`.
+- Schema 3 careers retain their historical coordinate scaling; schema 10 adds irregular 8-by-8 charts and persisted seeded map objectives without rescaling current positions. Schema 11 normalizes the tier-7 equipment era without requiring new player state.
 - Schema 4 careers migrate through schema 5 with the Wayfarer active and owned. Schema 5 careers migrate to schema 6 with boss accomplishments and roaming-capital state initialized safely.
 - Saves must continue to migrate forward safely.
 - Legacy diamonds migrate to banked Aetherium at 1:1.

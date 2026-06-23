@@ -13,11 +13,12 @@
     }
     const abilityHandlers = {
         afterburner: { activate({ effects, ability }) { effects.afterburner = ability.duration; } },
-        blink: { activate({ game, ability }) { Object.assign(game.state.ship, safeBlinkDestination(game, ability.distance)); } },
+        blink: { activate({ game, ability }) { const ship = game.state.ship, from = { x: ship.x, y: ship.y }, to = safeBlinkDestination(game, ability.distance); Object.assign(ship, to); game.blinkEffect = { from, to: { x: to.x, y: to.y }, life: .35, maxLife: .35 }; } },
         overshield: { canActivate({ stats }) { return stats.shield > 0; }, activate({ state, effects, ability }) { state.ship.overshield = ability.amount; effects.overshield = ability.duration; } },
         emp: { activate({ game, state, ability }) { game.enemies.forEach(enemy => { if (ns.MathUtil.distance(enemy, state.ship) > ability.radius) return; enemy.aggroed = true; enemy.hull -= ability.damage; enemy.disabled = Math.max(enemy.disabled || 0, ability.duration); if (enemy.hull <= 0) game.onEnemyKilled(enemy); }); } },
         repair: { activate({ effects, ability }) { effects.repair = ability.duration; effects.repairRemaining = ability.amount; } },
-        cloak: { activate({ effects, ability }) { effects.cloak = ability.duration; } }
+        cloak: { activate({ effects, ability }) { effects.cloak = ability.duration; } },
+        deepFreeze: { activate({ state, effects, ability }) { state.ship.heat = Math.max(0, state.ship.heat - ability.heatVent); effects.deepFreeze = ability.duration; effects.deepFreezeScale = ability.heatScale; } }
     };
     Object.entries(abilityHandlers).forEach(([id, handler]) => { if (!ns.Registry.hasHandler('ability', id)) ns.Registry.registerHandler('ability', id, handler); });
     function activate(game, slot) {
@@ -30,7 +31,7 @@
         if (((cd[slot] || 0) > 0 && !overclock) || state.ship.energy < energyCost) return false;
         const ability = module.ability, effects = effectState(state);
         const handler = ns.Registry.handler('ability', ability.type); if (!handler || handler.canActivate?.({ game, state, stats, ability }) === false) return false;
-        state.ship.energy -= energyCost; if (overclock) { state.ship.heat = Math.min(100, state.ship.heat + 35); ns.Combat.applyHullDamage(state, 5); }
+        state.ship.energy -= energyCost; if (overclock) { state.ship.heat = Math.min(100, state.ship.heat + 35 * heatScale(state)); ns.Combat.applyHullDamage(state, 5); }
         cd[slot] = ability.cooldown * (ability.type === 'afterburner' ? 1 - (stats.effects.afterburnerRecovery || 0) : 1);
         handler.activate({ game, state, stats, effects, ability, module, slot });
         game.notify(`${module.name.toUpperCase()} // ACTIVE`); return true;
@@ -38,7 +39,8 @@
     function update(game, dt) {
         const state = game.state, cd = cooldowns(state), effects = effectState(state);
         Object.keys(cd).forEach(slot => { cd[slot] = Math.max(0, cd[slot] - dt); });
-        ['afterburner', 'overshield', 'cloak', 'damageResistance', 'ghostVector'].forEach(name => { if (effects[name] > 0) effects[name] = Math.max(0, effects[name] - dt); });
+        ['afterburner', 'overshield', 'cloak', 'damageResistance', 'ghostVector', 'deepFreeze'].forEach(name => { if (effects[name] > 0) effects[name] = Math.max(0, effects[name] - dt); });
+        if (effects.deepFreeze === 0) effects.deepFreezeScale = 1;
         if (effects.overshield === 0) state.ship.overshield = 0;
         if (effects.repair > 0 && effects.repairRemaining > 0) {
             const stats = ns.Progression.calculateShipStats(state); const restored = Math.min(effects.repairRemaining, effects.repairRemaining / effects.repair * dt);
@@ -48,8 +50,9 @@
     }
     function onFire(state) { const effects = effectState(state); effects.cloak = 0; }
     function isActive(state, name) { return (effectState(state)[name] || 0) > 0; }
+    function heatScale(state) { const effects = effectState(state); return effects.deepFreeze > 0 ? Math.max(0, Math.min(1, Number(effects.deepFreezeScale) || 1)) : 1; }
     function slotState(state, slot) {
         const module = ns.Data.MODULES[state.ship.slots[slot]]; return { slot, module, unlocked: Boolean(ns.Unlocks.evaluate(state).abilitySlots[slot]), cooldown: cooldowns(state)[slot] || 0 };
     }
-    ns.Abilities = { KEY_SLOTS, activate, update, onFire, isActive, slotState, safeBlinkDestination };
+    ns.Abilities = { KEY_SLOTS, activate, update, onFire, isActive, heatScale, slotState, safeBlinkDestination };
 })(window.MiniInvadersV2);

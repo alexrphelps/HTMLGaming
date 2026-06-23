@@ -8,18 +8,18 @@
             this.state = null; this.world = null; this.region = ns.Data.REGIONS[0]; this.camera = { x: 0, y: 0, zoom: 1 }; this.lightSpeed = ns.LightSpeed.createState();
             this.bullets = []; this.enemies = []; this.effects = []; this.time = 0; this.running = false; this.paused = false; this.last = 0; this.accumulator = 0;
             this.weaponCooldowns = { primary1: 0, primary2: 0 }; this.enemySpawnedFor = null; this.autosaveTimer = 0; this.uiTimer = 0; this.messageTimer = 0; this.encounterTimer = 18; this.collisionGuards = new Map(); this.impactShake = 0;
-            this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false;
+            this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false; this.contractWarningTimer = 0; this.blinkEffect = null;
             this.random = new ns.Runtime.SimulationRandom(1); this.runtime = new ns.Runtime.RuntimePipeline(ns.Runtime.defaultSystems()); this.entitySerial = 0;
             this.loop = this.loop.bind(this); this.onResize = () => this.renderer.resize(); window.addEventListener('resize', this.onResize);
         }
-        newCareer() { ns.Save.remove(); this.useState(ns.State.createState()); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('WAYFARER ONLINE // FREE PILOT LICENSE ISSUED'); }
-        continueCareer() { const state = ns.Save.load(); if (!state) return this.newCareer(); this.useState(state); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('CAREER RESTORED'); }
+        newCareer() { ns.Save.remove(); this.useState(ns.State.createState()); this.save(); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('WAYFARER ONLINE // FREE PILOT LICENSE ISSUED'); }
+        continueCareer() { const state = ns.Save.load(); if (!state) return this.newCareer(); this.useState(state); this.save(); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('CAREER RESTORED'); }
         useState(state) {
             if (!('customWaypoint' in state)) state.customWaypoint = null;
-            ns.Galaxies.ensureState(state); const galaxySeed = ns.Galaxies.worldSeed(state);
-            this.state = state; this.world = new ns.World.WorldService(galaxySeed, state.consumedEntityIds); this.region = this.world.update(state.ship.x, state.ship.y);
+            ns.Galaxies.ensureState(state); ns.Objectives.ensure(state); ns.Objectives.definitionsFor(state, state.galaxyId); const galaxySeed = ns.Galaxies.worldSeed(state);
+            this.state = state; this.world = new ns.World.WorldService(galaxySeed, state.consumedEntityIds, ns.Galaxies.worldConfig(state)); this.region = this.world.update(state.ship.x, state.ship.y);
             this.random = new ns.Runtime.SimulationRandom(galaxySeed ^ 0x57a1f4); this.entitySerial = 0; this.runtime.init(this);
-            this.camera.x = state.ship.x; this.camera.y = state.ship.y; this.camera.zoom = 1; this.lightSpeed = ns.LightSpeed.createState(); this.bullets = []; this.enemies = []; this.effects = []; this.collisionGuards.clear(); this.impactShake = 0; this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false;
+            this.camera.x = state.ship.x; this.camera.y = state.ship.y; this.camera.zoom = 1; this.lightSpeed = ns.LightSpeed.createState(); this.bullets = []; this.enemies = []; this.effects = []; this.collisionGuards.clear(); this.impactShake = 0; this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false; this.contractWarningTimer = 0; this.blinkEffect = null;
             const stats = ns.Progression.calculateShipStats(state); state.ship.hull = clamp(state.ship.hull, 0, stats.hull); state.ship.shield = clamp(state.ship.shield, 0, stats.shield); state.ship.energy = clamp(state.ship.energy, 0, stats.reactor);
             if (state.dockedAt) { const station = LANDMARKS.find(l => l.id === state.dockedAt); if (station) ns.Economy.ensureMarket(state, station); }
             this.ui.renderAll(this);
@@ -57,7 +57,7 @@
                     this.updateBullets(dt); this.updateEnemies(dt); this.updateEffects(dt); this.updateContract(dt);
                 }
             } else if (ns.LightSpeed.isShifted(this)) {
-                ns.LightSpeed.update(this, dt); this.region = ns.World.regionAt(this.state.ship.x, this.state.ship.y);
+                ns.LightSpeed.update(this, dt); this.region = ns.World.regionAt(this.state.ship.x, this.state.ship.y, this.world?.config); this.updateContractClock(dt);
             } else {
                 ns.LightSpeed.update(this, dt); ns.Abilities.update(this, dt); this.world.updateAsteroids(dt); this.updateShip(dt); this.updateInteraction(dt); this.updateBullets(dt); this.updateEnemies(dt); this.updateEffects(dt); this.updateContract(dt);
                 this.region = this.world.update(this.state.ship.x, this.state.ship.y);
@@ -76,7 +76,9 @@
         }
         setCustomWaypoint(point) {
             const bounds = this.world?.config?.bounds || ns.World.WORLD_BOUNDS;
-            this.state.customWaypoint = { x: clamp(point.x, bounds.minX, bounds.maxX), y: clamp(point.y, bounds.minY, bounds.maxY) };
+            const candidate = { x: clamp(point.x, bounds.minX, bounds.maxX), y: clamp(point.y, bounds.minY, bounds.maxY) };
+            if (!ns.World.containsPoint(candidate.x, candidate.y, this.world.config)) { this.notify('NO NAVIGABLE SECTOR'); return null; }
+            this.state.customWaypoint = candidate;
             this.save(); this.notify('CUSTOM WAYPOINT SET'); return this.state.customWaypoint;
         }
         clearCustomWaypoint(message) {
@@ -99,7 +101,7 @@
             const drag = Math.pow(.992, dt * 60 * stats.braking); s.vx *= drag; s.vy *= drag; const speed = Math.hypot(s.vx, s.vy), maxSpeed = afterburner ? stats.maxSpeed * 1.82 : stats.maxSpeed;
             if (speed > maxSpeed) { s.vx *= maxSpeed / speed; s.vy *= maxSpeed / speed; }
             s.x += s.vx * dt; s.y += s.vy * dt; this.state.stats.distance += speed * dt;
-            const exposure = ns.World.boundaryExposure(s.x, s.y);
+            const exposure = ns.World.boundaryExposure(s.x, s.y, this.world?.config);
             if (exposure.active) {
                 ns.Combat.applyHullDamage(this.state, Math.min(180, 32 + exposure.depth * .16) * dt);
                 if (this.messageTimer <= 0) this.notify('NEBULA BREACH // HULL FAILURE IMMINENT');
@@ -136,7 +138,7 @@
             if (closingSpeed > 35 && (this.collisionGuards.get(key) || 0) <= this.time) {
                 this.collisionGuards.set(key, this.time + .3); const resistance = kind === 'player' ? ns.Progression.calculateShipStats(this.state).collisionResistance : 0, shipDamage = (closingSpeed - 35) * .12 * (1 - resistance);
                 if (kind === 'player') ns.Combat.applyDamage(this.state, shipDamage); else { body.hull -= shipDamage; if (body.hull <= 0) this.onEnemyKilled(body, false); }
-                const result = this.world.damageAsteroid(asteroid, shipDamage * .65); this.spawnImpact({ x: body.x - nx * radius, y: body.y - ny * radius, vx: asteroid.vx, vy: asteroid.vy }, result.destroyed ? 16 : 9); this.impactShake = Math.max(this.impactShake, Math.min(8, shipDamage * .15));
+                const result = this.world.damageAsteroid(asteroid, shipDamage * .65); this.handleAsteroidResult?.(result); this.spawnImpact({ x: body.x - nx * radius, y: body.y - ny * radius, vx: asteroid.vx, vy: asteroid.vy }, result.destroyed ? 16 : 9); this.impactShake = Math.max(this.impactShake, Math.min(8, shipDamage * .15));
             }
             return true;
         }
@@ -155,14 +157,14 @@
                     const convoy = this.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0 && ns.Encounters.opposing(b.ownerTeam || 'bandits', convoy.faction || 'independents')) candidates.push({ kind: 'convoy', target: convoy, t: ns.MathUtil.segmentCircleHit(from, to, convoy, b.radius) });
                     this.enemies.filter(enemy => enemy.hull > 0 && ns.Encounters.opposing(b.ownerTeam, enemy.team)).forEach(target => candidates.push({ kind: 'npc', target, t: ns.MathUtil.segmentCircleHit(from, to, target, b.radius) }));
                 } else this.enemies.filter(enemy => enemy.hull > 0 && !(b.hitIds || []).includes(enemy.id)).forEach(target => {
-                    const components = ns.Data.BOSSES[target.bossType]?.components || [], core = components.length ? Object.assign({}, target, { radius: target.radius * .55 }) : target;
-                    candidates.push({ kind: 'enemy', target, t: ns.MathUtil.segmentCircleHit(from, to, core, b.radius) });
-                    components.filter(component => (target.components?.[component.id] || 0) > 0).forEach(component => { const point = { x: target.x + component.x, y: target.y + component.y, radius: 18 }; candidates.push({ kind: 'component', target, component, t: ns.MathUtil.segmentCircleHit(from, to, point, b.radius) }); });
+                    const components = ns.Data.BOSSES[target.bossType]?.components || [];
+                    candidates.push({ kind: 'enemy', target, t: ns.Geometry.segmentPolygonHit(from, to, target, b.radius) });
+                    components.filter(component => (target.components?.[component.id] || 0) > 0).forEach(component => { const componentPoint = ns.Geometry.componentPoint(target, component); candidates.push({ kind: 'component', target, component, t: ns.MathUtil.segmentCircleHit(from, to, componentPoint, b.radius) }); });
                 });
                 const hit = candidates.filter(item => item.t !== null).sort((a, b2) => a.t - b2.t)[0];
                 if (!hit) { b.x = to.x; b.y = to.y; continue; }
                 b.x = from.x + (to.x - from.x) * hit.t; b.y = from.y + (to.y - from.y) * hit.t; const piercing = hit.kind === 'enemy' && b.pierce > 0; if (!piercing) b.life = 0; else { b.pierce--; b.hitIds.push(hit.target.id); }
-                if (hit.kind === 'asteroid') { const result = this.world.damageAsteroid(hit.target, b.damage); this.spawnImpact(hit.target, result.destroyed ? 10 : 4); if (!b.enemy && result.reward) ns.Wallet.credit(this.state, { aetherium: result.reward }); }
+                if (hit.kind === 'asteroid') { const result = this.world.damageAsteroid(hit.target, b.damage); this.handleAsteroidResult?.(result); this.spawnImpact(hit.target, result.destroyed ? 10 : 4); }
                 else if (hit.kind === 'player') { if (ns.Combat.applyDamage(this.state, b.damage)) this.onDefeat(); }
                 else if (hit.kind === 'convoy') hit.target.hull = Math.max(0, hit.target.hull - b.damage);
                 else if (hit.kind === 'npc') { hit.target.hull -= b.damage; if (hit.target.hull <= 0) this.onEnemyKilled(hit.target, false); }
@@ -174,19 +176,39 @@
             this.effects.push({ x: source.x, y: source.y, vx: 0, vy: 0, life: .16, maxLife: .16, size: 16 + count, flash: true });
             for (let i = 0; i < count; i++) { const angle = Math.random() * Math.PI * 2, speed = 25 + Math.random() * 85; this.effects.push({ x: source.x, y: source.y, vx: source.vx * .25 + Math.cos(angle) * speed, vy: source.vy * .25 + Math.sin(angle) * speed, life: .25 + Math.random() * .45, maxLife: .7, size: 1 + Math.random() * 3 }); }
         }
-        updateEffects(dt) { this.effects.forEach(effect => { effect.x += effect.vx * dt; effect.y += effect.vy * dt; effect.life -= dt; }); this.effects = this.effects.filter(effect => effect.life > 0); this.impactShake = Math.max(0, this.impactShake - dt * 24); }
+        handleAsteroidResult(result) {
+            const asteroid = result?.destroyed && result.asteroid; if (!asteroid) return null;
+            const chance = { large: .12, medium: .2, small: .32 }[asteroid.tier] || 0; if (!this.random.chance(chance)) return null;
+            const roll = this.random.next(), reward = roll < .7 ? { aetherium: Math.floor(this.random.range(2, 8)) } : roll < .93 ? { sunshards: Math.floor(this.random.range(1, 4)) } : { helionite: 1 };
+            return this.world.spawnTransient({ id: this.nextEntityId('mineral'), kind: 'worldObject', typeId: 'mineral_chunk', name: 'Mineral Fragment', x: asteroid.x, y: asteroid.y, vx: asteroid.vx * .3, vy: asteroid.vy * .3, radius: 12, region: this.region.id, reward });
+        }
+        updateEffects(dt) { this.effects.forEach(effect => { effect.x += effect.vx * dt; effect.y += effect.vy * dt; effect.rotation = (effect.rotation || 0) + (effect.spin || 0) * dt; effect.life -= dt; }); this.effects = this.effects.filter(effect => effect.life > 0); if (this.blinkEffect) { this.blinkEffect.life -= dt; if (this.blinkEffect.life <= 0) this.blinkEffect = null; } this.impactShake = Math.max(0, this.impactShake - dt * 24); }
         spawnEnemies(count, center, faction, role, archetype) { return ns.Encounters.spawn(this, count, center, faction, role, archetype); }
         nextEntityId(prefix) { this.entitySerial++; return `${prefix}:${this.state.worldSeed}:${this.entitySerial}`; }
         updateEnemies(dt) { ns.Encounters.update(this, dt); }
         onPlayerHitEnemy(enemy, hit) { ns.Encounters.playerHit(this, enemy, hit); }
-        onEnemyKilled(enemy, byPlayer) { if (enemy?.rewarded) return; if (enemy) enemy.rewarded = true; const playerKill = byPlayer !== false, reward = ns.Encounters.killed(this, enemy, playerKill); if (!playerKill) return; this.state.stats.kills++; ns.State.addExperience(this.state, reward.xp); ns.Contracts.recordProgress(this.state, 'kill', 1, enemy); ns.Encounters.completeRoaming(this, enemy); ns.Progression.updateAchievements(this.state); ns.Wallet.credit(this.state, { aetherium: reward.aetherium, helionite: reward.helionite }); }
+        spawnEnemyDeath(enemy) {
+            if (!enemy) return; const factionColor = ns.Data.FACTIONS[enemy.faction]?.color || '#ff8b59', pieces = ns.Geometry.fragments(enemy), life = enemy.bossType ? 2.1 : enemy.radius >= 18 ? 1.15 : .75;
+            pieces.forEach((fragment, index) => { const angle = index / pieces.length * Math.PI * 2 + (enemy.angle || 0), speed = (enemy.bossType ? 55 : 75) + this.random.range(0, enemy.bossType ? 90 : 120); this.effects.push({ x: enemy.x, y: enemy.y, vx: enemy.vx * .35 + Math.cos(angle) * speed, vy: enemy.vy * .35 + Math.sin(angle) * speed, life, maxLife: life, fragment, fragmentScale: ns.Geometry.scale(enemy), rotation: (enemy.angle || 0) + Math.PI / 2, spin: this.random.range(-4, 4), color: factionColor }); });
+            this.effects.push({ x: enemy.x, y: enemy.y, vx: 0, vy: 0, life: enemy.bossType ? .55 : .25, maxLife: enemy.bossType ? .55 : .25, size: enemy.radius * (enemy.bossType ? 2.2 : 1.4), flash: true, color: factionColor });
+            if (!enemy.bossType) return;
+            const def = ns.Data.BOSSES[enemy.bossType], salvageChance = def.capital ? .7 : enemy.bossType === 'marauder_carrier' ? .5 : .35; if (!this.random.chance(salvageChance)) return;
+            const reward = def.capital ? { aetherium: Math.floor(this.random.range(100, 161)), sunshards: Math.floor(this.random.range(2, 6)), helionite: Math.floor(this.random.range(2, 5)) } : { aetherium: Math.floor(this.random.range(55, 101)), sunshards: Math.floor(this.random.range(1, 4)), helionite: 1 };
+            this.world.spawnTransient({ id: this.nextEntityId('capital-salvage'), kind: 'worldObject', typeId: 'capital_salvage', name: `${def.name} Salvage`, x: enemy.x, y: enemy.y, vx: enemy.vx * .2, vy: enemy.vy * .2, radius: 22, region: this.region.id, reward });
+        }
+        onEnemyKilled(enemy, byPlayer) { if (enemy?.rewarded) return; if (enemy) enemy.rewarded = true; this.spawnEnemyDeath(enemy); const playerKill = byPlayer !== false, reward = ns.Encounters.killed(this, enemy, playerKill); if (!playerKill) return; this.state.stats.kills++; ns.Objectives.record(this.state, 'kills', 1); if (enemy?.bossType) ns.Objectives.record(this.state, 'bosses', 1); ns.State.addExperience(this.state, reward.xp); ns.Contracts.recordProgress(this.state, 'kill', 1, enemy); ns.Encounters.completeRoaming(this, enemy); ns.Progression.updateAchievements(this.state); ns.Wallet.credit(this.state, { aetherium: reward.aetherium, helionite: reward.helionite }); }
+        updateContractClock(dt) { const c = this.state.contracts.active; if (c && ns.Contracts.updateTimer(this.state, dt)) this.notify(c.timer.hard ? 'HARD DEADLINE MISSED // CURRENCY PAYMENT FORFEITED' : 'DEADLINE MISSED // BONUS PAYMENT EXPIRED'); }
         updateContract(dt) {
             const c = this.state.contracts.active; if (!c) { this.enemySpawnedFor = null; return; }
+            this.contractWarningTimer = Math.max(0, this.contractWarningTimer - dt);
+            this.updateContractClock(dt);
+            const dockingWarning = ns.Contracts.dockingWarning(this.state);
+            if (dockingWarning && this.contractWarningTimer <= 0) { this.notify(dockingWarning.message); this.contractWarningTimer = 5; }
             const revealed = ns.Contracts.revealSearches(this.state, this.state.ship);
             if (revealed.length) this.notify('SEARCH CONTACT RESOLVED // EXACT WAYPOINT LOCKED');
             const near = distance(this.state.ship, c.target) < 720, combatStage = ns.Contracts.activeStages(c).find(stage => stage.event === 'kill'), combatCount = combatStage?.required || c.required;
             if (['bounty', 'assault'].includes(c.type) && this.enemySpawnedFor === c.id && this.enemies.length === 0 && c.progress < c.required) this.enemySpawnedFor = null;
-            if (near && ['bounty', 'assault'].includes(c.type) && this.enemySpawnedFor !== c.id) { if (c.bossType) { ns.Encounters.spawnBoss(this, c); this.notify(`${ns.Data.BOSSES[c.bossType].name.toUpperCase()} // PRIORITY TARGET CONFIRMED`); } else { const faction = c.type === 'assault' ? (c.enemyFaction || ns.Data.FACTIONS[c.issuer]?.hostileTo) : null; this.spawnEnemies(combatCount, c.target, faction); } this.enemySpawnedFor = c.id; }
+            if (near && ['bounty', 'assault'].includes(c.type) && this.enemySpawnedFor !== c.id) { if (c.bossType) { ns.Encounters.spawnBoss(this, c); this.notify(`${ns.Data.BOSSES[c.bossType].name.toUpperCase()} // PRIORITY TARGET CONFIRMED`); } else { const faction = c.type === 'assault' ? (c.enemyFaction || ns.Data.FACTIONS[c.issuer]?.hostileTo?.[0]) : null; this.spawnEnemies(combatCount, c.target, faction); } this.enemySpawnedFor = c.id; }
             if (c.escort) {
                 const config = ns.Contracts.ESCORT_CONFIG, escort = c.escort;
                 if (escort.phase === 'rendezvous' && distance(this.state.ship, escort.start) <= config.activationRange) {
@@ -195,9 +217,16 @@
                 if (escort.phase === 'traveling') {
                     const convoy = escort.convoy;
                     if (!convoy || convoy.hull <= 0) return this.failEscort('CONVOY DESTROYED');
-                    const routeAngle = Math.atan2(escort.end.y - convoy.y, escort.end.x - convoy.x), remaining = distance(convoy, escort.end), step = Math.min(remaining, config.speed * dt);
-                    convoy.vx = Math.cos(routeAngle) * config.speed; convoy.vy = Math.sin(routeAngle) * config.speed; convoy.angle = routeAngle; convoy.x += Math.cos(routeAngle) * step; convoy.y += Math.sin(routeAngle) * step; c.target = { x: convoy.x, y: convoy.y }; const escortStage = ns.Contracts.activeStages(c).find(stage => stage.escort); if (escortStage) escortStage.target = { x: convoy.x, y: convoy.y };
-                    escort.grace = distance(this.state.ship, convoy) <= config.escortRange ? config.graceSeconds : escort.grace - dt;
+                    const separation = distance(this.state.ship, convoy), playerSpeed = Math.hypot(this.state.ship.vx, this.state.ship.vy), maxSpeed = ns.Progression.calculateShipStats(this.state).maxSpeed, desiredSpeed = separation <= config.formationRange ? Math.max(config.speed, Math.min(maxSpeed, playerSpeed)) : config.speed;
+                    escort.speed = (escort.speed || config.speed) + (desiredSpeed - (escort.speed || config.speed)) * Math.min(1, dt * 2.5);
+                    const routeAngle = Math.atan2(escort.end.y - convoy.y, escort.end.x - convoy.x), remaining = distance(convoy, escort.end), step = Math.min(remaining, escort.speed * dt);
+                    convoy.vx = Math.cos(routeAngle) * escort.speed; convoy.vy = Math.sin(routeAngle) * escort.speed; convoy.angle = routeAngle; convoy.x += Math.cos(routeAngle) * step; convoy.y += Math.sin(routeAngle) * step; c.target = { x: convoy.x, y: convoy.y }; const escortStage = ns.Contracts.activeStages(c).find(stage => stage.escort); if (escortStage) escortStage.target = { x: convoy.x, y: convoy.y };
+                    escort.grace = separation <= config.escortRange ? config.graceSeconds : escort.grace - dt;
+                    if (separation <= config.escortRange) escort.linkCriticalWarned = false;
+                    const hullRatio = convoy.hull / convoy.maxHull;
+                    if (hullRatio <= config.lowHullRatio && !escort.lowHullWarned) { this.notify(`CONVOY HULL CRITICAL // ${Math.ceil(hullRatio * 100)}%`); escort.lowHullWarned = true; this.contractWarningTimer = 4; }
+                    else if (escort.grace < 4 && !escort.linkCriticalWarned) { this.notify(`ESCORT LINK CRITICAL // ${escort.grace.toFixed(1)} SEC REMAINING`); escort.linkCriticalWarned = true; this.contractWarningTimer = 4; }
+                    else if (this.contractWarningTimer <= 0 && separation > config.warningRange) { this.notify(`CONVOY SEPARATION WARNING // ${Math.round(separation)} KM`); this.contractWarningTimer = 4; }
                     if (escort.grace <= 0) return this.failEscort('ESCORT LINK LOST');
                     const routeLength = Math.max(1, distance(escort.start, escort.end)), traveled = distance(escort.start, convoy);
                     if (escort.ambushes < 2 && traveled / routeLength >= .5) { this.spawnEnemies(2 + c.risk, convoy, null, 'escort'); escort.ambushes = 2; this.notify('CONVOY AMBUSH // HOSTILES INBOUND'); }
@@ -208,7 +237,7 @@
         }
         failEscort(reason) { const failed = ns.Contracts.fail(this.state, reason); if (failed) { this.save(); this.notify(`CONTRACT FAILED // ${reason}`); this.ui.renderAll(this); } return failed; }
         interactionDuration(target, source) {
-            if (source === 'world') return target.kind === 'worldObject' ? ns.WorldEvents.interactionDuration(target) : target.kind === 'salvage' ? 3 : 5;
+            if (source === 'world') return ['worldObject', 'worldScenario'].includes(target.kind) ? ns.WorldEvents.interactionDuration(target) : target.kind === 'salvage' ? 3 : 5;
             return ['pickup', 'rescue', 'salvage'].includes(target.event) ? 4 : 5;
         }
         startInteraction(target, source) {
@@ -234,7 +263,7 @@
             const cast = this.interactionCast; if (!cast) return;
             if (this.state.dockedAt || ns.LightSpeed.isTraveling(this) || this.ui.panel.classList.contains('active') || (this.state.ship.damageSerial || 0) !== cast.damageSerial) return void this.cancelInteraction();
             const target = this.interactionTarget(cast); if (!target) return void this.cancelInteraction(true);
-            if (distance(target, this.state.ship) <= 190) { cast.grace = 0; cast.progress += dt; }
+            if (ns.Interactions.inRange(this.state, target, this.state.ship)) { cast.grace = 0; cast.progress += dt; }
             else { cast.grace += dt; if (cast.grace > .75) return void this.cancelInteraction(); }
             if (cast.progress >= cast.duration) this.completeInteraction(target, cast.source);
         }
@@ -249,15 +278,17 @@
                 if (!ns.WorldEvents.interact(this, target)) return false;
                 ns.Progression.updateAchievements(this.state); this.save(); this.ui.renderAll(this); return true;
             }
-            if (['signal', 'salvage'].includes(target.kind) && !this.world.consumeEntity(this.state, target)) return false;
+            if (target.kind === 'worldScenario') return ns.WorldEvents.activate(this, target);
+            if (['signal', 'salvage', 'anomaly'].includes(target.kind) && !this.world.consumeEntity(this.state, target)) return false;
             const fresh = this.world.discover(this.state, target);
             if (target.kind === 'salvage') { const effects = ns.Progression.traitEffects(this.state), gain = Math.round(35 * (1 + (effects.salvage || 0))), premium = effects.fieldSavant ? 2 : 1; ns.Wallet.credit(this.state, { aetherium: gain, sunshards: premium }); this.notify(`SALVAGE RECOVERED // +${gain} AETHERIUM // +${premium} SUNSHARDS`); }
+            else if (target.kind === 'anomaly') { const gain = Math.round(8 * (1 + (ns.Progression.traitEffects(this.state).discoveryReward || 0))); ns.Wallet.credit(this.state, { aetherium: 40, sunshards: gain }); ns.State.addExperience(this.state, 45); this.notify(`BEACON LOGGED // +${gain} SUNSHARDS`); }
             else if (fresh) { const gain = Math.round(8 * (1 + (ns.Progression.traitEffects(this.state).discoveryReward || 0))); ns.Wallet.credit(this.state, { aetherium: 40, sunshards: gain }); ns.State.addExperience(this.state, 45); this.notify(`DISCOVERY LOGGED // +${gain} SUNSHARDS`); }
             ns.Progression.updateAchievements(this.state); this.save(); this.ui.renderAll(this); return true;
         }
         chartNearbyStations() {
             const sensor = ns.Progression.calculateShipStats(this.state).sensor;
-            const discovered = LANDMARKS.filter(item => item.type === 'station' && !this.state.discoveries.includes(item.id) && distance(item, this.state.ship) <= sensor);
+            const discovered = this.world.config.landmarks.filter(item => item.type === 'station' && !this.state.discoveries.includes(item.id) && distance(item, this.state.ship) <= sensor);
             if (!discovered.length) return;
             discovered.forEach(item => this.state.discoveries.push(item.id)); this.save();
             this.notify(`STATION CHARTED // ${discovered[0].name.toUpperCase()}`);
@@ -269,14 +300,14 @@
         }
         availableInteraction() {
             if (!this.state || this.state.dockedAt || ns.LightSpeed.isTraveling(this)) return null;
-            const ship = this.state.ship, contact = ns.Contracts.contactsFor(this.state.contracts.active).filter(item => distance(item, ship) <= 190).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
+            const ship = this.state.ship, contact = ns.Contracts.contactsFor(this.state.contracts.active).filter(item => ns.Interactions.inRange(this.state, item, ship)).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
             if (contact) return { target: contact, source: 'contract', verb: 'CONTRACT' };
-            const target = this.world.nearbyEntities(ship.x, ship.y, 190).filter(entity => entity.kind === 'station' || ['signal', 'salvage', 'anomaly', 'worldObject'].includes(entity.kind)).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
+            const target = this.world.nearbyEntities(ship.x, ship.y, 240).filter(entity => entity.kind === 'station' || ['signal', 'salvage', 'anomaly', 'worldObject'].includes(entity.kind) || (entity.kind === 'worldScenario' && ns.WorldEvents.scenarioDefinition(entity)?.requiresInteraction)).filter(entity => ns.Interactions.inRange(this.state, entity, ship)).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
             if (!target) return null;
             return { target, source: 'world', verb: target.kind === 'station' ? 'DOCK' : 'INTERACT' };
         }
         dock(station) {
-            const rep = this.state.reputations[station.faction]; if (rep <= -50) { this.notify('DOCKING DENIED // HOSTILE STANDING'); return false; }
+            if (ns.Expansion.dockingDenied(this.state, station.faction)) { this.notify('DOCKING DENIED // HOSTILE STANDING'); return false; }
             this.cancelInteraction(true); if (!this.state.discoveries.includes(station.id)) this.state.discoveries.push(station.id);
             this.state.dockedAt = station.id; this.state.ship.vx = 0; this.state.ship.vy = 0; ns.Economy.ensureMarket(this.state, station);
             ns.Wallet.deposit(this.state);
@@ -285,19 +316,28 @@
             ns.Economy.driftMarkets(this.state); this.save(); this.paused = true; this.ui.openPanel(this, 'station'); this.notify(`DOCKED // ${station.name.toUpperCase()}`); return true;
         }
         stargateTravel(destinationId) {
+            if (this.stargateTransitioning) return false;
+            const destination = ns.Galaxies.byId(destinationId), cooldown = Math.max(0, ns.Galaxies.STARGATE_COOLDOWN_MS - (Date.now() - this.state.lastStargateTravelAt));
+            const blocked = !this.state.dockedAt ? 'DOCK AT A STATION' : !ns.Galaxies.gateStatus(this.state).ready ? 'STARGATE SYSTEMS OFFLINE' : destination.id === this.state.galaxyId ? 'ALREADY IN THIS GALAXY' : !ns.Galaxies.connected(this.state.galaxyId, destination.id) ? 'NO DIRECT STARGATE ROUTE' : this.state.contracts.active ? 'COMPLETE OR ABANDON ACTIVE CONTRACT' : cooldown > 0 ? `COOLDOWN ${Math.ceil(cooldown / 1000)} SEC` : '';
+            if (blocked) { this.notify(`STARGATE TRAVEL BLOCKED // ${blocked}`); return false; }
+            this.stargateTransitioning = true; this.ui.playStargateTransition(() => this.commitStargateTravel(destinationId), () => { this.stargateTransitioning = false; }); return true;
+        }
+        commitStargateTravel(destinationId) {
+            const firstVisit = !this.state.visitedGalaxies.includes(destinationId);
             const outcome = ns.Galaxies.travel(this.state, destinationId);
             if (!outcome.ok) {
-                const reason = { 'dock-required': 'DOCK AT A STATION', 'systems-offline': 'STARGATE SYSTEMS OFFLINE', 'unknown-galaxy': 'UNKNOWN GALAXY', 'current-galaxy': 'ALREADY IN THIS GALAXY', 'no-direct-route': 'NO DIRECT STARGATE ROUTE', 'active-contract': 'COMPLETE OR ABANDON ACTIVE CONTRACT' }[outcome.reason] || outcome.reason.toUpperCase();
+                const reason = { 'dock-required': 'DOCK AT A STATION', 'systems-offline': 'STARGATE SYSTEMS OFFLINE', 'unknown-galaxy': 'UNKNOWN GALAXY', 'current-galaxy': 'ALREADY IN THIS GALAXY', 'no-direct-route': 'NO DIRECT STARGATE ROUTE', 'active-contract': 'COMPLETE OR ABANDON ACTIVE CONTRACT', cooldown: `COOLDOWN ${Math.ceil((outcome.remaining || 0) / 1000)} SEC` }[outcome.reason] || outcome.reason.toUpperCase();
                 this.notify(`STARGATE TRAVEL BLOCKED // ${reason}`); return false;
             }
             this.useState(this.state); this.paused = true; this.save();
             this.ui.navigationView = 'stargate'; this.ui.selectedGalaxyId = outcome.destination.id; this.ui.openPanel(this, 'navigation');
-            this.notify(`STARGATE ARRIVAL // GALAXY ${outcome.destination.code} // ${outcome.destination.name.toUpperCase()}`); return true;
+            const unlockedFaction = firstVisit && outcome.destination.unlocksFaction ? ns.Data.FACTIONS[outcome.destination.unlocksFaction] : null;
+            this.notify(unlockedFaction ? `STARGATE ARRIVAL // ${outcome.destination.name.toUpperCase()} // ${unlockedFaction.short} ENCLAVES NOW ACTIVE` : `STARGATE ARRIVAL // GALAXY ${outcome.destination.code} // ${outcome.destination.name.toUpperCase()}`); return true;
         }
-        undock() { this.state.dockedAt = null; this.paused = false; this.ui.closePanel(); this.last = performance.now(); this.notify('FLIGHT CONTROL RESTORED'); }
+        undock() { this.state.dockedAt = null; const timerStarted = ns.Contracts.startTimer(this.state); this.paused = false; this.ui.closePanel(); this.last = performance.now(); this.notify(timerStarted ? 'FLIGHT CONTROL RESTORED // CONTRACT TIMER STARTED' : 'FLIGHT CONTROL RESTORED'); }
         selectTarget() { if (!this.enemies.length) return; this.enemies.push(this.enemies.shift()); }
         onDefeat() { const result = ns.Combat.defeatConsequences(this.state, this.world); this.lightSpeed = ns.LightSpeed.createState(); this.camera.zoom = 1; this.enemies = []; this.bullets = []; this.paused = true; this.save(); this.ui.openDefeat(this, result); }
-        save(message) { ns.Save.save(this.state); if (message) this.notify(message); }
+        save(message) { ns.Objectives?.evaluate(this.state, this.state.galaxyId); ns.Save.save(this.state); if (message) this.notify(message); }
         notify(message) { this.ui.showMessage(message); this.messageTimer = 3; }
         destroy() { this.running = false; this.runtime.destroy(this); this.input.destroy(); this.ui.destroy?.(); window.removeEventListener('resize', this.onResize); }
     }
