@@ -1,15 +1,8 @@
 # Frontier Wayfarer
 
-Frontier Wayfarer is a separate game from the original Mini Invaders and must stay separate.
-
-- Original game: `games/miniinvaders/`
-- Frontier Wayfarer game: `games/frontier_wayfarer/`
-
-Do not replace, rename, or fold Frontier Wayfarer changes back into the original arcade game unless a future task explicitly asks for that.
-
 ## Purpose
 
-This game is the open-universe evolution of Mini Invaders: a single-player top-down inertial starfighter RPG built in plain browser JavaScript with no build step and no runtime dependencies.
+This game is a single-player top-down inertial starfighter open-universe RPG built in plain browser JavaScript with no build step and no runtime dependencies.
 
 The intended player fantasy is:
 
@@ -18,14 +11,10 @@ The intended player fantasy is:
 3. Progress through contracts, discoveries, combat, factions, trade, salvaging, and ship upgrades.
 4. Grow a long-lived career that survives defeat, with losses focused on unbanked rewards, cargo risk, and repairable module damage.
 
-This is not meant to drift back toward a short-session arcade score attack. Every meaningful change should be judged against the RPG starfighter career direction first.
-
 ## Non-Negotiable Product Direction
 
-- Keep Frontier Wayfarer under `games/frontier_wayfarer/` with its own GameHub wrapper and standalone `index.html`.
 - Preserve the no-build browser-script architecture under `window.MiniInvadersV2`.
 - Keep the universe finite and region-authored, not endless procedural space.
-- Keep the game single-player.
 - Keep one active persistent personal ship, with dock-only switching among purchased hull frames rather than a fleet or disposable hull loop.
 - Keep pilot traits separate from ship modules.
 - Keep module effects and trait effects funneled through centralized derived-stat calculation instead of mutating duplicate runtime fields.
@@ -33,8 +22,6 @@ This is not meant to drift back toward a short-session arcade score attack. Ever
 
 Out of scope unless explicitly requested:
 
-- Multiplayer
-- Planetary landings
 - Walking characters
 - Per-ship inventories, cargo holds, crews, or fleet deployment
 - Refactoring to TypeScript, bundlers, or frameworks
