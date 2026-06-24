@@ -16,7 +16,7 @@
             anomaly, combat, factionStanding: Boolean(factionStanding), rim,
             lightDrive: state.pilot.level >= 4 && state.contracts.completed >= 5,
             contractTypes: {
-                haul: tutorial >= 1, salvage: tutorial >= 1, rescue: tutorial >= 1,
+                haul: tutorial >= 1, salvage: tutorial >= 1, mining: tutorial >= 1, rescue: tutorial >= 1,
                 escort: state.contracts.completed >= 3, survey: anomaly, bounty: combat,
                 smuggle: state.reputations.corsairs >= 10, assault: Boolean(factionStanding)
             },
@@ -67,4 +67,4 @@
         return 'All career licenses unlocked. Raise faction standing for elite hardware.';
     }
     ns.Unlocks = { evaluate, requirementMet, moduleVisible, commodityVisible, nextMilestone, hasAnomaly };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

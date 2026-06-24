@@ -9,31 +9,33 @@
             this.bullets = []; this.enemies = []; this.effects = []; this.time = 0; this.running = false; this.paused = false; this.last = 0; this.accumulator = 0;
             this.weaponCooldowns = { primary1: 0, primary2: 0 }; this.enemySpawnedFor = null; this.autosaveTimer = 0; this.uiTimer = 0; this.messageTimer = 0; this.encounterTimer = 18; this.collisionGuards = new Map(); this.impactShake = 0;
             this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false; this.contractWarningTimer = 0; this.blinkEffect = null;
-            this.random = new ns.Runtime.SimulationRandom(1); this.runtime = new ns.Runtime.RuntimePipeline(ns.Runtime.defaultSystems()); this.entitySerial = 0;
+            this.random = new ns.Runtime.SimulationRandom(1); this.runtime = new ns.Runtime.RuntimePipeline(ns.Runtime.defaultSystems()); this.entitySerial = 0; this.deathCinematic = null; this.defeatPromptTimer = 0;
             this.loop = this.loop.bind(this); this.onResize = () => this.renderer.resize(); window.addEventListener('resize', this.onResize);
         }
         newCareer() { ns.Save.remove(); this.useState(ns.State.createState()); this.save(); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('WAYFARER ONLINE // FREE PILOT LICENSE ISSUED'); }
         continueCareer() { const state = ns.Save.load(); if (!state) return this.newCareer(); this.useState(state); this.save(); this.ui.hideStart(); this.running = true; this.paused = false; this.last = performance.now(); requestAnimationFrame(this.loop); if (this.state.dockedAt) this.ui.openPanel(this, 'station'); this.notify('CAREER RESTORED'); }
         useState(state) {
             if (!('customWaypoint' in state)) state.customWaypoint = null;
-            ns.Galaxies.ensureState(state); ns.Objectives.ensure(state); ns.Objectives.definitionsFor(state, state.galaxyId); const galaxySeed = ns.Galaxies.worldSeed(state);
+            ns.Galaxies.ensureState(state); ns.StationWar.ensure(state); ns.Objectives.ensure(state); ns.Objectives.definitionsFor(state, state.galaxyId); const galaxySeed = ns.Galaxies.worldSeed(state);
             this.state = state; this.world = new ns.World.WorldService(galaxySeed, state.consumedEntityIds, ns.Galaxies.worldConfig(state)); this.region = this.world.update(state.ship.x, state.ship.y);
             this.random = new ns.Runtime.SimulationRandom(galaxySeed ^ 0x57a1f4); this.entitySerial = 0; this.runtime.init(this);
-            this.camera.x = state.ship.x; this.camera.y = state.ship.y; this.camera.zoom = 1; this.lightSpeed = ns.LightSpeed.createState(); this.bullets = []; this.enemies = []; this.effects = []; this.collisionGuards.clear(); this.impactShake = 0; this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false; this.contractWarningTimer = 0; this.blinkEffect = null;
+            this.camera.x = state.ship.x; this.camera.y = state.ship.y; this.camera.zoom = 1; this.lightSpeed = ns.LightSpeed.createState(); this.bullets = []; this.enemies = []; this.effects = []; this.collisionGuards.clear(); this.impactShake = 0; this.interactionCast = null; this.weaponCharges = {}; this.weaponLocks = {}; this.weaponRamps = {}; this.lastWeaponShot = null; this.bulkheadsUsed = false; this.contractWarningTimer = 0; this.blinkEffect = null; this.deathCinematic = null; if (this.defeatPromptTimer) { clearTimeout(this.defeatPromptTimer); this.defeatPromptTimer = 0; }
             const stats = ns.Progression.calculateShipStats(state); state.ship.hull = clamp(state.ship.hull, 0, stats.hull); state.ship.shield = clamp(state.ship.shield, 0, stats.shield); state.ship.energy = clamp(state.ship.energy, 0, stats.reactor);
-            if (state.dockedAt) { const station = LANDMARKS.find(l => l.id === state.dockedAt); if (station) ns.Economy.ensureMarket(state, station); }
+            if (state.dockedAt) { const station = ns.Galaxies.landmarkById(state, state.dockedAt); if (station) ns.Economy.ensureMarket(state, station); }
             this.ui.renderAll(this);
         }
         loop(now) {
             if (!this.running) return;
             const elapsed = Math.min(.1, (now - this.last) / 1000 || 0); this.last = now; this.accumulator += elapsed;
             const interfaceHandled = this.processInterfaceInput();
+            if (this.deathCinematic && !this.deathCinematic.promptOpen) this.deathCinematic.elapsed = Math.min(this.deathCinematic.duration, this.deathCinematic.elapsed + elapsed);
             const step = 1 / 60; let stepped = false;
-            while (this.accumulator >= step) { if (!this.paused) this.update(step); this.accumulator -= step; stepped = true; }
+            while (this.accumulator >= step) { if (this.deathCinematic && !this.deathCinematic.promptOpen) this.updateDeathCinematic(step); else if (!this.paused) this.update(step); this.accumulator -= step; stepped = true; }
             this.renderer.render(this); this.ui.updateHud(this); if ((stepped && !this.paused) || interfaceHandled || (stepped && this.paused)) this.input.endFrame(); requestAnimationFrame(this.loop);
         }
         processInterfaceInput() {
             if (!this.state) return false;
+            if (this.deathCinematic && !this.deathCinematic.promptOpen) return false;
             const travel = ns.LightSpeed.ensure(this); let handled = false;
             if (travel.phase === 'idle') {
                 [['Escape', 'pause'], ['m', 'navigation'], ['t', 'traits'], ['c', 'contracts']].some(([key, tab]) => {
@@ -63,7 +65,8 @@
                 this.region = this.world.update(this.state.ship.x, this.state.ship.y);
                 ns.WorldEvents.update(this);
                 ns.Encounters.updateRoaming(this);
-                this.chartNearbyStations();
+                ns.StationWar.update(this);
+                this.chartNearbyLandmarks();
             }
             if (previousRegion !== this.region.id) {
                 if (!this.state.visitedRegions.includes(this.region.id)) this.state.visitedRegions.push(this.region.id);
@@ -73,6 +76,14 @@
             this.runtime.update(this, dt);
             this.camera.zoom = travel.zoom; this.camera.x += (this.state.ship.x - this.camera.x) * Math.min(1, dt * (ns.LightSpeed.isShifted(this) ? 12 : 5)); this.camera.y += (this.state.ship.y - this.camera.y) * Math.min(1, dt * (ns.LightSpeed.isShifted(this) ? 12 : 5));
             if (this.uiTimer >= .2) this.uiTimer = 0;
+        }
+        updateDeathCinematic(dt) {
+            const death = this.deathCinematic; if (!death) return;
+            this.time += dt; this.messageTimer -= dt; this.world.updateAsteroids(dt); this.updateEffects(dt);
+            this.bullets.forEach(b => { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; }); this.bullets = this.bullets.filter(b => b.life > 0);
+            this.enemies.forEach(e => { e.x += (e.vx || 0) * dt; e.y += (e.vy || 0) * dt; e.angle = (e.angle || 0) + (e.turn || 0) * dt; });
+            this.region = this.world.update(death.snapshot.x, death.snapshot.y);
+            this.camera.zoom = 1; this.camera.x += (death.snapshot.x - this.camera.x) * Math.min(1, dt * 7); this.camera.y += (death.snapshot.y - this.camera.y) * Math.min(1, dt * 7);
         }
         setCustomWaypoint(point) {
             const bounds = this.world?.config?.bounds || ns.World.WORLD_BOUNDS;
@@ -93,17 +104,19 @@
             const shipScreen = this.renderer.screen(s, this.camera);
             s.angle = ns.MathUtil.angleToPointer(this.input.mouse, { w: this.renderer.w, h: this.renderer.h }, s.angle, shipScreen);
             let thrust = 0; if (this.input.down('w', 'ArrowUp')) thrust += 1; if (this.input.down('s', 'ArrowDown')) thrust -= .55;
-            const afterburner = ns.Abilities.isActive(this.state, 'afterburner') || ns.Abilities.isActive(this.state, 'ghostVector');
-            const force = stats.thrust * (afterburner ? 2.1 : 1) * overweight; s.vx += Math.cos(s.angle) * thrust * force * dt; s.vy += Math.sin(s.angle) * thrust * force * dt;
+            const afterburner = ns.Abilities.isActive(this.state, 'afterburner') || ns.Abilities.isActive(this.state, 'ghostVector'), effects = s.abilityEffects || {};
+            const thrustScale = ns.Abilities.isActive(this.state, 'afterburner') ? (effects.afterburnerThrustScale || 2.1) : 2.1;
+            const speedScale = ns.Abilities.isActive(this.state, 'afterburner') ? (effects.afterburnerSpeedScale || 1.82) : 1.82;
+            const force = stats.thrust * (afterburner ? thrustScale : 1) * overweight; s.vx += Math.cos(s.angle) * thrust * force * dt; s.vy += Math.sin(s.angle) * thrust * force * dt;
             const strafe = (this.input.down('d', 'ArrowRight') ? 1 : 0) - (this.input.down('a', 'ArrowLeft') ? 1 : 0);
             const strafeForce = force * .55 * stats.strafeScale * (1 + (stats.effects.strafe || 0));
             s.vx += Math.cos(s.angle + Math.PI / 2) * strafe * strafeForce * dt; s.vy += Math.sin(s.angle + Math.PI / 2) * strafe * strafeForce * dt;
-            const drag = Math.pow(.992, dt * 60 * stats.braking); s.vx *= drag; s.vy *= drag; const speed = Math.hypot(s.vx, s.vy), maxSpeed = afterburner ? stats.maxSpeed * 1.82 : stats.maxSpeed;
+            const drag = Math.pow(.992, dt * 60 * stats.braking); s.vx *= drag; s.vy *= drag; const speed = Math.hypot(s.vx, s.vy), maxSpeed = afterburner ? stats.maxSpeed * speedScale : stats.maxSpeed;
             if (speed > maxSpeed) { s.vx *= maxSpeed / speed; s.vy *= maxSpeed / speed; }
             s.x += s.vx * dt; s.y += s.vy * dt; this.state.stats.distance += speed * dt;
             const exposure = ns.World.boundaryExposure(s.x, s.y, this.world?.config);
             if (exposure.active) {
-                ns.Combat.applyHullDamage(this.state, Math.min(180, 32 + exposure.depth * .16) * dt);
+                if (ns.Combat.applyHullDamage(this.state, Math.min(180, 32 + exposure.depth * .16) * dt)) return this.onDefeat();
                 if (this.messageTimer <= 0) this.notify('NEBULA BREACH // HULL FAILURE IMMINENT');
             }
             s.energy = Math.min(stats.reactor, s.energy + stats.energyRecharge * dt); s.heat = Math.max(0, s.heat - stats.cooling * dt);
@@ -156,7 +169,7 @@
                     if (b.targetPlayer !== false && (!b.ownerTeam || b.ownerTeam === 'bandits' || ns.Expansion.patrolStatus(this.state, b.ownerTeam) === 'HOSTILE')) candidates.push({ kind: 'player', target: player, t: ns.MathUtil.segmentCircleHit(from, to, player, b.radius) });
                     const convoy = this.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0 && ns.Encounters.opposing(b.ownerTeam || 'bandits', convoy.faction || 'independents')) candidates.push({ kind: 'convoy', target: convoy, t: ns.MathUtil.segmentCircleHit(from, to, convoy, b.radius) });
                     this.enemies.filter(enemy => enemy.hull > 0 && ns.Encounters.opposing(b.ownerTeam, enemy.team)).forEach(target => candidates.push({ kind: 'npc', target, t: ns.MathUtil.segmentCircleHit(from, to, target, b.radius) }));
-                } else this.enemies.filter(enemy => enemy.hull > 0 && !(b.hitIds || []).includes(enemy.id)).forEach(target => {
+                } else this.enemies.filter(enemy => enemy.hull > 0 && !ns.StationWar.isPlayerAlly(this.state, enemy) && !(b.hitIds || []).includes(enemy.id)).forEach(target => {
                     const components = ns.Data.BOSSES[target.bossType]?.components || [];
                     candidates.push({ kind: 'enemy', target, t: ns.Geometry.segmentPolygonHit(from, to, target, b.radius) });
                     components.filter(component => (target.components?.[component.id] || 0) > 0).forEach(component => { const componentPoint = ns.Geometry.componentPoint(target, component); candidates.push({ kind: 'component', target, component, t: ns.MathUtil.segmentCircleHit(from, to, componentPoint, b.radius) }); });
@@ -196,7 +209,7 @@
             const reward = def.capital ? { aetherium: Math.floor(this.random.range(100, 161)), sunshards: Math.floor(this.random.range(2, 6)), helionite: Math.floor(this.random.range(2, 5)) } : { aetherium: Math.floor(this.random.range(55, 101)), sunshards: Math.floor(this.random.range(1, 4)), helionite: 1 };
             this.world.spawnTransient({ id: this.nextEntityId('capital-salvage'), kind: 'worldObject', typeId: 'capital_salvage', name: `${def.name} Salvage`, x: enemy.x, y: enemy.y, vx: enemy.vx * .2, vy: enemy.vy * .2, radius: 22, region: this.region.id, reward });
         }
-        onEnemyKilled(enemy, byPlayer) { if (enemy?.rewarded) return; if (enemy) enemy.rewarded = true; this.spawnEnemyDeath(enemy); const playerKill = byPlayer !== false, reward = ns.Encounters.killed(this, enemy, playerKill); if (!playerKill) return; this.state.stats.kills++; ns.Objectives.record(this.state, 'kills', 1); if (enemy?.bossType) ns.Objectives.record(this.state, 'bosses', 1); ns.State.addExperience(this.state, reward.xp); ns.Contracts.recordProgress(this.state, 'kill', 1, enemy); ns.Encounters.completeRoaming(this, enemy); ns.Progression.updateAchievements(this.state); ns.Wallet.credit(this.state, { aetherium: reward.aetherium, helionite: reward.helionite }); }
+        onEnemyKilled(enemy, byPlayer) { if (enemy?.rewarded) return; if (enemy) enemy.rewarded = true; this.spawnEnemyDeath(enemy); const playerKill = byPlayer !== false, reward = ns.Encounters.killed(this, enemy, playerKill); if (!playerKill) return; ns.StationWar.notePlayerKill(this, enemy); this.state.stats.kills++; ns.Objectives.record(this.state, 'kills', 1); if (enemy?.bossType) ns.Objectives.record(this.state, 'bosses', 1); ns.State.addExperience(this.state, reward.xp); ns.Contracts.recordProgress(this.state, 'kill', 1, enemy); ns.Encounters.completeRoaming(this, enemy); ns.Progression.updateAchievements(this.state); ns.Wallet.credit(this.state, { aetherium: reward.aetherium, helionite: reward.helionite }); }
         updateContractClock(dt) { const c = this.state.contracts.active; if (c && ns.Contracts.updateTimer(this.state, dt)) this.notify(c.timer.hard ? 'HARD DEADLINE MISSED // CURRENCY PAYMENT FORFEITED' : 'DEADLINE MISSED // BONUS PAYMENT EXPIRED'); }
         updateContract(dt) {
             const c = this.state.contracts.active; if (!c) { this.enemySpawnedFor = null; return; }
@@ -275,7 +288,8 @@
                 this.notify(`CONTRACT CONTACT SECURED // ${target.name.toUpperCase()}`); this.ui.renderAll(this); return true;
             }
             if (target.kind === 'worldObject') {
-                if (!ns.WorldEvents.interact(this, target)) return false;
+                const liveTarget = this.world.loadedEntities().find(entity => entity.id === target.id);
+                if (!liveTarget || !ns.WorldEvents.interact(this, liveTarget)) { this.notify('INTERACTION LINK LOST'); return false; }
                 ns.Progression.updateAchievements(this.state); this.save(); this.ui.renderAll(this); return true;
             }
             if (target.kind === 'worldScenario') return ns.WorldEvents.activate(this, target);
@@ -286,13 +300,14 @@
             else if (fresh) { const gain = Math.round(8 * (1 + (ns.Progression.traitEffects(this.state).discoveryReward || 0))); ns.Wallet.credit(this.state, { aetherium: 40, sunshards: gain }); ns.State.addExperience(this.state, 45); this.notify(`DISCOVERY LOGGED // +${gain} SUNSHARDS`); }
             ns.Progression.updateAchievements(this.state); this.save(); this.ui.renderAll(this); return true;
         }
-        chartNearbyStations() {
-            const sensor = ns.Progression.calculateShipStats(this.state).sensor;
-            const discovered = this.world.config.landmarks.filter(item => item.type === 'station' && !this.state.discoveries.includes(item.id) && distance(item, this.state.ship) <= sensor);
+        chartNearbyLandmarks() {
+            const discovered = this.world.config.landmarks.filter(item => ['station', 'anomaly'].includes(item.type) && !this.state.discoveries.includes(item.id) && distance(item, this.state.ship) <= 600);
             if (!discovered.length) return;
             discovered.forEach(item => this.state.discoveries.push(item.id)); this.save();
-            this.notify(`STATION CHARTED // ${discovered[0].name.toUpperCase()}`);
+            if (this.ui?.activeTab === 'navigation' && this.ui.panel.classList.contains('active')) this.ui.renderPanel(this);
+            this.notify(`${discovered[0].type === 'station' ? 'STATION' : 'POI'} CHARTED // ${discovered[0].name.toUpperCase()}`);
         }
+        chartNearbyStations() { return this.chartNearbyLandmarks(); }
         interact() {
             const available = this.availableInteraction(); if (!available) { this.notify('NO INTERACTION IN RANGE'); return; }
             if (available.target.kind === 'station') return this.dock(available.target);
@@ -302,18 +317,23 @@
             if (!this.state || this.state.dockedAt || ns.LightSpeed.isTraveling(this)) return null;
             const ship = this.state.ship, contact = ns.Contracts.contactsFor(this.state.contracts.active).filter(item => ns.Interactions.inRange(this.state, item, ship)).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
             if (contact) return { target: contact, source: 'contract', verb: 'CONTRACT' };
-            const target = this.world.nearbyEntities(ship.x, ship.y, 240).filter(entity => entity.kind === 'station' || ['signal', 'salvage', 'anomaly', 'worldObject'].includes(entity.kind) || (entity.kind === 'worldScenario' && ns.WorldEvents.scenarioDefinition(entity)?.requiresInteraction)).filter(entity => ns.Interactions.inRange(this.state, entity, ship)).sort((a, b) => distance(a, ship) - distance(b, ship))[0];
+            const priority = entity => entity.kind === 'worldObject' ? 0 : entity.kind === 'worldScenario' ? 1 : ['signal', 'salvage', 'anomaly'].includes(entity.kind) ? 2 : 3;
+            const target = this.world.nearbyEntities(ship.x, ship.y, 240).filter(entity => entity.kind === 'station' || ['signal', 'salvage', 'anomaly', 'worldObject'].includes(entity.kind) || (entity.kind === 'worldScenario' && ns.WorldEvents.scenarioDefinition(entity)?.requiresInteraction)).filter(entity => ns.Interactions.inRange(this.state, entity, ship)).sort((a, b) => priority(a) - priority(b) || distance(a, ship) - distance(b, ship))[0];
             if (!target) return null;
             return { target, source: 'world', verb: target.kind === 'station' ? 'DOCK' : 'INTERACT' };
         }
         dock(station) {
+            station = ns.Galaxies.availableLandmarks(this.state).find(item => item.type === 'station' && item.id === station?.id);
+            if (!station) { this.notify('DOCKING FAILED // NO VALID STATION'); return false; }
+            station = ns.StationWar.effectiveStation(this.state, station);
             if (ns.Expansion.dockingDenied(this.state, station.faction)) { this.notify('DOCKING DENIED // HOSTILE STANDING'); return false; }
             this.cancelInteraction(true); if (!this.state.discoveries.includes(station.id)) this.state.discoveries.push(station.id);
             this.state.dockedAt = station.id; this.state.ship.vx = 0; this.state.ship.vy = 0; ns.Economy.ensureMarket(this.state, station);
             ns.Wallet.deposit(this.state);
             const c = this.state.contracts.active; if (c) ns.Contracts.recordProgress(this.state, 'dock', 1, station);
             if (c && ns.Contracts.isComplete(c)) { const completed = ns.Contracts.complete(this.state); if (completed) this.notify('CONTRACT COMPLETE // REWARDS BANKED'); }
-            ns.Economy.driftMarkets(this.state); this.save(); this.paused = true; this.ui.openPanel(this, 'station'); this.notify(`DOCKED // ${station.name.toUpperCase()}`); return true;
+            if (!this.state.contracts.active) ns.Contracts.ensureBoardForStation(this.state, station);
+            ns.StationWar.clearBattle(this.state); ns.Economy.driftMarkets(this.state); this.save(); this.paused = true; this.ui.openPanel(this, 'station'); this.notify(`DOCKED // ${station.name.toUpperCase()}`); return true;
         }
         stargateTravel(destinationId) {
             if (this.stargateTransitioning) return false;
@@ -330,16 +350,39 @@
                 this.notify(`STARGATE TRAVEL BLOCKED // ${reason}`); return false;
             }
             this.useState(this.state); this.paused = true; this.save();
+            const takeover = ns.StationWar.runTravelTick(this.state, outcome.destination.id);
+            if (takeover) this.useState(this.state);
             this.ui.navigationView = 'stargate'; this.ui.selectedGalaxyId = outcome.destination.id; this.ui.openPanel(this, 'navigation');
             const unlockedFaction = firstVisit && outcome.destination.unlocksFaction ? ns.Data.FACTIONS[outcome.destination.unlocksFaction] : null;
+            this.save();
+            if (takeover) this.notify(`STATION TAKEOVER // ${takeover.station.name.toUpperCase()} NOW ${ns.Data.FACTIONS[takeover.invader].short} CONTROLLED`);
             this.notify(unlockedFaction ? `STARGATE ARRIVAL // ${outcome.destination.name.toUpperCase()} // ${unlockedFaction.short} ENCLAVES NOW ACTIVE` : `STARGATE ARRIVAL // GALAXY ${outcome.destination.code} // ${outcome.destination.name.toUpperCase()}`); return true;
         }
         undock() { this.state.dockedAt = null; const timerStarted = ns.Contracts.startTimer(this.state); this.paused = false; this.ui.closePanel(); this.last = performance.now(); this.notify(timerStarted ? 'FLIGHT CONTROL RESTORED // CONTRACT TIMER STARTED' : 'FLIGHT CONTROL RESTORED'); }
         selectTarget() { if (!this.enemies.length) return; this.enemies.push(this.enemies.shift()); }
-        onDefeat() { const result = ns.Combat.defeatConsequences(this.state, this.world); this.lightSpeed = ns.LightSpeed.createState(); this.camera.zoom = 1; this.enemies = []; this.bullets = []; this.paused = true; this.save(); this.ui.openDefeat(this, result); }
+        defeatSnapshot() {
+            const s = this.state.ship, hull = ns.Progression.activeHull(this.state);
+            return { x: s.x, y: s.y, vx: s.vx || 0, vy: s.vy || 0, angle: s.angle || 0, radius: ns.Progression.calculateShipStats(this.state).radius, activeHullId: s.activeHullId, slots: Object.assign({}, s.slots), hullShape: hull.shape.map(point => point.slice()) };
+        }
+        createDeathCinematic(snapshot, result) {
+            const hullShape = snapshot.hullShape?.length ? snapshot.hullShape : ns.Geometry.SHAPES.cutter, count = Math.min(hullShape.length, snapshot.radius >= 18 ? 7 : 5), step = Math.max(1, Math.floor(hullShape.length / count));
+            const fragments = Array.from({ length: count }, (_, index) => [[0, 0], hullShape[(index * step) % hullShape.length], hullShape[((index + 1) * step) % hullShape.length]]).map((fragment, index, all) => {
+                const angle = snapshot.angle + index / Math.max(1, all.length) * Math.PI * 2, speed = 58 + this.random.range(0, 96);
+                return { fragment, x: Math.cos(angle) * 5, y: Math.sin(angle) * 5, vx: snapshot.vx * .26 + Math.cos(angle) * speed, vy: snapshot.vy * .26 + Math.sin(angle) * speed, rotation: snapshot.angle + Math.PI / 2, spin: this.random.range(-3.2, 3.2), scale: ns.MathUtil.shipScale(snapshot) || 1, color: '#55f0ad' };
+            });
+            const sparks = Array.from({ length: 18 }, (_, index) => { const angle = index / 18 * Math.PI * 2 + this.random.range(-.12, .12), speed = this.random.range(70, 190); return { angle, speed, size: this.random.range(1, 2.6), color: index % 4 === 0 ? '#ffbd59' : index % 3 === 0 ? '#55d7ff' : '#d9edf2' }; });
+            return { elapsed: 0, duration: 3, promptOpen: false, snapshot, result, fragments, sparks, flavor: this.ui.defeatFlavorLine(this.state, result) };
+        }
+        onDefeat() {
+            if (this.deathCinematic) return this.deathCinematic.result;
+            const snapshot = this.defeatSnapshot(); ns.StationWar.clearBattle(this.state); const result = ns.Combat.defeatConsequences(this.state, this.world);
+            this.lightSpeed = ns.LightSpeed.createState(); this.camera.x = snapshot.x; this.camera.y = snapshot.y; this.camera.zoom = 1; this.effects = []; this.paused = true; this.impactShake = Math.max(this.impactShake, 1.8); this.deathCinematic = this.createDeathCinematic(snapshot, result); this.save();
+            this.defeatPromptTimer = setTimeout(() => { if (!this.deathCinematic) return; this.deathCinematic.promptOpen = true; this.defeatPromptTimer = 0; this.ui.openDefeat(this, result, this.deathCinematic.flavor); }, 3000);
+            return result;
+        }
         save(message) { ns.Objectives?.evaluate(this.state, this.state.galaxyId); ns.Save.save(this.state); if (message) this.notify(message); }
         notify(message) { this.ui.showMessage(message); this.messageTimer = 3; }
-        destroy() { this.running = false; this.runtime.destroy(this); this.input.destroy(); this.ui.destroy?.(); window.removeEventListener('resize', this.onResize); }
+        destroy() { this.running = false; if (this.defeatPromptTimer) clearTimeout(this.defeatPromptTimer); this.runtime.destroy(this); this.input.destroy(); this.ui.destroy?.(); window.removeEventListener('resize', this.onResize); }
     }
     ns.Game = Game;
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

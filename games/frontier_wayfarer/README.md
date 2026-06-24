@@ -13,7 +13,7 @@ The intended player fantasy is:
 
 ## Non-Negotiable Product Direction
 
-- Preserve the no-build browser-script architecture under `window.MiniInvadersV2`.
+- Preserve the no-build browser-script architecture under `window.FrontierWayfarer`.
 - Keep the universe finite and region-authored, not endless procedural space.
 - Keep one active persistent personal ship, with dock-only switching among purchased hull frames rather than a fleet or disposable hull loop.
 - Keep pilot traits separate from ship modules.
@@ -203,8 +203,6 @@ Ranked trait cards show the cumulative current effect rather than only the per-r
 
 ## UI Direction
 
-The visual identity should continue to evolve from classic Mini Invaders rather than abandoning it.
-
 Keep:
 
 - black-space presentation
@@ -269,30 +267,34 @@ Current script order:
 2. `js/data.js`
 3. `js/math.js`
 4. `js/expansion.js`
-5. `js/galaxies.js`
-6. `js/registry.js`
-7. `js/state.js`
-8. `js/wallet.js`
-9. `js/unlocks.js`
-10. `js/progression.js`
-11. `js/world.js`
-12. `js/economy.js`
-13. `js/contracts.js`
-14. `js/save.js`
-15. `js/combat.js`
-16. `js/abilities.js`
-17. `js/weapons.js`
-18. `js/encounters.js`
-19. `js/worldEvents.js`
-20. `js/lightSpeed.js`
-21. `js/runtime.js`
-22. `js/commands.js`
-23. `js/input.js`
-24. `js/renderer.js`
-25. `js/game.js`
-26. `js/components.js`
-27. `js/ui.js`
-28. `js/main.js`
+5. `js/geometry.js`
+6. `js/galaxies.js`
+7. `js/stationWar.js`
+8. `js/registry.js`
+9. `js/state.js`
+10. `js/wallet.js`
+11. `js/objectives.js`
+12. `js/unlocks.js`
+13. `js/progression.js`
+14. `js/interactions.js`
+15. `js/world.js`
+16. `js/economy.js`
+17. `js/contracts.js`
+18. `js/save.js`
+19. `js/combat.js`
+20. `js/abilities.js`
+21. `js/weapons.js`
+22. `js/encounters.js`
+23. `js/worldEvents.js`
+24. `js/lightSpeed.js`
+25. `js/runtime.js`
+26. `js/commands.js`
+27. `js/input.js`
+28. `js/renderer.js`
+29. `js/game.js`
+30. `js/components.js`
+31. `js/ui.js`
+32. `js/main.js`
 
 High-level ownership map:
 
@@ -303,6 +305,7 @@ High-level ownership map:
 - `unlocks.js`: progression milestone evaluation and visibility rules
 - `expansion.js`: hulls, weapon/enemy/boss definitions, specializations, faction thresholds, narrative flavor
 - `galaxies.js`: seven-galaxy route graph, Tier IV hull classes, stargate modules, local-chart snapshots, and intergalactic travel
+- `stationWar.js`: persisted effective station ownership, stargate-travel takeover rolls, and station-invasion battle choices
 - `progression.js`: trait logic, derived hull/ship stats, equipment and hull fitting, respec logic
 - `weapons.js`: player weapon firing, charging, guidance, piercing, splash, and chain effects
 - `encounters.js`: enemy creation, faction targeting, patrol combat, and boss phases
@@ -322,8 +325,8 @@ High-level ownership map:
 
 ## Persistence Contract
 
-- Current save schema version is `11`.
-- Schema 3 careers retain their historical coordinate scaling; schema 10 adds irregular 8-by-8 charts and persisted seeded map objectives without rescaling current positions. Schema 11 normalizes the tier-7 equipment era without requiring new player state.
+- Current save schema version is `12`.
+- Schema 3 careers retain their historical coordinate scaling; schema 10 adds irregular 8-by-8 charts and persisted seeded map objectives without rescaling current positions. Schema 11 normalizes the tier-7 equipment era without requiring new player state. Schema 12 adds station-control state for faction takeovers.
 - Schema 4 careers migrate through schema 5 with the Wayfarer active and owned. Schema 5 careers migrate to schema 6 with boss accomplishments and roaming-capital state initialized safely.
 - Saves must continue to migrate forward safely.
 - Legacy diamonds migrate to banked Aetherium at 1:1.
@@ -342,6 +345,7 @@ Important save domains:
 - manual board-refresh timestamp and active convoy route/ship state
 - consumed procedural signal and salvage ids, preventing regenerated pickups after reload
 - discoveries and visited regions
+- station-control ownership overrides and active invasion battle state
 - economy state
 - world seed and location
 - ability cooldown/effect state where needed
@@ -393,7 +397,7 @@ These are poor directions unless the game is intentionally re-scoped:
 - bypassing unlocks by sprinkling one-off UI exceptions
 # Extending Frontier Wayfarer
 
-Frontier Wayfarer keeps its dependency-free browser-script boot, but content is exposed through `MiniInvadersV2.Registry`. Add definitions after `registry.js` has loaded and before `main.js` validates the catalog.
+Frontier Wayfarer keeps its dependency-free browser-script boot, but content is exposed through `FrontierWayfarer.Registry`. Add definitions after `registry.js` has loaded and before `main.js` validates the catalog.
 
 - Regions may be any axis-aligned rectangle. Register a `region` with `x`, `y`, `w`, `h`, faction, backdrop, and danger; world bounds are derived from the supplied region set.
 - Landmarks reference a registered region ID. World objects and events provide eligibility data and may name a registered handler through `handlerId`.
@@ -402,4 +406,4 @@ Frontier Wayfarer keeps its dependency-free browser-script boot, but content is 
 - Runtime services implement `update(game, dt)` and can be added to `RuntimePipeline`. Player mutations should be exposed as commands returning `{ ok, reason, changes }`.
 - UI actions belong in `ActionRouter`; persistent interface pieces implement `mount`, `render`, and `destroy` through `Components.Component`.
 
-Call `MiniInvadersV2.Registry.validate()` in tests for every content pack. It catches duplicate IDs, missing regions/factions/handlers, unsupported module slots, invalid bounds, and malformed costs.
+Call `FrontierWayfarer.Registry.validate()` in tests for every content pack. It catches duplicate IDs, missing regions/factions/handlers, unsupported module slots, invalid bounds, and malformed costs.

@@ -35,6 +35,7 @@
             const enemy = create(game, type, x, y, { faction: faction || definition(type).faction, role, formation: formation ? 'wedge' : null, angle: formation ? formationAngle + Math.PI : angle + Math.PI });
             game.enemies.push(enemy); spawned.push(enemy);
         }
+        separateShips(game);
         return spawned;
     }
     function spawnBoss(game, contract) {
@@ -59,7 +60,7 @@
         const snapshot = { hull: enemy.hull, phase: enemy.bossPhase, deployCount: enemy.deployCount, components: enemy.components, patternTimer: enemy.patternTimer, specialTimer: enemy.specialTimer, queuedPattern: enemy.queuedPattern };
         if (enemy.contractRef) enemy.contractRef.bossState = snapshot;
         const contract = game.state.contracts.active; if (contract?.bossType === enemy.bossType) contract.bossState = snapshot;
-        const threat = game.state.progression?.roamingThreat; if (enemy.roaming && threat?.bossType === enemy.bossType) threat.bossState = snapshot;
+        const threat = currentThreat(game.state); if (enemy.roaming && threat?.bossType === enemy.bossType) threat.bossState = snapshot;
     }
     function patternReady(enemy, type, dt, duration) {
         if (!enemy.queuedPattern) { if (enemy.patternTimer > 0) return false; enemy.queuedPattern = { type, timer: duration || .8 }; enemy.telegraph = Math.max(enemy.telegraph, duration || .8); return false; }
@@ -95,6 +96,29 @@
         if (enemy.cooldown < (def.telegraph || .55)) enemy.telegraph = Math.max(enemy.telegraph, def.telegraph || .55); enemy.telegraph = Math.max(0, enemy.telegraph - dt);
         saveBossState(game, enemy);
     }
+    function separateShips(game) {
+        const ships = game.enemies.filter(enemy => enemy.hull > 0);
+        for (let pass = 0; pass < 5; pass++) {
+            let changed = false;
+            for (let i = 0; i < ships.length; i++) {
+                for (let j = 0; j < i; j++) {
+                    const a = ships[i], b = ships[j], min = (a.radius || 12) + (b.radius || 12) + 4, actual = distance(a, b);
+                    if (actual >= min) continue;
+                    const angle = actual > .001 ? Math.atan2(a.y - b.y, a.x - b.x) : ns.MathUtil.hash(i + 19, j + 37, a.x, a.y, pass) * Math.PI * 2;
+                    const nx = Math.cos(angle), ny = Math.sin(angle), push = (min - actual + .01) * .5;
+                    a.x += nx * push; a.y += ny * push; b.x -= nx * push; b.y -= ny * push; changed = true;
+                    const relative = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+                    if (relative < 0) {
+                        const impulse = -relative * .5;
+                        a.vx += nx * impulse; a.vy += ny * impulse; b.vx -= nx * impulse; b.vy -= ny * impulse;
+                    }
+                    a.vx *= .96; a.vy *= .96; b.vx *= .96; b.vy *= .96;
+                }
+            }
+            if (!changed) break;
+        }
+        return ships;
+    }
     function update(game, dt) {
         const ship = game.state.ship;
         game.enemies.forEach(enemy => {
@@ -115,6 +139,7 @@
             if (d < 680 && enemy.cooldown <= 0) { enemy.cooldown = def.cooldown * (enemy.bossPhase ? Math.max(.55, 1 - (enemy.bossPhase - 1) * .15) : 1) + game.random.range(0, .35); if (enemy.archetype === 'torpedo_bomber') fireFan(game, enemy, target, def, 2, .25); else fire(game, enemy, target, def); }
             game.world.nearbyEntities(enemy.x, enemy.y, 90).filter(entity => entity.kind === 'asteroid').forEach(asteroid => game.resolveShipAsteroidCollision(enemy, enemy.radius, asteroid, 'enemy'));
         });
+        separateShips(game);
         game.enemies = game.enemies.filter(enemy => enemy.hull > 0 && (enemy.persistent || distance(enemy, ship) < 2600));
     }
     function playerHit(game, enemy, hit) {
@@ -128,23 +153,48 @@
         if (byPlayer !== false && isFaction(enemy.faction)) game.state.reputations[enemy.faction] = ns.MathUtil.clamp(game.state.reputations[enemy.faction] - 8, -100, 100);
         const def = definition(enemy.archetype), scale = def.reward || 1; return { xp: Math.round((16 + game.region.danger * 4) * scale), aetherium: Math.round((8 + game.region.danger * 3) * scale), helionite: game.region.danger >= 3 ? Math.max(1, Math.round(scale)) : 0 };
     }
+    function ensureThreatStore(state) {
+        const progression = state.progression = state.progression || {};
+        progression.bossesDefeated = progression.bossesDefeated && typeof progression.bossesDefeated === 'object' ? progression.bossesDefeated : {};
+        progression.roamingThreats = progression.roamingThreats && typeof progression.roamingThreats === 'object' ? progression.roamingThreats : {};
+        progression.roamingThreatCooldowns = progression.roamingThreatCooldowns && typeof progression.roamingThreatCooldowns === 'object' ? progression.roamingThreatCooldowns : {};
+        if (progression.roamingThreat && !progression.roamingThreat.galaxyId) progression.roamingThreat.galaxyId = state.galaxyId;
+        if (progression.roamingThreat?.galaxyId && !progression.roamingThreats[progression.roamingThreat.galaxyId]) progression.roamingThreats[progression.roamingThreat.galaxyId] = progression.roamingThreat;
+        progression.roamingThreat = progression.roamingThreats[state.galaxyId] || null;
+        progression.nextRoamingThreatAt = Math.max(0, Number(progression.roamingThreatCooldowns[state.galaxyId]) || 0);
+        return progression;
+    }
+    function currentThreat(state) { return ensureThreatStore(state).roamingThreats[state.galaxyId] || null; }
+    function setCurrentThreat(state, threat) {
+        const progression = ensureThreatStore(state);
+        if (threat) progression.roamingThreats[state.galaxyId] = threat;
+        else delete progression.roamingThreats[state.galaxyId];
+        progression.roamingThreat = threat || null;
+        return progression.roamingThreat;
+    }
+    function setCurrentCooldown(state, time) {
+        const progression = ensureThreatStore(state);
+        progression.roamingThreatCooldowns[state.galaxyId] = Math.max(0, Number(time) || 0);
+        progression.nextRoamingThreatAt = progression.roamingThreatCooldowns[state.galaxyId];
+    }
     function onRegionEntered(game, region) {
-        const progression = game.state.progression, defeated = Object.keys(progression.bossesDefeated || {}).filter(id => ns.Data.BOSSES[id]?.capital);
-        if (progression.roamingThreat || region.danger < 5 || game.state.playTime < (progression.nextRoamingThreatAt || 0) || !defeated.length) return null;
-        const roll = ns.MathUtil.hash(game.state.worldSeed, region.column, region.row, Math.floor(game.state.playTime / 1800)); if (roll >= .12) return null;
+        const progression = ensureThreatStore(game.state), defeated = Object.keys(progression.bossesDefeated || {}).filter(id => ns.Data.BOSSES[id]?.capital);
+        if (currentThreat(game.state) || region.danger < 5 || game.state.playTime < (progression.nextRoamingThreatAt || 0) || !defeated.length) return null;
+        const galaxySeed = ns.Galaxies?.worldSeed ? ns.Galaxies.worldSeed(game.state) : game.state.worldSeed;
+        const roll = ns.MathUtil.hash(galaxySeed, region.column, region.row, Math.floor(game.state.playTime / 1800)); if (roll >= .12) return null;
         const bossType = defeated[Math.floor(roll * 1000) % defeated.length], angle = roll * Math.PI * 20, radius = Math.min(region.w, region.h) * .3;
-        progression.roamingThreat = { bossType, region: region.id, x: region.x + region.w / 2 + Math.cos(angle) * radius, y: region.y + region.h / 2 + Math.sin(angle) * radius, status: 'signaled', bossState: null };
-        progression.nextRoamingThreatAt = game.state.playTime + 1800; return progression.roamingThreat;
+        const threat = setCurrentThreat(game.state, { bossType, galaxyId: game.state.galaxyId, region: region.id, x: region.x + region.w / 2 + Math.cos(angle) * radius, y: region.y + region.h / 2 + Math.sin(angle) * radius, status: 'signaled', bossState: null });
+        setCurrentCooldown(game.state, game.state.playTime + 1800); return threat;
     }
     function updateRoaming(game) {
-        const threat = game.state.progression?.roamingThreat; if (!threat || threat.region !== game.region.id) return null;
+        const threat = currentThreat(game.state); if (!threat || threat.galaxyId !== game.state.galaxyId || threat.region !== game.region.id) return null;
         if (threat.status === 'active' && !game.enemies.some(enemy => enemy.roaming && enemy.hull > 0)) threat.status = 'signaled';
         if (threat.status === 'active' || distance(game.state.ship, threat) > 900) return null;
-        threat.status = 'active'; const boss = spawnBoss(game, { bossType: threat.bossType, target: threat, encounterId: `roaming:${threat.bossType}:${threat.region}`, bossState: threat.bossState, roaming: true }); boss.roaming = true; game.notify(`${definition(threat.bossType).name.toUpperCase()} // ROAMING CAPITAL ENGAGED`); return boss;
+        threat.status = 'active'; const boss = spawnBoss(game, { bossType: threat.bossType, target: threat, encounterId: `roaming:${game.state.galaxyId}:${threat.bossType}:${threat.region}`, bossState: threat.bossState, roaming: true }); boss.roaming = true; game.notify(`${definition(threat.bossType).name.toUpperCase()} // ROAMING CAPITAL ENGAGED`); return boss;
     }
     function completeRoaming(game, enemy) {
-        const threat = game.state.progression?.roamingThreat; if (!enemy?.roaming || threat?.bossType !== enemy.bossType) return false;
-        const def = definition(enemy.bossType); ns.Wallet.credit(game.state, { aetherium: Math.round(900 * .6), sunshards: Math.round(18 * .6), helionite: Math.round(55 * .6) }); game.state.progression.roamingThreat = null; game.notify(`${def.name.toUpperCase()} // ROAMING THREAT ELIMINATED`); return true;
+        const threat = currentThreat(game.state); if (!enemy?.roaming || threat?.bossType !== enemy.bossType) return false;
+        const def = definition(enemy.bossType); ns.Wallet.credit(game.state, { aetherium: Math.round(900 * .6), sunshards: Math.round(18 * .6), helionite: Math.round(55 * .6) }); setCurrentThreat(game.state, null); game.notify(`${def.name.toUpperCase()} // ROAMING THREAT ELIMINATED`); return true;
     }
-    ns.Encounters = { definition, hostileToPlayer, opposing, create, spawn, spawnBoss, update, playerHit, killed, componentAlive, onRegionEntered, updateRoaming, completeRoaming };
-})(window.MiniInvadersV2);
+    ns.Encounters = { definition, hostileToPlayer, opposing, create, spawn, spawnBoss, update, playerHit, killed, componentAlive, separateShips, onRegionEntered, updateRoaming, completeRoaming };
+})(window.FrontierWayfarer);

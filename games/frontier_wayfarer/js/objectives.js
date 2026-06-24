@@ -93,4 +93,4 @@
         progress[family] = Math.max(0, (Number(progress[family]) || 0) + (Number(amount) || 0)); return evaluate(state, galaxyId);
     }
     ns.Objectives = { LOCAL_FACTIONS, REWARD_RANGES, ensure, definitionsFor, relicFor, valueFor, evaluate, record };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

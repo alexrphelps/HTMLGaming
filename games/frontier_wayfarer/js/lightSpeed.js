@@ -9,7 +9,8 @@
     }
     function ensure(game) { if (!game.lightSpeed) game.lightSpeed = createState(); return game.lightSpeed; }
     function drive(game) { return ns.Data.MODULES[game.state?.ship?.slots?.engine] || {}; }
-    function fitted(game) { const module = drive(game); return Boolean(module.id === 'light_drive' || module.lightSpeed); }
+    function reactor(game) { return ns.Data.MODULES[game.state?.ship?.slots?.reactor] || {}; }
+    function fitted(game) { return Boolean(game.state && ns.Progression.calculateShipStats(game.state).lightSpeed); }
     function chargeDuration(game) { return CONFIG.chargeDuration * (drive(game).lightCharge || 1); }
     function decelerationDuration(game) { return CONFIG.decelerationDuration * (drive(game).lightDeceleration || 1); }
     function isShifted(game) { return shiftedPhases.includes(ensure(game).phase); }
@@ -58,8 +59,7 @@
         if (dy > .0001) distances.push((b.maxY - ship.y) / dy); else if (dy < -.0001) distances.push((b.minY - ship.y) / dy);
         const rectangular = Math.min(...distances.filter(value => value >= 0)), config = game?.world?.config;
         if (!config?.regions) return rectangular;
-        for (let distance = 0; distance <= Math.min(rectangular, CONFIG.boundaryLookahead + 800); distance += 100) if (!ns.World.containsPoint(ship.x + dx * distance, ship.y + dy * distance, config)) return distance;
-        return rectangular;
+        return Math.min(rectangular, ns.World.distanceToInvalidSectorBoundary(ship, ship.angle, config, Math.min(rectangular, CONFIG.boundaryLookahead + 900)));
     }
     function interrupt(game, message) {
         const travel = ensure(game); travel.phase = 'idle'; travel.timer = 0; travel.cooldown = CONFIG.retryDelay; travel.zoom = 1;
@@ -77,6 +77,8 @@
         const travel = ensure(game), ship = game.state.ship, bounds = game.world?.config?.bounds || ns.World.WORLD_BOUNDS;
         ship.x = ns.MathUtil.clamp(ship.x, bounds.minX + CONFIG.boundaryInset, bounds.maxX - CONFIG.boundaryInset);
         ship.y = ns.MathUtil.clamp(ship.y, bounds.minY + CONFIG.boundaryInset, bounds.maxY - CONFIG.boundaryInset);
+        const safe = ns.World.projectToValidPoint(ship.x, ship.y, game.world?.config, CONFIG.boundaryInset);
+        ship.x = safe.x; ship.y = safe.y;
         ship.vx = Math.cos(ship.angle) * 340; ship.vy = Math.sin(ship.angle) * 340;
         travel.phase = 'idle'; travel.timer = 0; travel.cooldown = CONFIG.cooldown; travel.zoom = .55;
         game.region = game.world.update(ship.x, ship.y); game.camera.x = ship.x; game.camera.y = ship.y;
@@ -116,7 +118,11 @@
     function status(game) {
         const travel = ensure(game), unlocked = game.state ? ns.Unlocks.evaluate(game.state).lightDrive : false;
         if (!unlocked && !game.state?.ship?.ownedModules?.includes('light_drive')) return { label: 'LICENSE LOCKED', className: 'locked' };
-        if (!fitted(game)) return { label: game.state.ship.ownedModules.includes('light_drive') ? 'FIT DRIVE' : 'NOT INSTALLED', className: 'locked' };
+        if (!fitted(game)) {
+            const engine = drive(game), core = reactor(game);
+            if (engine.lightSpeed && !core.lightSpeedSupport) return { label: 'FIT T3 REACTOR', className: 'locked' };
+            return { label: game.state.ship.ownedModules.includes('light_drive') ? 'FIT DRIVE' : 'NOT INSTALLED', className: 'locked' };
+        }
         if (travel.phase === 'charging') return { label: `CHARGING ${Math.min(100, Math.round(travel.timer / chargeDuration(game) * 100))}%`, className: 'charging' };
         if (travel.phase === 'cruising') return { label: 'R // DECELERATE', className: 'active' };
         if (travel.phase === 'decelerating') return { label: 'REMATERIALIZING', className: 'charging' };
@@ -125,5 +131,5 @@
         if (game.state.ship.energy <= 0 || game.state.ship.heat >= 100) return { label: 'DRIVE RESERVES EXHAUSTED', className: 'locked' };
         return { label: 'R // LIGHT SPEED', className: 'ready' };
     }
-    ns.LightSpeed = { CONFIG, createState, ensure, fitted, drive, chargeDuration, decelerationDuration, isShifted, isTraveling, isLocked, canCharge, beginCharge, beginDeceleration, toggle, update, status, distanceToBoundary };
-})(window.MiniInvadersV2);
+    ns.LightSpeed = { CONFIG, createState, ensure, fitted, drive, reactor, chargeDuration, decelerationDuration, isShifted, isTraveling, isLocked, canCharge, beginCharge, beginDeceleration, toggle, update, status, distanceToBoundary };
+})(window.FrontierWayfarer);

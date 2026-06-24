@@ -84,7 +84,7 @@
             sensor: 850 + hull.sensor + (cargo.sensor || 0) + utility('sensor') + (effects.sensor || 0),
             interactionRange: 90 + (cargo.interactionRange || 0) + utility('interactionRange'),
             collisionResistance: engine.collisionResistance || 0, heavyStability: (engine.heavyStability || 0) + (defense.heavyStability || 0),
-            lightSpeed: Boolean(engine.lightSpeed || engine.id === 'light_drive'), lightTurn: engine.lightTurn || 1, lightCharge: engine.lightCharge || 1, lightDeceleration: engine.lightDeceleration || 1,
+            lightSpeed: Boolean(engine.lightSpeed && reactor.lightSpeedSupport), lightTurn: engine.lightTurn || 1, lightCharge: engine.lightCharge || 1, lightDeceleration: engine.lightDeceleration || 1,
             effects
         };
     }
@@ -157,4 +157,4 @@
     }
 
     ns.Progression = { getTraitRank, getDisciplineSpend, canBuyTrait, buyTrait, respecCost, respec, traitEffects, traitTotalLabel, activeHull, calculateShipStats, checkEquipModule, equipModule, cargoUsed, checkSwitchHull, switchHull, buyHull, updateAchievements };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

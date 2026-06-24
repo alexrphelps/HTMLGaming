@@ -45,4 +45,4 @@
         return { x: ship.x + Math.cos(ship.angle) * forward - Math.sin(ship.angle) * lateral, y: ship.y + Math.sin(ship.angle) * forward + Math.cos(ship.angle) * lateral };
     }
     ns.MathUtil = { clamp, lerp, distance, hash, seeded, circlesOverlap, segmentCircleHit, formatDistance, formatSpeed, angleToPointer, shipScale, weaponMount, weaponHardpoint };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

@@ -3,6 +3,7 @@
 
     function objectDefinition(entity) { return ns.Registry.get('worldObject', entity?.typeId) || null; }
     function scenarioDefinition(entity) { return ns.Registry.get('worldEvent', entity?.typeId) || null; }
+    function isHiddenScenario(entity) { return Boolean(scenarioDefinition(entity)?.hidden); }
     function scaledReward(definition, danger) {
         const reward = Object.assign({ aetherium: 0, sunshards: 0, helionite: 0 }, definition.reward);
         Object.entries(definition.dangerScale || {}).forEach(([currency, amount]) => { reward[currency] += Math.max(0, danger - 1) * amount; });
@@ -15,7 +16,7 @@
     function moduleLootPool(game, definition, danger) {
         const loot = definition.moduleLoot || {};
         return Object.values(ns.Data.MODULES).filter(module => {
-            if (!module.cost || ns.Wallet.isZero(module.cost)) return false;
+            if (!ns.Economy.moduleEligibleForLoot(game.state, module)) return false;
             if (loot.slots?.length && !loot.slots.includes(module.slot)) return false;
             if ((module.tier || 1) < (loot.minTier || 1) || (module.tier || 1) > (loot.maxTier || 99)) return false;
             if (module.majorOnly && !game.state.dockedAt && (module.tier || 1) < 5) return false;
@@ -41,6 +42,14 @@
     function interactionDuration(entity) { return (entity?.kind === 'worldScenario' ? scenarioDefinition(entity) : objectDefinition(entity))?.interactionDuration || 5; }
     function interact(game, entity) {
         const definition = objectDefinition(entity); if (!definition || !game.world.consumeEntity(game.state, entity)) return false;
+        if (entity.typeId === 'mineral_chunk') {
+            const mining = ns.Contracts.collectMiningFragment(game.state, entity);
+            if (mining.counted) {
+                game.world.discover(game.state, entity);
+                game.notify(`MINERAL FRAGMENTS // ${mining.stage.progress}/${mining.stage.required} // SECTOR ${mining.stage.sector}`);
+                return true;
+            }
+        }
         const effects = ns.Progression.traitEffects(game.state), danger = ns.Data.REGIONS.find(region => region.id === entity.region)?.danger || game.region?.danger || 1;
         const reward = entity.reward ? Object.assign({ aetherium: 0, sunshards: 0, helionite: 0 }, entity.reward) : scaledReward(definition, danger), multiplier = entity.typeId === 'ancient_relic' ? 1 : definition.rewardType === 'salvage' ? 1 + (effects.salvage || 0) : 1 + (effects.discoveryReward || 0);
         Object.keys(reward).forEach(currency => { reward[currency] = Math.round(reward[currency] * multiplier); });
@@ -65,6 +74,14 @@
         const danger = ns.Data.REGIONS.find(region => region.id === entity.region)?.danger || game.region?.danger || 1;
         const handler = ns.Registry.handler('worldEvent', definition.handlerId || entity.typeId) || ns.Registry.handler('worldEvent', 'default'); handler({ game, entity, definition, danger }); game.save(); game.ui.renderAll(game); return true;
     }
+    function spawnAmbush(game, entity, options) {
+        const opts = options || {}, ship = game.state.ship, renderer = game.renderer || {}, visibleRadius = Math.max(renderer.w || 900, renderer.h || 650) / 2 + 260;
+        const distanceFromPlayer = opts.distance || visibleRadius + 520, roll = hash(game.state.worldSeed || 1, Math.round(entity.x), Math.round(entity.y), String(entity.id || entity.typeId || '').length + (opts.salt || 0));
+        const center = { x: ship.x + Math.cos(roll * Math.PI * 2) * distanceFromPlayer, y: ship.y + Math.sin(roll * Math.PI * 2) * distanceFromPlayer };
+        const spawned = game.spawnEnemies(opts.count || 1, center, opts.faction, opts.role || 'world-event', opts.archetype) || [];
+        spawned.forEach(enemy => { enemy.aggroed = true; enemy.angle = Math.atan2(ship.y - enemy.y, ship.x - enemy.x); });
+        return spawned;
+    }
     function update(game) {
         if (!game.state || game.state.dockedAt || ns.LightSpeed.isTraveling(game)) return false;
         const scenarios = game.world.loadedEntities().filter(entity => entity.kind === 'worldScenario').sort((a, b) => distance(a, game.state.ship) - distance(b, game.state.ship));
@@ -73,14 +90,15 @@
     }
 
     ns.Registry.registerHandler('worldObject', 'default', ({ game, definition, reward }) => game.notify(`${definition.name.toUpperCase()} SECURED // ${rewardText(reward)}`));
-    ns.Registry.registerHandler('worldObject', 'smuggler_dead_drop', ({ game, entity, danger, reward }) => { if (entity.variant === 'guarded') { game.spawnEnemies(2 + Math.floor(danger / 3), entity); game.notify(`DEAD DROP OPEN // ${rewardText(reward)} // RAIDER RESPONSE`); } else game.notify(`DEAD DROP OPEN // ${rewardText(reward)}`); });
+    ns.Registry.registerHandler('worldObject', 'smuggler_dead_drop', ({ game, entity, danger, reward }) => { if (entity.variant === 'guarded') { spawnAmbush(game, entity, { count: 2 + Math.floor(danger / 3) }); game.notify(`DEAD DROP OPEN // ${rewardText(reward)} // RAIDER RESPONSE`); } else game.notify(`DEAD DROP OPEN // ${rewardText(reward)}`); });
     ns.Registry.registerHandler('worldObject', 'unstable_prism', ({ game, reward }) => game.notify(`PRISM SURVEY LOGGED // ${rewardText(reward)} // SYSTEM LOAD SPIKE`));
     ns.Registry.registerHandler('worldObject', 'ancient_relic', ({ game, reward }) => game.notify(`ANCIENT RELIC RECOVERED // ${rewardText(reward)}`));
-    ns.Registry.registerHandler('worldObject', 'module_cache', ({ game, entity, danger, reward, moduleLoot }) => { if (entity.variant === 'guarded') game.spawnEnemies(1 + Math.floor(danger / 3), entity); const loot = moduleLoot ? moduleLoot.duplicate ? `${moduleLoot.module.name.toUpperCase()} DUPLICATE // ${rewardText(moduleLoot.fallback)}` : `${moduleLoot.module.name.toUpperCase()} ADDED TO HOLD` : rewardText(reward); game.notify(`MODULE CACHE OPEN // ${loot}`); });
+    ns.Registry.registerHandler('worldObject', 'module_cache', ({ game, entity, danger, reward, moduleLoot }) => { if (entity.variant === 'guarded') spawnAmbush(game, entity, { count: 1 + Math.floor(danger / 3) }); const loot = moduleLoot ? moduleLoot.duplicate ? `${moduleLoot.module.name.toUpperCase()} DUPLICATE // ${rewardText(moduleLoot.fallback)}` : `${moduleLoot.module.name.toUpperCase()} ADDED TO HOLD` : rewardText(reward); game.notify(`MODULE CACHE OPEN // ${loot}`); });
     ns.Registry.registerHandler('worldEvent', 'default', ({ game, definition }) => game.notify(`${definition.name.toUpperCase()} // EVENT RESOLVED`));
-    ns.Registry.registerHandler('worldEvent', 'distress_call', ({ game, entity, definition, danger }) => { if (distressIsFalse(game, entity, definition)) { game.spawnEnemies(Math.min(4, 1 + Math.ceil(danger / 2)), entity); game.notify('FALSE DISTRESS SIGNAL // BANDIT AMBUSH'); } else { const reward = { aetherium: 45 + danger * 8, sunshards: 1, helionite: 0 }, standing = positiveStanding(game, 'independents', 1); ns.Wallet.credit(game.state, reward); ns.State.addExperience(game.state, 28); game.notify(`PILOT RECOVERED // +${reward.aetherium} AE // +${standing} GUILD STANDING`); } });
+    ns.Registry.registerHandler('worldEvent', 'distress_call', ({ game, entity, definition, danger }) => { if (distressIsFalse(game, entity, definition)) { spawnAmbush(game, entity, { count: Math.min(4, 1 + Math.ceil(danger / 2)) }); game.notify('FALSE DISTRESS SIGNAL // BANDIT AMBUSH'); } else { const reward = { aetherium: 45 + danger * 8, sunshards: 1, helionite: 0 }, standing = positiveStanding(game, 'independents', 1); ns.Wallet.credit(game.state, reward); ns.State.addExperience(game.state, 28); game.notify(`PILOT RECOVERED // +${reward.aetherium} AE // +${standing} GUILD STANDING`); } });
     ns.Registry.registerHandler('worldEvent', 'border_skirmish', ({ game, entity }) => { game.spawnEnemies(2, { x: entity.x - 140, y: entity.y }, 'concord', 'world-event', 'concord_patrol'); game.spawnEnemies(2, { x: entity.x + 140, y: entity.y }, 'corsairs', 'world-event', 'corsair_raider'); game.notify('BORDER SKIRMISH // CONCORD AND CORSAIR CONTACTS'); });
-    ns.Registry.registerHandler('worldEvent', 'raider_sweep', ({ game, entity, danger }) => { game.spawnEnemies(Math.min(4, 1 + Math.ceil(danger / 2)), entity); game.notify('RAIDER SWEEP // HOSTILES INBOUND'); });
+    ns.Registry.registerHandler('worldEvent', 'raider_sweep', ({ game, entity, danger }) => { spawnAmbush(game, entity, { count: Math.min(4, 1 + Math.ceil(danger / 2)), salt: 7 }); game.notify('RAIDER SWEEP // HOSTILES INBOUND'); });
     ns.Registry.registerHandler('worldEvent', 'abandoned_worksite', ({ game }) => { ns.State.addExperience(game.state, 8); game.notify('ABANDONED WORKSITE // RECOVERABLE STORES DETECTED'); });
-    ns.WorldEvents = { objectDefinition, scenarioDefinition, scaledReward, moduleLootPool, interactionDuration, distressIsFalse, interact, activate, update };
-})(window.MiniInvadersV2);
+    ns.Registry.registerHandler('worldEvent', 'station_invasion', ({ game, entity }) => ns.StationWar.beginInvasion(game, entity));
+    ns.WorldEvents = { objectDefinition, scenarioDefinition, isHiddenScenario, scaledReward, moduleLootPool, interactionDuration, distressIsFalse, spawnAmbush, interact, activate, update };
+})(window.FrontierWayfarer);

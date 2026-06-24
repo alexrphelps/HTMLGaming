@@ -43,4 +43,4 @@
     };
 
     ns.Runtime = { SimulationRandom, RuntimePipeline, defaultSystems: () => [waypointSystem, autosaveSystem, ambientEncounterSystem] };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

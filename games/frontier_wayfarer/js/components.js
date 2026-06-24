@@ -60,4 +60,4 @@
         destroy() { this.panels.forEach(panel => panel.destroy()); this.panels.clear(); super.destroy(); }
     }
     ns.Components = { Component, Wallet, AbilityHud, DriveHud, Objective, TemplatePanel, PanelHost, escape, CREDIT_META };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

@@ -29,6 +29,17 @@
         }
         return chosen;
     }
+    function galaxyAllowsModule(state, module) {
+        if (state.galaxyId !== 'galaxy_a') return true;
+        if (module.id === 'light_drive' || module.stargateSystem) return true;
+        return (module.tier || 1) <= 2;
+    }
+    function moduleEligibleForStation(state, station, module) {
+        return Boolean(module && module.cost && !ns.Wallet.isZero(module.cost) && (!module.majorOnly || station?.major) && ns.Unlocks.moduleVisible(state, module) && galaxyAllowsModule(state, module));
+    }
+    function moduleEligibleForLoot(state, module) {
+        return Boolean(module && module.cost && !ns.Wallet.isZero(module.cost) && ns.Unlocks.moduleVisible(state, module) && galaxyAllowsModule(state, module));
+    }
     function inventoryFor(state, station) {
         state.marketInventories = state.marketInventories || {};
         const cycle = Math.floor((Number(state.playTime) || 0) / INVENTORY_CYCLE_SECONDS), saved = state.marketInventories[station.id];
@@ -36,16 +47,17 @@
         if (saved?.cycle === cycle) {
             saved.commodities = Array.isArray(saved.commodities) ? saved.commodities : [];
             saved.requests = Array.isArray(saved.requests) ? saved.requests.filter(id => !saved.commodities.includes(id)) : [];
-            saved.modules = Array.isArray(saved.modules) ? saved.modules : [];
+            saved.modules = Array.isArray(saved.modules) ? saved.modules.filter(id => moduleEligibleForStation(state, station, MODULES[id])) : [];
             if (!saved.requests.some(id => ns.Unlocks.commodityVisible(state, COMMODITIES[id]))) saved.requests = [];
             if (!saved.requests.length) pick(visibleRequestPool(saved.commodities).length ? visibleRequestPool(saved.commodities) : Object.keys(COMMODITIES).filter(id => !saved.commodities.includes(id)), station.major ? 2 : 1, seeded((state.worldSeed ^ station.x ^ station.y ^ cycle * 1319 ^ 0x5e11) >>> 0), saved.requests);
-            const useful = Object.values(MODULES).find(module => module.cost && !ns.Wallet.isZero(module.cost) && ns.Unlocks.moduleVisible(state, module) && !state.ship.ownedModules.includes(module.id) && (!module.majorOnly || station.major));
+            const useful = Object.values(MODULES).find(module => moduleEligibleForStation(state, station, module) && !state.ship.ownedModules.includes(module.id));
             if (useful && !saved.modules.includes(useful.id)) saved.modules.push(useful.id);
-            Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!saved.modules.includes(module.id)) saved.modules.push(module.id); });
-            if (station.major) Object.values(MODULES).filter(module => module.stargateSystem && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!saved.modules.includes(module.id)) saved.modules.push(module.id); });
+            if (station.major && MODULES.light_drive && moduleEligibleForStation(state, station, MODULES.light_drive) && !saved.modules.includes('light_drive')) saved.modules.push('light_drive');
+            Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && moduleEligibleForStation(state, station, module)).forEach(module => { if (!saved.modules.includes(module.id)) saved.modules.push(module.id); });
+            if (station.major) Object.values(MODULES).filter(module => module.stargateSystem && moduleEligibleForStation(state, station, module)).forEach(module => { if (!saved.modules.includes(module.id)) saved.modules.push(module.id); });
             return saved;
         }
-        const commodityIds = Object.keys(COMMODITIES), moduleIds = Object.values(MODULES).filter(module => module.cost && !ns.Wallet.isZero(module.cost) && (!module.majorOnly || station.major)).map(module => module.id);
+        const commodityIds = Object.keys(COMMODITIES), moduleIds = Object.values(MODULES).filter(module => moduleEligibleForStation(state, station, module)).map(module => module.id);
         const identity = seeded((state.worldSeed ^ station.x ^ station.y ^ 0x51f15e) >>> 0), rotation = seeded((state.worldSeed ^ station.x ^ station.y ^ cycle * 977 ^ 0xa11ce) >>> 0);
         const commodities = []; pick(commodityIds, station.major ? 2 : 1, identity, commodities); pick(commodityIds, 1, rotation, commodities);
         const requestPool = visibleRequestPool(commodities);
@@ -55,9 +67,9 @@
         const remoteness = REGIONS.find(region => region.id === station.region)?.remoteness || 0, moduleWeight = id => 1 + remoteness * Math.max(0, (MODULES[id].tier || 1) - 1) * 1.5;
         pickWeighted(preferred, station.major ? 4 : 2, identity, modules, moduleWeight); pickWeighted(moduleIds, station.major ? 3 : 2, rotation, modules, moduleWeight);
         if (station.major && moduleIds.includes('light_drive') && !modules.includes('light_drive')) modules.push('light_drive');
-        if (station.major) Object.values(MODULES).filter(module => module.stargateSystem && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!modules.includes(module.id)) modules.push(module.id); });
-        const useful = moduleIds.find(id => ns.Unlocks.moduleVisible(state, MODULES[id]) && !state.ship.ownedModules.includes(id)); if (useful && !modules.includes(useful)) modules.push(useful);
-        Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && ns.Unlocks.moduleVisible(state, module)).forEach(module => { if (!modules.includes(module.id)) modules.push(module.id); });
+        if (station.major) Object.values(MODULES).filter(module => module.stargateSystem && moduleEligibleForStation(state, station, module)).forEach(module => { if (!modules.includes(module.id)) modules.push(module.id); });
+        const useful = moduleIds.find(id => !state.ship.ownedModules.includes(id)); if (useful && !modules.includes(useful)) modules.push(useful);
+        Object.values(MODULES).filter(module => module.vendors?.includes(station.id) && moduleEligibleForStation(state, station, module)).forEach(module => { if (!modules.includes(module.id)) modules.push(module.id); });
         const inventory = { cycle, commodities, requests, modules, refreshedAt: Number(state.playTime) || 0 }; state.marketInventories[station.id] = inventory; return inventory;
     }
     function stocksCommodity(state, station, commodityId) { return inventoryFor(state, station).commodities.includes(commodityId); }
@@ -130,5 +142,5 @@
     function driftMarkets(state) {
         Object.values(state.economy).forEach(m => { m.supply = clamp(m.supply + (50 - m.supply) * .04, 5, 120); });
     }
-    ns.Economy = { INVENTORY_CYCLE_SECONDS, marketKey, ensureMarket, inventoryFor, stocksCommodity, requestsCommodity, stocksModule, tradeReputationGain, price, trade, buyModule, moduleResaleValue, checkSellModule, sellModule, driftMarkets };
-})(window.MiniInvadersV2);
+    ns.Economy = { INVENTORY_CYCLE_SECONDS, marketKey, ensureMarket, inventoryFor, moduleEligibleForStation, moduleEligibleForLoot, stocksCommodity, requestsCommodity, stocksModule, tradeReputationGain, price, trade, buyModule, moduleResaleValue, checkSellModule, sellModule, driftMarkets };
+})(window.FrontierWayfarer);

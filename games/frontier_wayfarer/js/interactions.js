@@ -10,4 +10,4 @@
     function inRange(state, target, position) { return Boolean(target && position && ns.MathUtil.distance(target, position) <= rangeFor(state, target)); }
 
     ns.Interactions = { BASE_RANGE, DOCK_RANGE, rangeFor, inRange };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

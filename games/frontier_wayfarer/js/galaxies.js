@@ -62,19 +62,20 @@
         [GATE_REACTOR]: {
             id: GATE_REACTOR,
             name: 'Gateheart Singularity Core',
-            description: 'A contained singularity reactor that stabilizes station-scale stargate translation. Tier IV hulls only.',
+            description: 'A contained singularity reactor that stabilizes station-scale stargate translation. Tier IV+ hulls only.',
             slot: 'reactor', mass: 13, reactor: 165, energyRecharge: 22,
             cost: C(1800, 70, 75), tier: 5, unlock: 'capitalVeteran', majorOnly: true, stargateSystem: true
         },
         [GATE_ENGINE]: {
             id: GATE_ENGINE,
             name: 'Atlas Stargate Engine',
-            description: 'A frame-locked translation engine capable of surviving a station stargate aperture. Tier IV hulls only.',
+            description: 'A frame-locked translation engine capable of surviving a station stargate aperture. Tier IV+ hulls only.',
             slot: 'engine', mass: 14, thrust: 330, maxSpeed: 20, strafe: 1.05, turn: 2.8, braking: 1.3,
             lightSpeed: true, lightTurn: 1.1, lightCharge: .85, lightDeceleration: .85,
             cost: C(1900, 60, 90), tier: 5, unlock: 'capitalVeteran', majorOnly: true, stargateSystem: true
         }
     });
+    ns.Data.normalizeModuleTravelFlags?.();
 
     function byId(id) { return GALAXIES.find(galaxy => galaxy.id === id) || GALAXIES[0]; }
     function current(state) { ensureState(state); return byId(state.galaxyId); }
@@ -84,14 +85,40 @@
         const pool = landmark.type === 'station' ? parts.stations : parts.beacons;
         return `${parts.prefix} ${pool[index % pool.length]}${index >= pool.length ? ` ${Math.floor(index / pool.length) + 1}` : ''}`;
     }
+    function saltFor(id) { return String(id || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0); }
     function landmarkRadius(item) { return item.type === 'station' ? 105 : 65; }
     function regionFor(item) { return ns.Data.REGIONS.find(region => region.id === item.region); }
+    function placeForGalaxy(galaxy, item, index) {
+        if (galaxy.id === 'galaxy_a') return item;
+        const region = regionFor(item), inset = landmarkRadius(item) + 180, salt = saltFor(item.id) + index * 37;
+        if (!region) return item;
+        item.x = region.x + inset + ns.MathUtil.hash(galaxy.seed ^ salt, region.column + 1, region.row + 1, 17) * Math.max(1, region.w - inset * 2);
+        item.y = region.y + inset + ns.MathUtil.hash(galaxy.seed ^ salt, region.column + 1, region.row + 1, 53) * Math.max(1, region.h - inset * 2);
+        return item;
+    }
     function clampToRegion(item) {
         const region = regionFor(item), inset = landmarkRadius(item) + 90;
         if (!region) return item;
         item.x = ns.MathUtil.clamp(item.x, region.x + inset, region.x + region.w - inset);
         item.y = ns.MathUtil.clamp(item.y, region.y + inset, region.y + region.h - inset);
         return item;
+    }
+    function stationMajorScore(galaxy, item, index) {
+        const region = regionFor(item), faction = ns.Data.FACTIONS[item.faction], localFaction = faction?.unlockGalaxy === galaxy.id;
+        const factionHub = localFaction || (galaxy.id === 'galaxy_b' && ['independents', 'concord', 'corsairs'].includes(item.faction));
+        return (factionHub ? 1000 : 0) + (item.major ? 260 : 0) + ((region?.danger || 0) * 50) + ((region?.remoteness || 0) * 38) + ns.MathUtil.hash(galaxy.seed, saltFor(item.id), index, 211);
+    }
+    function applyGalaxyMajorStations(galaxy, landmarks) {
+        landmarks.forEach(item => { if (item.type === 'station') delete item.major; });
+        if (galaxy.id === 'galaxy_a') return landmarks;
+        const stations = landmarks.filter(item => item.type === 'station');
+        const target = Math.min(stations.length, 3 + Math.floor(ns.MathUtil.hash(galaxy.seed, stations.length, 0, 347) * 3));
+        stations
+            .map((item, index) => ({ item, score: stationMajorScore(galaxy, item, index) }))
+            .sort((a, b) => b.score - a.score || String(a.item.id).localeCompare(String(b.item.id)))
+            .slice(0, target)
+            .forEach(entry => { entry.item.major = true; });
+        return landmarks;
     }
     function separateLandmarks(landmarks) {
         const list = landmarks.map(item => Object.assign({}, item, { radius: landmarkRadius(item) }));
@@ -116,12 +143,13 @@
     }
     function displayLandmarks(state, landmarks) {
         const galaxy = current(state), counts = { station: 0, anomaly: 0 };
-        const named = landmarks.map(item => {
+        const named = landmarks.map((item, index) => {
             const clone = Object.assign({}, item), isNamedStatic = clone.type === 'station' || clone.type === 'anomaly';
+            placeForGalaxy(galaxy, clone, index);
             if (isNamedStatic && galaxy.id !== 'galaxy_a') clone.name = localName(galaxy, clone, counts[clone.type]++);
             return clone;
         });
-        return separateLandmarks(named);
+        return ns.StationWar ? ns.StationWar.applyToLandmarks(state, applyGalaxyMajorStations(galaxy, separateLandmarks(named)), galaxy.id) : applyGalaxyMajorStations(galaxy, separateLandmarks(named));
     }
     function neighbors(id) {
         return LINKS.filter(link => link.includes(id)).map(link => link[0] === id ? link[1] : link[0]);
@@ -142,6 +170,14 @@
         state.visitedGalaxies = Array.isArray(state.visitedGalaxies) ? state.visitedGalaxies.filter(id => GALAXIES.some(galaxy => galaxy.id === id)) : [];
         if (!state.visitedGalaxies.includes(state.galaxyId)) state.visitedGalaxies.push(state.galaxyId);
         state.galaxyCharts = state.galaxyCharts && typeof state.galaxyCharts === 'object' ? state.galaxyCharts : {};
+        if (state.progression) {
+            state.progression.roamingThreats = state.progression.roamingThreats && typeof state.progression.roamingThreats === 'object' ? state.progression.roamingThreats : {};
+            state.progression.roamingThreatCooldowns = state.progression.roamingThreatCooldowns && typeof state.progression.roamingThreatCooldowns === 'object' ? state.progression.roamingThreatCooldowns : {};
+            if (state.progression.roamingThreat && !state.progression.roamingThreat.galaxyId) state.progression.roamingThreat.galaxyId = state.galaxyId;
+            if (state.progression.roamingThreat?.galaxyId && !state.progression.roamingThreats[state.progression.roamingThreat.galaxyId]) state.progression.roamingThreats[state.progression.roamingThreat.galaxyId] = state.progression.roamingThreat;
+            state.progression.roamingThreat = state.progression.roamingThreats[state.galaxyId] || null;
+            state.progression.nextRoamingThreatAt = Math.max(0, Number(state.progression.roamingThreatCooldowns[state.galaxyId]) || 0);
+        }
         state.lastStargateTravelAt = Math.max(0, Number(state.lastStargateTravelAt) || 0);
         return state;
     }
@@ -173,21 +209,30 @@
             x: state.ship.x, y: state.ship.y, dockedAt: state.dockedAt,
             discoveries: state.discoveries, visitedRegions: state.visitedRegions,
             consumedEntityIds: state.consumedEntityIds, economy: state.economy,
-            marketInventories: state.marketInventories, contractBoard: state.contracts.board,
+            marketInventories: state.marketInventories, contractBoard: state.contracts.board, boardStationId: state.contracts.boardStationId,
             boardRevision: state.contracts.boardRevision, lastManualRefreshAt: state.contracts.lastManualRefreshAt
         });
     }
+    function defaultChartFor(galaxyId) {
+        const chartState = { galaxyId, visitedGalaxies: [galaxyId], galaxyCharts: {}, lastStargateTravelAt: 0 };
+        const stations = availableLandmarks(chartState).filter(item => item.type === 'station');
+        const station = stations.find(item => item.id === 'waypoint_zero') || stations.sort((a, b) => (b.major ? 1 : 0) - (a.major ? 1 : 0))[0] || { id: 'waypoint_zero', x: 0, y: 0, region: 'trade_belt' };
+        return { x: station.x, y: station.y, dockedAt: station.id, discoveries: [station.id], visitedRegions: [station.region], consumedEntityIds: [], economy: {}, marketInventories: {}, contractBoard: [], boardStationId: null, boardRevision: 0, lastManualRefreshAt: 0 };
+    }
+    function arrivalStation(state, chart, galaxyId) {
+        const stations = availableLandmarks(state).filter(item => item.type === 'station');
+        return stations.find(item => item.id === chart?.dockedAt) || stations.find(item => item.id === 'waypoint_zero') || stations.sort((a, b) => (b.major ? 1 : 0) - (a.major ? 1 : 0))[0] || defaultChartFor(galaxyId);
+    }
     function loadChart(state, galaxyId) {
         const saved = state.galaxyCharts[galaxyId];
-        const chart = saved || {
-            x: 0, y: 0, dockedAt: 'waypoint_zero', discoveries: ['waypoint_zero'], visitedRegions: ['trade_belt'],
-            consumedEntityIds: [], economy: {}, marketInventories: {}, contractBoard: [], boardRevision: 0, lastManualRefreshAt: 0
-        };
-        state.ship.x = Number.isFinite(chart.x) ? chart.x : 0; state.ship.y = Number.isFinite(chart.y) ? chart.y : 0;
-        state.ship.vx = 0; state.ship.vy = 0; state.dockedAt = chart.dockedAt || 'waypoint_zero';
-        state.discoveries = clone(chart.discoveries || ['waypoint_zero']); state.visitedRegions = clone(chart.visitedRegions || ['trade_belt']);
+        const chart = saved || defaultChartFor(galaxyId);
+        const station = arrivalStation(state, chart, galaxyId);
+        state.ship.x = station.x; state.ship.y = station.y;
+        state.ship.vx = 0; state.ship.vy = 0; state.dockedAt = station.id;
+        state.discoveries = Array.from(new Set(clone(chart.discoveries || []).concat(station.id))); state.visitedRegions = Array.from(new Set(clone(chart.visitedRegions || []).concat(station.region)));
         state.consumedEntityIds = clone(chart.consumedEntityIds || []); state.economy = clone(chart.economy || {});
         state.marketInventories = clone(chart.marketInventories || {}); state.contracts.board = clone(chart.contractBoard || []);
+        state.contracts.boardStationId = typeof chart.boardStationId === 'string' ? chart.boardStationId : null;
         state.contracts.boardRevision = Math.max(0, Number(chart.boardRevision) || 0); state.contracts.lastManualRefreshAt = Math.max(0, Number(chart.lastManualRefreshAt) || 0);
         state.customWaypoint = null;
     }
@@ -202,9 +247,9 @@
         if (state.contracts.active) return { ok: false, reason: 'active-contract' };
         const cooldown = Math.max(0, STARGATE_COOLDOWN_MS - (Date.now() - state.lastStargateTravelAt));
         if (cooldown > 0) return { ok: false, reason: 'cooldown', remaining: cooldown };
-        const origin = current(state); storeChart(state); loadChart(state, destination.id);
-        state.galaxyId = destination.id;
+        const origin = current(state); storeChart(state); state.galaxyId = destination.id; loadChart(state, destination.id);
         if (!state.visitedGalaxies.includes(destination.id)) state.visitedGalaxies.push(destination.id);
+        ensureState(state);
         state.lastStargateTravelAt = Date.now();
         return { ok: true, origin, destination };
     }
@@ -213,4 +258,4 @@
     ns.Data.GALAXIES = GALAXIES;
     ns.Data.GALAXY_LINKS = LINKS;
     ns.Galaxies = { GALAXIES, LINKS, MASKS, GATE_ENGINE, GATE_REACTOR, STARGATE_COOLDOWN_MS, byId, current, neighbors, connected, isHighestTierHull, gateStatus, ensureState, factionAvailable, availableFactions, availableLandmarks, landmarkById, worldRegions, worldConfig, travel, worldSeed };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

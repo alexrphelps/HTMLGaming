@@ -8,8 +8,21 @@
         search: { kind: 'signal', event: 'search', name: 'Search Contact', instruction: 'Enter the search area; the exact contact resolves at close sensor range.' },
         pickup: { kind: 'salvage', event: 'pickup', name: 'Lost Cargo', instruction: 'Reach the marked cargo and press F to begin recovery.' }
     };
-    const EVENT_RANGES = { kill: 760, escort: 760, salvage: 220, scan: 220, rescue: 220, search: 220, pickup: 220, dock: 220 };
+    const EVENT_RANGES = { kill: 760, escort: 760, salvage: 220, scan: 220, rescue: 220, search: 220, pickup: 220, dock: 220, mine: Infinity };
     const BOARD_COOLDOWN_MS = 120000;
+    const CONTRACT_CATEGORIES = {
+        haul: { label: 'Trade', icon: 'TRD' },
+        smuggle: { label: 'Trade', icon: 'TRD' },
+        mining: { label: 'Mining', icon: 'MIN' },
+        salvage: { label: 'Salvage', icon: 'SLV' },
+        rescue: { label: 'Rescue', icon: 'RSC' },
+        survey: { label: 'Research', icon: 'RCH' },
+        bounty: { label: 'Combat', icon: 'CBT' },
+        assault: { label: 'Combat', icon: 'CBT' },
+        escort: { label: 'Escort', icon: 'ESC' },
+        choice: { label: 'Special', icon: 'SPC' },
+        advanced: { label: 'Special', icon: 'SPC' }
+    };
     const ESCORT_CONFIG = { rendezvousDistance: 1800, activationRange: 220, escortRange: 760, warningRange: 570, formationRange: 180, graceSeconds: 8, speed: 58, hull: 220, lowHullRatio: .35, enemySpawnDistance: 760 };
     const ADVANCED_TEMPLATES = ['lost_ship_escort', 'multi_haul', 'deep_survey', 'area_search', 'cargo_recovery'];
     const CHOICE_TEMPLATES = ['lost_cargo_choice', 'black_box_choice', 'pilot_asylum_choice', 'survey_rights_choice', 'prototype_custody_choice'];
@@ -19,6 +32,15 @@
     function clone(value) { return JSON.parse(JSON.stringify(value)); }
     function point(item) { return { x: item.x, y: item.y }; }
     function stationById(id) { return LANDMARKS.find(item => item.id === id && item.type === 'station'); }
+    function isRival(a, b) { return Boolean(ns.Expansion.rivals(a, b) || ns.Expansion.rivals(b, a)); }
+    function categoryFor(type) { return CONTRACT_CATEGORIES[type] || { label: 'Contract', icon: 'JOB' }; }
+    function applyCategory(contract) {
+        const category = categoryFor(contract.categoryType || contract.type);
+        contract.category = category.label.toLowerCase();
+        contract.categoryLabel = category.label;
+        contract.categoryIcon = category.icon;
+        return contract;
+    }
     function stageId(contractId, index) { return `${contractId}:stage:${index}`; }
     function escortState(start, end) { return { phase: 'rendezvous', grace: ESCORT_CONFIG.graceSeconds, ambushes: 0, start: point(start), end: point(end), startRegion: start.region || null, startSector: start.sector || null, endRegion: end.region || null, endSector: end.sector || null, convoy: null }; }
     function escortStart(destination, rand) {
@@ -71,17 +93,44 @@
         return CONTRACT_TYPES.filter(t => unlocked[t.id] && (t.id !== 'smuggle' || faction === 'corsairs' || state.reputations.corsairs >= 10));
     }
     function stationAvailable(state, station) { return Boolean(station && station.type === 'station' && ns.Galaxies.factionAvailable(state, station.faction) && (!station.unlockGalaxy || state.visitedGalaxies.includes(station.unlockGalaxy))); }
-    function dockingDenied(state, stationOrFaction) { const faction = typeof stationOrFaction === 'string' ? stationOrFaction : stationOrFaction?.faction; return Boolean(faction && ns.Expansion.dockingDenied(state, faction)); }
+    function dockingDenied(state, stationOrFaction) { const faction = typeof stationOrFaction === 'string' ? stationOrFaction : ns.StationWar.effectiveFaction(state, stationOrFaction); return Boolean(faction && ns.Expansion.dockingDenied(state, faction)); }
     function accessibleLandmarks(state, predicate) {
         const hasLightDrive = state.ship.ownedModules.includes('light_drive');
         const landmarks = ns.Galaxies?.availableLandmarks ? ns.Galaxies.availableLandmarks(state) : LANDMARKS;
         return landmarks.filter(item => (!item.unlockGalaxy || state.visitedGalaxies.includes(item.unlockGalaxy)) && predicate(item) && (hasLightDrive || !(REGIONS.find(region => region.id === item.region)?.travelTier)));
     }
+    function factionStations(state, faction, excludeId) {
+        return accessibleLandmarks(state, item => stationAvailable(state, item) && item.faction === faction && item.id !== excludeId);
+    }
+    function deliveryStations(state, origin, issuer) {
+        const originRegion = REGIONS.find(region => region.id === origin.region);
+        return accessibleLandmarks(state, item => {
+            if (!stationAvailable(state, item) || item.id === origin.id || isRival(issuer, item.faction)) return false;
+            if (![issuer, 'independents'].includes(item.faction) && item.faction !== origin.faction) return false;
+            const targetRegion = REGIONS.find(region => region.id === item.region);
+            return !originRegion || !targetRegion || sectorDistance(originRegion, targetRegion) <= 2;
+        });
+    }
+    function fieldLandmarks(state, issuer) {
+        return accessibleLandmarks(state, item => item.type !== 'station' && !isRival(issuer, item.faction));
+    }
+    function stationIssuers(state, station) {
+        if (!station?.major || (state.progression?.tutorialStep || 0) < 2) return [station.faction];
+        const available = ns.Galaxies.availableFactions(state).filter(faction => faction.id !== station.faction && !isRival(station.faction, faction.id));
+        const rand = seeded((state.worldSeed ^ station.x ^ station.y ^ Math.max(0, Math.round(Number(state.contracts.boardRevision) || 0)) * 577) >>> 0);
+        const pool = available.slice(), issuers = [station.faction];
+        const target = Math.min(3, Math.max(2, pool.length + 1));
+        while (pool.length && issuers.length < target) {
+            const pick = pool.splice(Math.floor(rand() * pool.length), 1)[0];
+            if (issuers.every(id => !isRival(id, pick.id))) issuers.push(pick.id);
+        }
+        return issuers;
+    }
     function tutorialContract(state, station) {
         const first = (state.progression?.tutorialStep || 0) === 0;
         const destinationId = first ? 'cold_start_beacon' : station.id === 'greenline_exchange' ? 'waypoint_zero' : 'greenline_exchange';
         const destination = LANDMARKS.find(l => l.id === destinationId), id = `tutorial:${first ? 'cold_start' : 'parts_run'}`;
-        const contract = { id, tutorialStep: first ? 1 : 2, type: first ? 'survey' : 'haul', name: first ? 'Cold Start' : 'Parts Run', description: first ? 'Calibrate the Wayfarer at the nearby Guild beacon.' : 'Deliver a Guild parts package to Greenline Exchange.', issuer: 'independents', origin: station.id, destination: destination.id, target: point(destination), reward: first ? { aetherium: 120, sunshards: 0, helionite: 0 } : { aetherium: 100, sunshards: 0, helionite: 0 }, xp: first ? 60 : 80, risk: 0, progress: 0, required: 1, status: 'offered', createdAt: state.playTime, stageMode: 'sequential' };
+        const contract = applyCategory({ id, tutorialStep: first ? 1 : 2, type: first ? 'survey' : 'haul', name: first ? 'Cold Start' : 'Parts Run', description: first ? 'Calibrate the Wayfarer at the nearby Guild beacon.' : 'Deliver a Guild parts package to Greenline Exchange.', issuer: 'independents', origin: station.id, destination: destination.id, target: point(destination), reward: first ? { aetherium: 120, sunshards: 0, helionite: 0 } : { aetherium: 100, sunshards: 0, helionite: 0 }, xp: first ? 60 : 80, risk: 0, progress: 0, required: 1, status: 'offered', createdAt: state.playTime, stageMode: 'sequential' });
         contract.stages = [makeStage(id, 0, { type: contract.type, event: first ? 'scan' : 'dock', name: contract.name, instruction: first ? CONTACT_TYPES.survey.instruction : `Dock at ${destination.name} to complete delivery.`, destination: destination.id, target: point(destination) })];
         return syncContract(contract);
     }
@@ -90,40 +139,66 @@
         const scale = (1 + (state.pilot.level - 1) * .08) * (1 + Math.min(2, distance(station, destination) / 6500)) * (1 + (ns.Progression.traitEffects(state).contractReward || 0)) * (1 + region.danger * .08) * (stageFactor || 1);
         return ns.Wallet.scale(type.baseReward, scale);
     }
-    function generateStandard(state, station, index, rand, type) {
+    function generateMining(state, station, index, rand, type, issuer) {
+        const originRegion = accessibleRegions(state).find(region => region.id === station.region) || accessibleRegions(state)[0];
+        const sectors = accessibleRegions(state).filter(region => region.id !== originRegion?.id && sectorDistance(originRegion, region) >= 1 && sectorDistance(originRegion, region) <= 2);
+        const region = sectors[Math.floor(rand() * sectors.length)] || originRegion;
+        const delivery = factionStations(state, issuer, null).find(stop => stop.id === station.id) || factionStations(state, issuer, station.id)[0] || station;
+        const required = [10, 15, 20][Math.floor(rand() * 3)] || 10, target = pointInRegion(region, rand);
+        const id = `mining:${station.id}:${issuer}:${state.contracts.completed}:${state.contracts.boardRevision}:${index}`;
+        const contract = applyCategory({ id, type: type.id, name: `${region.name} Mining Claim`, description: `Collect ${required} mineral fragments from sector ${region.grid} and return to ${delivery.name}.`, issuer, origin: station.id, destination: delivery.id, target, reward: rewardFor(state, station, Object.assign({ region: region.id }, target), type, 1.2), xp: Math.round(45 + required * 5 + region.danger * 8), risk: Math.max(type.risk, region.danger > 3 ? 2 : 1), progress: 0, required: 2, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', missionPayload: { kind: 'mineral-fragments', sector: region.grid, region: region.id, quantity: required }, stages: [] });
+        contract.stages = [
+            makeStage(id, 0, { type: 'mining', event: 'mine', name: 'Mineral Fragments', instruction: `Collect mineral fragments from ${region.name} sector ${region.grid}.`, destination: null, region: region.id, sector: region.grid, target, progress: 0, required }),
+            makeStage(id, 1, { type: 'haul', event: 'dock', name: 'Deliver Ore Claim', instruction: `Dock at ${delivery.name} to file the claim.`, destination: delivery.id, target: point(delivery) })
+        ];
+        return syncContract(contract);
+    }
+    function generateStandard(state, station, index, rand, type, issuer) {
+        issuer = issuer || station.faction;
+        if (type.id === 'mining') return generateMining(state, station, index, rand, type, issuer);
         const field = ['survey', 'salvage', 'rescue'].includes(type.id);
-        const destinations = accessibleLandmarks(state, item => item.id !== station.id && (field ? item.type !== 'station' : item.type === 'station'));
+        const destinations = field ? fieldLandmarks(state, issuer) : deliveryStations(state, station, issuer);
         const destination = destinations[Math.floor(rand() * destinations.length)] || station;
         const id = `contract:${station.id}:${state.contracts.completed}:${state.contracts.boardRevision}:${index}`;
         const required = ['bounty', 'escort', 'assault'].includes(type.id) ? 3 + type.risk : 1;
-        const contract = { id, type: type.id, name: type.name, description: `${type.verb} near ${destination.name}.`, issuer: station.faction, origin: station.id, destination: destination.id, target: point(destination), reward: rewardFor(state, station, destination, type), xp: Math.round(55 * type.risk * (1 + Math.min(2, distance(station, destination) / 6500))), risk: type.risk, progress: 0, required, status: 'offered', createdAt: state.playTime, stageMode: 'sequential' };
+        const returnStation = type.id === 'salvage' ? (factionStations(state, issuer, null).find(stop => stop.id === station.id) || factionStations(state, issuer, station.id)[0] || station) : null;
+        const contract = applyCategory({ id, type: type.id, name: type.name, description: `${type.verb} near ${destination.name}${returnStation ? ` and return to ${returnStation.name}` : ''}.`, issuer, origin: station.id, destination: returnStation?.id || destination.id, target: point(destination), reward: rewardFor(state, station, returnStation || destination, type), xp: Math.round(55 * type.risk * (1 + Math.min(2, distance(station, destination) / 6500))), risk: type.risk, progress: 0, required, status: 'offered', createdAt: state.playTime, stageMode: 'sequential' });
         const start = type.id === 'escort' ? escortStart(destination, rand) : null;
         const escort = start ? escortState(start, destination) : null;
         const meta = CONTACT_TYPES[type.id];
-        contract.stages = [makeStage(id, 0, { type: type.id, event: meta?.event || (['haul', 'smuggle'].includes(type.id) ? 'dock' : ['bounty', 'assault'].includes(type.id) ? 'kill' : 'escort'), name: type.name, instruction: objectiveInstructionLegacy(Object.assign({}, contract, { escort })), destination: destination.id, target: escort ? point(start) : point(destination), required: type.id === 'escort' ? 1 : required, escort })];
+        if (returnStation) {
+            contract.stages = [makeStage(id, 0, { type: type.id, event: meta.event, name: type.name, instruction: meta.instruction, destination: destination.id, target: point(destination) }), makeStage(id, 1, { type: 'haul', event: 'dock', name: 'Return Recovered Claim', instruction: `Dock at ${returnStation.name}.`, destination: returnStation.id, target: point(returnStation) })];
+        } else {
+            contract.stages = [makeStage(id, 0, { type: type.id, event: meta?.event || (['haul', 'smuggle'].includes(type.id) ? 'dock' : ['bounty', 'assault'].includes(type.id) ? 'kill' : 'escort'), name: type.name, instruction: objectiveInstructionLegacy(Object.assign({}, contract, { escort })), destination: destination.id, target: escort ? point(start) : point(destination), required: type.id === 'escort' ? 1 : required, escort })];
+        }
         return syncContract(contract);
     }
-    function uniqueStations(state, origin, count, rand) {
-        const pool = accessibleLandmarks(state, item => stationAvailable(state, item) && item.id !== origin.id).slice();
+    function uniqueStations(state, origin, count, rand, issuer) {
+        const pool = accessibleLandmarks(state, item => stationAvailable(state, item) && item.id !== origin.id && (!issuer || !isRival(issuer, item.faction))).slice();
         const result = []; while (pool.length && result.length < count) result.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]); return result;
     }
     function fieldPoint(destination, rand, radius) {
         const angle = rand() * Math.PI * 2, offset = (radius || 420) * (.35 + rand() * .65);
         return { x: destination.x + Math.cos(angle) * offset, y: destination.y + Math.sin(angle) * offset };
     }
-    function accessibleRegions(state) { const hasLightDrive = state.ship.ownedModules.includes('light_drive'); return REGIONS.filter(region => hasLightDrive || !region.travelTier); }
+    function accessibleRegions(state) {
+        const hasLightDrive = state.ship.ownedModules.includes('light_drive');
+        const regions = ns.Galaxies?.worldRegions ? ns.Galaxies.worldRegions(state) : REGIONS;
+        return regions.filter(region => hasLightDrive || !region.travelTier);
+    }
     function sectorDistance(a, b) { return Math.max(Math.abs(a.column - b.column), Math.abs(a.row - b.row)); }
     function pointInRegion(region, rand) { const inset = 900; return { x: region.x + inset + rand() * (region.w - inset * 2), y: region.y + inset + rand() * (region.h - inset * 2) }; }
     function surveyChainRegions(state, first, rand, count) {
         const pool = accessibleRegions(state), selected = [first];
         while (selected.length < count) {
-            const previous = selected[selected.length - 1], candidates = pool.filter(region => !selected.includes(region) && sectorDistance(previous, region) >= 1 && sectorDistance(previous, region) <= 2), fallback = pool.filter(region => !selected.includes(region));
+            const previous = selected[selected.length - 1], selectedIds = new Set(selected.map(region => region.id));
+            const candidates = pool.filter(region => !selectedIds.has(region.id) && sectorDistance(previous, region) >= 1 && sectorDistance(previous, region) <= 2), fallback = pool.filter(region => !selectedIds.has(region.id));
             const choices = candidates.length ? candidates : fallback; if (!choices.length) break; selected.push(choices[Math.floor(rand() * choices.length)]);
         }
         return selected;
     }
-    function choiceStations(state, origin, rand) {
-        const pool = accessibleLandmarks(state, item => stationAvailable(state, item) && item.id !== origin.id), byFaction = [];
+    function choiceStations(state, origin, rand, issuer) {
+        const pool = accessibleLandmarks(state, item => stationAvailable(state, item) && item.id !== origin.id && (!issuer || !isRival(issuer, item.faction))), byFaction = [];
         pool.forEach(station => { if (!byFaction.some(item => item.faction === station.faction)) byFaction.push(station); });
         const choices = [];
         while (byFaction.length && choices.length < 2) choices.push(byFaction.splice(Math.floor(rand() * byFaction.length), 1)[0]);
@@ -145,9 +220,10 @@
         contract.timer = { duration, remaining: duration, started: false, missed: false, hard: rand() < .2 };
         return contract;
     }
-    function generateChoice(state, station, index, rand, template) {
-        const choices = choiceStations(state, station, rand); if (choices.length < 2) return null;
-        const fields = accessibleLandmarks(state, item => item.type !== 'station'), field = fields[Math.floor(rand() * fields.length)] || station, target = fieldPoint(field, rand, 460);
+    function generateChoice(state, station, index, rand, template, issuer) {
+        issuer = issuer || station.faction;
+        const choices = choiceStations(state, station, rand, issuer); if (choices.length < 2) return null;
+        const fields = fieldLandmarks(state, issuer), field = fields[Math.floor(rand() * fields.length)] || station, target = fieldPoint(field, rand, 460);
         const id = `choice:${template}:${station.id}:${state.contracts.completed}:${state.contracts.boardRevision}:${index}`;
         const definitions = {
             lost_cargo_choice: ['Lost Cargo Arbitration', 'Recover disputed cargo, then choose which faction receives it.', 'pickup', 'Lost Cargo'],
@@ -158,21 +234,22 @@
         };
         const [name, description, event, contactName] = definitions[template], contactType = event === 'scan' ? 'survey' : event === 'rescue' ? 'rescue' : event === 'salvage' ? 'salvage' : 'pickup';
         const base = CONTRACT_TYPES.find(item => item.id === (event === 'scan' ? 'survey' : event === 'rescue' ? 'rescue' : 'salvage'));
-        const contract = { id, type: 'choice', template, name, description, issuer: station.faction, origin: station.id, destination: null, target, reward: rewardFor(state, station, choices[0], base, 1.65), xp: 210, risk: template === 'prototype_custody_choice' ? 4 : 3, progress: 0, required: 2, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', missionPayload: { kind: template, quantity: 1 }, stages: [] };
+        const contract = applyCategory({ id, type: 'choice', template, name, description, issuer, origin: station.id, destination: null, target, reward: rewardFor(state, station, choices[0], base, 1.65), xp: 210, risk: template === 'prototype_custody_choice' ? 4 : 3, progress: 0, required: 2, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', missionPayload: { kind: template, quantity: 1 }, stages: [] });
         contract.stages = [makeStage(id, 0, { type: contactType, event, name: contactName, instruction: `Reach the marked ${contactName.toLowerCase()} and press F to establish recovery.`, destination: field.id, target }), makeStage(id, 1, { type: 'choice', event: 'dock', name: 'Choose Recipient', instruction: 'Dock at either available faction station. The chosen faction receives the standing gain.', destination: null, target: point(choices[0]), choices: choices.map(stop => ({ destination: stop.id, faction: stop.faction, name: stop.name, target: point(stop) })) })];
         return syncContract(contract);
     }
-    function generateAdvanced(state, station, index, rand, template) {
+    function generateAdvanced(state, station, index, rand, template, issuer) {
+        issuer = issuer || station.faction;
         const id = `advanced:${template}:${station.id}:${state.contracts.completed}:${state.contracts.boardRevision}:${index}`;
-        const stations = uniqueStations(state, station, 3, rand), fields = accessibleLandmarks(state, item => item.type !== 'station');
+        const stations = uniqueStations(state, station, 3, rand, issuer), fields = fieldLandmarks(state, issuer);
         const field = fields[Math.floor(rand() * fields.length)] || station, destination = stations[0] || station;
         const base = CONTRACT_TYPES.find(item => item.id === (template === 'deep_survey' ? 'survey' : template === 'lost_ship_escort' ? 'escort' : 'haul'));
-        const contract = { id, type: 'advanced', template, name: '', description: '', issuer: station.faction, origin: station.id, destination: destination.id, target: point(destination), reward: rewardFor(state, station, destination, base, 1.55), xp: 150 + Math.round(rand() * 80), risk: Math.max(2, base.risk + 1), progress: 0, required: 1, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', missionPayload: null, stages: [] };
+        const contract = applyCategory({ id, type: 'advanced', template, name: '', description: '', issuer, origin: station.id, destination: destination.id, target: point(destination), reward: rewardFor(state, station, destination, base, 1.55), xp: 150 + Math.round(rand() * 80), risk: Math.max(2, base.risk + 1), progress: 0, required: 1, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', missionPayload: null, stages: [] });
         if (template === 'multi_haul') {
             const stops = stations.slice(0, rand() > .55 ? 3 : 2); contract.name = 'Frontier Circuit'; contract.description = `Deliver sealed manifests to ${stops.length} stations in any order.`; contract.stageMode = 'parallel'; contract.missionPayload = { kind: 'sealed-manifests', quantity: stops.length };
             contract.stages = stops.map((stop, i) => makeStage(id, i, { status: 'active', type: 'haul', event: 'dock', name: `Delivery ${i + 1}`, instruction: `Dock at ${stop.name}.`, destination: stop.id, target: point(stop) }));
         } else if (template === 'deep_survey') {
-            contract.name = 'Deep Survey Chain'; contract.description = 'Calibrate a sequence of remote survey checkpoints.';
+            contract.name = 'Deep Survey Chain'; contract.description = 'Calibrate a sequence of remote survey checkpoints.'; contract.categoryType = 'survey'; applyCategory(contract);
             const firstRegion = REGIONS.find(region => region.id === field.region) || accessibleRegions(state)[0], sectors = surveyChainRegions(state, firstRegion, rand, 3);
             contract.stages = sectors.map((region, i) => makeStage(id, i, { type: 'survey', event: 'scan', name: `Survey Checkpoint ${i + 1}`, instruction: `Scan checkpoint ${i + 1} of 3 in ${region.name}.`, destination: null, region: region.id, sector: region.grid, target: pointInRegion(region, rand) }));
         } else if (template === 'lost_ship_escort') {
@@ -183,31 +260,33 @@
             const exact = fieldPoint(field, rand, 500), area = fieldPoint(exact, rand, 360); contract.name = 'Blind Search'; contract.description = 'Sweep a broad sensor area and recover the unidentified contact.';
             contract.stages = [makeStage(id, 0, { type: 'search', event: 'search', name: 'Search Area', instruction: CONTACT_TYPES.search.instruction, destination: field.id, target: area, search: { center: area, radius: 1800, exact, revealed: false } })];
         } else {
-            const cargo = fieldPoint(field, rand, 420), delivery = rand() < .35 ? station : destination; contract.name = 'Recovery Run'; contract.description = `Recover lost cargo and deliver it to ${delivery.name}.`; contract.missionPayload = { kind: 'recovered-cargo', quantity: 1 };
+            const cargo = fieldPoint(field, rand, 420), delivery = factionStations(state, issuer, null).find(stop => stop.id === station.id) || factionStations(state, issuer, station.id)[0] || station; contract.name = 'Recovery Run'; contract.description = `Recover lost cargo and deliver it to ${delivery.name}.`; contract.missionPayload = { kind: 'recovered-cargo', quantity: 1 };
             contract.stages = [makeStage(id, 0, { type: 'pickup', event: 'pickup', name: 'Recover Lost Cargo', instruction: CONTACT_TYPES.pickup.instruction, destination: field.id, target: cargo }), makeStage(id, 1, { type: 'haul', event: 'dock', name: 'Deliver Recovered Cargo', instruction: `Dock at ${delivery.name}.`, destination: delivery.id, target: point(delivery) })];
         }
         return syncContract(contract);
     }
-    function generate(state, station, index) {
+    function generate(state, station, index, issuerOverride) {
         const revision = Math.max(0, Math.round(Number(state.contracts.boardRevision) || 0));
         const rand = seeded((state.worldSeed ^ station.x ^ station.y ^ state.contracts.completed * 97 ^ revision * 193 ^ index * 131) >>> 0);
         const remoteness = REGIONS.find(region => region.id === station.region)?.remoteness || 0;
+        const issuers = stationIssuers(state, station), issuer = issuerOverride || issuers[index % issuers.length] || station.faction;
         let contract;
-        if (index === 0 && state.pilot.level >= 6 && state.stats.kills >= 20) contract = generateBoss(state, station, rand);
-        else if (state.contracts.completed >= 5 && rand() < .24) contract = generateChoice(state, station, index, rand, CHOICE_TEMPLATES[Math.floor(rand() * CHOICE_TEMPLATES.length)]);
-        if (!contract && state.contracts.completed >= 3 && rand() < Math.min(.7, .42 + remoteness * .08)) contract = generateAdvanced(state, station, index, rand, ADVANCED_TEMPLATES[Math.floor(rand() * ADVANCED_TEMPLATES.length)]);
+        if (index === 0 && state.pilot.level >= 6 && state.stats.kills >= 20) contract = generateBoss(state, station, rand, issuer);
+        else if (state.contracts.completed >= 5 && rand() < .24) contract = generateChoice(state, station, index, rand, CHOICE_TEMPLATES[Math.floor(rand() * CHOICE_TEMPLATES.length)], issuer);
+        if (!contract && state.contracts.completed >= 3 && rand() < Math.min(.7, .42 + remoteness * .08)) contract = generateAdvanced(state, station, index, rand, ADVANCED_TEMPLATES[Math.floor(rand() * ADVANCED_TEMPLATES.length)], issuer);
         if (!contract) {
-            const types = eligibleTypes(state, station.faction), profile = FACTION_TYPE_WEIGHTS[station.faction] || {}, weighted = types.flatMap(type => Array.from({ length: Math.max(1, Math.round((1 + type.risk * remoteness * .35) * (profile[type.id] || 1))) }, () => type));
-            contract = generateStandard(state, station, index, rand, weighted[Math.floor(rand() * weighted.length)]);
+            const types = eligibleTypes(state, issuer), profile = FACTION_TYPE_WEIGHTS[issuer] || {}, weighted = types.flatMap(type => Array.from({ length: Math.max(1, Math.round((1 + type.risk * remoteness * .35) * (profile[type.id] || 1))) }, () => type));
+            contract = generateStandard(state, station, index, rand, weighted[Math.floor(rand() * weighted.length)], issuer);
         }
         return applyTimedModifier(state, station, contract, rand);
     }
-    function generateBoss(state, station, rand) {
+    function generateBoss(state, station, rand, issuer) {
+        issuer = issuer || station.faction;
         const capitalReady = state.pilot.level >= 10 && Object.keys(state.progression?.bossesDefeated || {}).some(id => !ns.Data.BOSSES[id]?.capital);
-        const bossType = capitalReady ? (station.faction === 'concord' ? 'eclipse_cruiser' : station.faction === 'corsairs' ? 'solar_bastion' : 'foundry_ark') : station.faction === 'concord' ? 'void_reaver' : station.faction === 'corsairs' ? 'aegis_frigate' : 'marauder_carrier';
-        const boss = ns.Data.BOSSES[bossType], fields = accessibleLandmarks(state, item => item.type !== 'station'), field = fields[Math.floor(rand() * fields.length)] || LANDMARKS.find(item => item.type !== 'station');
+        const bossType = capitalReady ? (issuer === 'concord' ? 'eclipse_cruiser' : issuer === 'corsairs' ? 'solar_bastion' : 'foundry_ark') : issuer === 'concord' ? 'void_reaver' : issuer === 'corsairs' ? 'aegis_frigate' : 'marauder_carrier';
+        const boss = ns.Data.BOSSES[bossType], fields = fieldLandmarks(state, issuer), field = fields[Math.floor(rand() * fields.length)] || LANDMARKS.find(item => item.type !== 'station');
         const target = fieldPoint(field, rand, 520), id = `boss:${bossType}:${station.id}:${state.contracts.completed}:${state.contracts.boardRevision}`;
-        const contract = { id, type: station.faction === 'independents' ? 'bounty' : 'assault', name: `Priority Target: ${boss.name}`, description: `Break the ${boss.name} operating near ${field.name}.`, issuer: station.faction, origin: station.id, destination: field.id, target, reward: boss.capital ? { aetherium: 1500, sunshards: 30, helionite: 85 } : { aetherium: 900, sunshards: 18, helionite: 55 }, xp: boss.capital ? 520 : 340, risk: boss.capital ? 6 : 5, progress: 0, required: 1, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', bossType, enemyFaction: boss.faction, encounterId: id };
+        const contract = applyCategory({ id, type: issuer === 'independents' ? 'bounty' : 'assault', name: `Priority Target: ${boss.name}`, description: `Break the ${boss.name} operating near ${field.name}.`, issuer, origin: station.id, destination: field.id, target, reward: boss.capital ? { aetherium: 1500, sunshards: 30, helionite: 85 } : { aetherium: 900, sunshards: 18, helionite: 55 }, xp: boss.capital ? 520 : 340, risk: boss.capital ? 6 : 5, progress: 0, required: 1, status: 'offered', createdAt: state.playTime, stageMode: 'sequential', bossType, enemyFaction: boss.faction, encounterId: id });
         contract.stages = [makeStage(id, 0, { type: contract.type, event: 'kill', name: boss.name, instruction: `Destroy the ${boss.name}. Deployed escorts are secondary targets.`, destination: field.id, target, required: 1, bossType })];
         contract.briefing = ns.Expansion.briefing(contract, station); return syncContract(contract);
     }
@@ -217,9 +296,19 @@
         return Math.max(1, min + Math.floor(rand() * spread) + trust);
     }
     function refreshBoard(state, station) {
+        state.contracts.boardStationId = station?.id || null;
         if ((state.progression?.tutorialStep || 0) < 2) { state.contracts.board = [tutorialContract(state, station)]; return state.contracts.board; }
         state.contracts.boardRevision = Math.max(0, Math.round(Number(state.contracts.boardRevision) || 0)) + 1;
-        state.contracts.board = Array.from({ length: boardSize(state, station, state.contracts.boardRevision) }, (_, i) => { const contract = generate(state, station, i); contract.briefing = contract.briefing || ns.Expansion.briefing(contract, station); if (ns.Expansion.patrolStatus(state, station.faction) === 'FRIENDLY' && i === 0) { Object.keys(contract.reward).forEach(key => { contract.reward[key] = Math.round(contract.reward[key] * 1.1); }); contract.priority = true; } return contract; }); return state.contracts.board;
+        state.contracts.board = Array.from({ length: boardSize(state, station, state.contracts.boardRevision) }, (_, i) => { const contract = generate(state, station, i); contract.briefing = contract.briefing || ns.Expansion.briefing(contract, station); if (ns.Expansion.patrolStatus(state, contract.issuer) === 'FRIENDLY' && i === 0) { Object.keys(contract.reward).forEach(key => { contract.reward[key] = Math.round(contract.reward[key] * 1.1); }); contract.priority = true; } return contract; }); return state.contracts.board;
+    }
+    function ensureBoardForStation(state, station) {
+        if (!station) return [];
+        if (!state.contracts.boardStationId && state.contracts.board.length) {
+            const ownedByAnotherStation = state.contracts.board.some(contract => contract.origin && contract.origin !== station.id);
+            if (!ownedByAnotherStation) { state.contracts.boardStationId = station.id; return state.contracts.board; }
+        }
+        if (state.contracts.boardStationId !== station.id || !state.contracts.board.length) return refreshBoard(state, station);
+        return state.contracts.board;
     }
     function refreshRemaining(state, now) { return Math.max(0, BOARD_COOLDOWN_MS - ((Number(now) || Date.now()) - (Number(state.contracts.lastManualRefreshAt) || 0))); }
     function manualRefresh(state, station, now) {
@@ -244,6 +333,7 @@
     function objectiveInstructionLegacy(contract) {
         if (CONTACT_TYPES[contract.type]) return CONTACT_TYPES[contract.type].instruction;
         if (['haul', 'smuggle'].includes(contract.type)) return `Dock at ${LANDMARKS.find(item => item.id === contract.destination)?.name || 'the marked station'} to complete delivery.`;
+        if (contract.type === 'mining') return 'Collect the required mineral fragments in the assigned sector, then return to the issuing station.';
         if (['bounty', 'assault'].includes(contract.type)) return 'Reach the marked combat zone and eliminate the assigned hostiles.';
         if (contract.type === 'escort') return contract.escort?.phase === 'traveling' ? 'Stay within 760 KM and protect the convoy until it reaches the destination.' : 'Reach the marked rendezvous to begin the convoy escort.';
         return contract.description;
@@ -277,10 +367,18 @@
                 stage.selectedChoice = clone(choice); contract.reputationRecipient = choice.faction; contract.destination = choice.destination; stage.destination = choice.destination; stage.target = point(choice.target);
             } else if (event === 'dock' && stage.destination && position?.id !== stage.destination) return;
             if (event === 'dock' && !stage.destination && (!position || distance(position, stage.target) > EVENT_RANGES.dock)) return;
-            if (event !== 'dock' && (!position || distance(position, stage.target) > (EVENT_RANGES[event] || 220))) return;
+            if (event === 'mine' && stage.region && position?.region !== stage.region) return;
+            if (event !== 'dock' && event !== 'mine' && (!position || distance(position, stage.target) > (EVENT_RANGES[event] || 220))) return;
             stage.progress = clamp(stage.progress + (amount || 1), 0, stage.required); changed = true; if (stage.progress >= stage.required) completeStage(contract, stage);
         });
         if (changed) syncContract(contract); return isComplete(contract);
+    }
+    function collectMiningFragment(state, entity) {
+        const contract = state.contracts.active, stage = activeStages(contract).find(item => item.event === 'mine');
+        if (!contract || !stage || entity?.typeId !== 'mineral_chunk' || entity.region !== stage.region) return { counted: false, complete: false };
+        const before = stage.progress;
+        const complete = recordProgress(state, 'mine', 1, entity);
+        return { counted: stage.progress !== before || stage.status === 'complete', complete, stage };
     }
     function startTimer(state) { const timer = state.contracts.active?.timer; if (!timer || timer.started) return false; timer.started = true; return true; }
     function updateTimer(state, dt) { const timer = state.contracts.active?.timer; if (!timer?.started || timer.missed || timer.remaining <= 0) return false; timer.remaining = Math.max(0, timer.remaining - Math.max(0, dt)); if (timer.remaining > 0) return false; timer.missed = true; return true; }
@@ -322,5 +420,5 @@
     }
     function joinFaction(state, factionId) { const faction = FACTIONS[factionId]; if (!faction?.joinable || !ns.Galaxies.factionAvailable(state, factionId) || state.reputations[factionId] < 15) return false; const old = state.pilot.allegiance; if (old && old !== factionId) state.reputations[old] = clamp(state.reputations[old] - 35, -100, 100); state.pilot.allegiance = factionId; state.reputations[factionId] = Math.max(20, state.reputations[factionId]); (faction.hostileTo || []).forEach(opponent => { state.reputations[opponent] = Math.min(-20, state.reputations[opponent] || 0); }); return true; }
     function leaveFaction(state) { if (!state.pilot.allegiance) return false; state.reputations[state.pilot.allegiance] = clamp(state.reputations[state.pilot.allegiance] - 25, -100, 100); state.pilot.allegiance = null; return true; }
-    ns.Contracts = { BOARD_COOLDOWN_MS, ESCORT_CONFIG, ADVANCED_TEMPLATES, CHOICE_TEMPLATES, generate, generateBoss, generateAdvanced, generateChoice, refreshBoard, refreshRemaining, manualRefresh, dockingAccess, dockingWarning, accept, ensureStages, activeStages, syncContract, isComplete, recordProgress, startTimer, updateTimer, complete, abandon, fail, startEscort, contactFor, contactsFor, targetsFor, revealSearches, destinationName, objectiveInstruction, joinFaction, leaveFaction };
-})(window.MiniInvadersV2);
+    ns.Contracts = { BOARD_COOLDOWN_MS, ESCORT_CONFIG, ADVANCED_TEMPLATES, CHOICE_TEMPLATES, CONTRACT_CATEGORIES, generate, generateBoss, generateAdvanced, generateChoice, refreshBoard, ensureBoardForStation, refreshRemaining, manualRefresh, dockingAccess, dockingWarning, accept, ensureStages, activeStages, syncContract, isComplete, recordProgress, collectMiningFragment, startTimer, updateTimer, complete, abandon, fail, startEscort, contactFor, contactsFor, targetsFor, revealSearches, destinationName, objectiveInstruction, stationIssuers, joinFaction, leaveFaction };
+})(window.FrontierWayfarer);

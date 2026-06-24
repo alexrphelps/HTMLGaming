@@ -36,4 +36,4 @@
         dispatch(action, context) { const handler = this.handlers.get(action); if (!handler) return false; handler(context); return true; }
     }
     ns.Commands = Commands; ns.ActionRouter = ActionRouter;
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

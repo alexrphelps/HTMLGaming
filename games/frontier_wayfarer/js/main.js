@@ -2,11 +2,12 @@
     const validation = ns.Registry.validate();
     if (!validation.ok) throw new Error(`Frontier Wayfarer content validation failed:\n${validation.errors.join('\n')}`);
     const ui = new ns.UI(); const game = new ns.Game(document.getElementById('gameCanvas'), ui); ui.bind(game);
+    window.frontierWayfarerGame = game;
     window.miniInvadersV2Game = game;
     window.addEventListener('message', event => {
-        if (event.data && event.data.type === 'mini-invaders-v2:pause' && game.state) {
+        if (event.data && event.data.type === 'frontier-wayfarer:pause' && game.state) {
             game.paused = true; ui.openPanel(game, 'pause');
         }
     });
     console.log('Frontier Wayfarer // open-universe systems online');
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

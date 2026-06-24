@@ -30,7 +30,38 @@
     };
 
     function containsPoint(x, y, config) { return (config?.regions || REGIONS).some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h); }
+    const isValidPoint = containsPoint;
     function rectDistance(x, y, region) { const dx = Math.max(region.x - x, 0, x - (region.x + region.w)), dy = Math.max(region.y - y, 0, y - (region.y + region.h)); return Math.hypot(dx, dy); }
+    function exposedRegionEdges(config) {
+        const regions = config?.regions || REGIONS, active = new Set(regions.map(region => `${region.column},${region.row}`)), edges = [];
+        regions.forEach(region => {
+            const neighbors = [
+                { column: region.column - 1, row: region.row, axis: 'x', value: region.x, min: region.y, max: region.y + region.h, side: -1 },
+                { column: region.column + 1, row: region.row, axis: 'x', value: region.x + region.w, min: region.y, max: region.y + region.h, side: 1 },
+                { column: region.column, row: region.row - 1, axis: 'y', value: region.y, min: region.x, max: region.x + region.w, side: -1 },
+                { column: region.column, row: region.row + 1, axis: 'y', value: region.y + region.h, min: region.x, max: region.x + region.w, side: 1 }
+            ];
+            neighbors.filter(edge => !active.has(`${edge.column},${edge.row}`)).forEach(edge => edges.push(Object.assign({ region }, edge)));
+        });
+        return edges;
+    }
+    function exposedRegionCorners(config) {
+        const regions = config?.regions || REGIONS, active = new Set(regions.map(region => `${region.column},${region.row}`)), corners = [];
+        regions.forEach(region => {
+            [
+                { dc: -1, dr: -1, x: region.x, y: region.y },
+                { dc: 1, dr: -1, x: region.x + region.w, y: region.y },
+                { dc: -1, dr: 1, x: region.x, y: region.y + region.h },
+                { dc: 1, dr: 1, x: region.x + region.w, y: region.y + region.h }
+            ].forEach(corner => {
+                const horizontalOpen = !active.has(`${region.column + corner.dc},${region.row}`);
+                const verticalOpen = !active.has(`${region.column},${region.row + corner.dr}`);
+                const diagonalOpen = !active.has(`${region.column + corner.dc},${region.row + corner.dr}`);
+                if (diagonalOpen) corners.push(Object.assign({ region, sideX: corner.dc, sideY: corner.dr, diagonalOnly: !horizontalOpen && !verticalOpen }, corner));
+            });
+        });
+        return corners;
+    }
     function boundaryExposure(x, y, config) {
         if (config && Number.isFinite(config.minX)) config = { bounds: config, regions: REGIONS };
         config = config || { bounds: WORLD_BOUNDS, regions: REGIONS }; const regions = config.regions || REGIONS, active = regions.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
@@ -42,6 +73,7 @@
             if (!adjacent(active.column + 1, active.row)) distances.push(active.x + active.w - x);
             if (!adjacent(active.column, active.row - 1)) distances.push(y - active.y);
             if (!adjacent(active.column, active.row + 1)) distances.push(active.y + active.h - y);
+            exposedRegionCorners(config).filter(corner => corner.region === active).forEach(corner => distances.push(Math.hypot(x - corner.x, y - corner.y)));
             insideDistance = distances.length ? Math.min(...distances) : 900;
         }
         return { depth, insideDistance, active: depth > 0, proximity: clamp((900 - insideDistance) / 900, 0, 1) };
@@ -51,6 +83,46 @@
         const safeX = clamp(x, bounds.minX + 1, bounds.maxX - 1);
         const safeY = clamp(y, bounds.minY + 1, bounds.maxY - 1);
         return regions.find(r => safeX >= r.x && safeX < r.x + r.w && safeY >= r.y && safeY < r.y + r.h) || regions.slice().sort((a, b) => rectDistance(x, y, a) - rectDistance(x, y, b))[0];
+    }
+    function projectToValidPoint(x, y, config, inset) {
+        config = config || { bounds: WORLD_BOUNDS, regions: REGIONS };
+        const regions = config.regions || REGIONS, margin = Number.isFinite(inset) ? inset : 120;
+        const region = regions.find(item => x >= item.x && x < item.x + item.w && y >= item.y && y < item.y + item.h) || regions.slice().sort((a, b) => rectDistance(x, y, a) - rectDistance(x, y, b))[0];
+        if (!region) return { x, y, region: null };
+        const adjacent = (column, row) => regions.some(item => item.column === column && item.row === row);
+        let px = clamp(x, region.x + 1, region.x + region.w - 1), py = clamp(y, region.y + 1, region.y + region.h - 1);
+        if (!adjacent(region.column - 1, region.row)) px = Math.max(px, region.x + margin);
+        if (!adjacent(region.column + 1, region.row)) px = Math.min(px, region.x + region.w - margin);
+        if (!adjacent(region.column, region.row - 1)) py = Math.max(py, region.y + margin);
+        if (!adjacent(region.column, region.row + 1)) py = Math.min(py, region.y + region.h - margin);
+        return { x: px, y: py, region };
+    }
+    function distanceToInvalidSectorBoundary(ship, angle, config, maxDistance) {
+        config = config || { bounds: WORLD_BOUNDS, regions: REGIONS };
+        if (!containsPoint(ship.x, ship.y, config)) return 0;
+        const dx = Math.cos(angle), dy = Math.sin(angle), limit = Number.isFinite(maxDistance) ? maxDistance : Infinity;
+        let best = Infinity;
+        exposedRegionEdges(config).forEach(edge => {
+            let t = Infinity, along = 0;
+            if (edge.axis === 'x') {
+                if (Math.abs(dx) < .0001) return;
+                t = (edge.value - ship.x) / dx; along = ship.y + dy * t;
+            } else {
+                if (Math.abs(dy) < .0001) return;
+                t = (edge.value - ship.y) / dy; along = ship.x + dx * t;
+            }
+            if (t >= 0 && t <= limit && along >= edge.min - .001 && along <= edge.max + .001) best = Math.min(best, t);
+        });
+        return best;
+    }
+    function validStations(state, world, predicate) {
+        const config = world?.config || ns.Galaxies?.worldConfig?.(state) || createConfig();
+        return (config.landmarks || []).filter(item => item.type === 'station' && containsPoint(item.x, item.y, config) && (!predicate || predicate(item)));
+    }
+    function nearestValidStation(state, world, x, y, predicate) {
+        const origin = { x, y }, preferred = validStations(state, world, predicate).sort((a, b) => distance(origin, a) - distance(origin, b))[0];
+        if (preferred) return preferred;
+        return validStations(state, world).sort((a, b) => distance(origin, a) - distance(origin, b))[0] || null;
     }
     function chunkKey(cx, cy) { return `${cx},${cy}`; }
     function asteroidTier(seed, cx, cy, index) {
@@ -242,10 +314,10 @@
             for (const chunk of this.chunks.values()) { const index = chunk.entities.indexOf(entity); if (index >= 0) { this.entities.remove(entity, chunk.key); chunk.entities.splice(index, 1); break; } }
             return true;
         }
-        nearestStation(x, y, predicate) { return LANDMARKS.filter(l => l.type === 'station' && (!predicate || predicate(l))).sort((a, b) => distance({ x, y }, a) - distance({ x, y }, b))[0]; }
+        nearestStation(x, y, predicate) { return nearestValidStation(null, this, x, y, predicate); }
         toScreen(x, y, camera, viewport) { return { x: viewport.w / 2 + x - camera.x, y: viewport.h / 2 + y - camera.y }; }
         discover(state, entity) { if (!entity || state.discoveries.includes(entity.id)) return false; state.discoveries.push(entity.id); state.stats.discoveries++; ns.Objectives?.record(state, 'discoveries', 1); return true; }
     }
 
-    ns.World = { CHUNK_SIZE, LOAD_RADIUS, WORLD_BOUNDS, ASTEROID_TIERS, boundsFor, catalogBounds, createConfig, EntityStore, containsPoint, boundaryExposure, regionAt, eligibleDefinitions, weightedDefinition, generateChunk, WorldService };
-})(window.MiniInvadersV2);
+    ns.World = { CHUNK_SIZE, LOAD_RADIUS, WORLD_BOUNDS, ASTEROID_TIERS, boundsFor, catalogBounds, createConfig, EntityStore, containsPoint, isValidPoint, exposedRegionEdges, exposedRegionCorners, boundaryExposure, regionAt, projectToValidPoint, distanceToInvalidSectorBoundary, validStations, nearestValidStation, eligibleDefinitions, weightedDefinition, generateChunk, WorldService };
+})(window.FrontierWayfarer);

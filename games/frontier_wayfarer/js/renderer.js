@@ -46,15 +46,50 @@
             c.restore();
         }
         screen(entity, camera) { return { x: this.w / 2 + entity.x - camera.x + (this.shakeX || 0), y: this.h / 2 + entity.y - camera.y + (this.shakeY || 0) }; }
+        stationVisualRadius(e) { return e?.major ? Math.max(255, (e.radius || 105) * 2.475) : e?.radius || 95; }
+        stationArchetype(e) {
+            const types = ['multi_ring', 'triple_ring', 'spindle_gate', 'crown_array', 'braided_halo'];
+            return types[Math.floor(hash(e.x, e.y, e.name.length, 31) * types.length)] || types[0];
+        }
+        stationIssuerColors(e, state) {
+            let issuers = [e.faction];
+            try {
+                if (e.major && state && ns.Contracts?.stationIssuers) issuers = ns.Contracts.stationIssuers(state, e);
+            } catch (err) { issuers = [e.faction]; }
+            return issuers.slice(0, 3).map(id => ns.Data.FACTIONS[id]?.color || ns.Data.FACTIONS[e.faction]?.color || '#55d7ff');
+        }
+        stationEllipse(cx, cy, rx, ry, rotation) {
+            const c = this.ctx;
+            c.beginPath();
+            if (c.ellipse) c.ellipse(cx, cy, rx, ry, rotation || 0, 0, Math.PI * 2);
+            else c.arc(cx, cy, Math.max(rx, ry), 0, Math.PI * 2);
+        }
+        drawThickBeam(x1, y1, x2, y2, color, width) {
+            const c = this.ctx, beam = width || 8;
+            c.strokeStyle = '#102e38'; c.lineWidth = beam; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+            c.strokeStyle = color; c.lineWidth = Math.max(2, beam * .34); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+        }
+        drawAttachedBay(x, y, w, h, attachX, attachY, color) {
+            const c = this.ctx;
+            this.drawThickBeam(attachX, attachY, x + w / 2, y + h / 2, color, 8);
+            c.fillStyle = '#0b2028'; c.strokeStyle = color; c.lineWidth = 2; c.fillRect(x, y, w, h); c.strokeRect(x, y, w, h);
+        }
+        drawStationFrame(radius, color) {
+            const c = this.ctx;
+            c.strokeStyle = '#102e38'; c.lineWidth = 17; this.stationEllipse(0, 0, radius * .43, radius * .18, 0); c.stroke();
+            this.drawThickBeam(-radius * .45, 0, radius * .45, 0, color, 11);
+            this.drawThickBeam(0, -radius * .2, 0, radius * .2, color, 11);
+            c.strokeStyle = color; c.lineWidth = 4; this.stationEllipse(0, 0, radius * .43, radius * .18, 0); c.stroke();
+        }
         drawWorld(game) {
             const c = this.ctx, camera = game.camera;
             game.world.loadedEntities().forEach(entity => {
-                const p = this.screen(entity, camera); if (p.x < -150 || p.x > this.w + 150 || p.y < -150 || p.y > this.h + 150) return;
+                const p = this.screen(entity, camera), margin = entity.kind === 'station' ? this.stationVisualRadius(entity) + 90 : 150; if (p.x < -margin || p.x > this.w + margin || p.y < -margin || p.y > this.h + margin) return;
                 if (entity.kind === 'asteroid') this.drawAsteroid(entity, p);
-                else if (entity.kind === 'station') this.drawStation(entity, p, game.time);
+                else if (entity.kind === 'station') this.drawStation(entity, p, game.time, game.state);
                 else if (entity.kind === 'anomaly') this.drawAnomaly(entity, p, game.time);
                 else if (entity.kind === 'worldObject') this.drawWorldObject(entity, p, game.time);
-                else if (entity.kind === 'worldScenario') this.drawWorldScenario(entity, p, game.time);
+                else if (entity.kind === 'worldScenario' && !ns.WorldEvents.isHiddenScenario(entity)) this.drawWorldScenario(entity, p, game.time);
                 else this.drawSignal(entity, p, game.time);
             });
             game.enemies.forEach(e => this.drawEnemy(e, this.screen(e, camera), game.time));
@@ -72,19 +107,83 @@
             if (e.hull < e.maxHull) { c.globalAlpha = .7; c.strokeStyle = '#ffbd59'; c.beginPath(); c.moveTo(-e.radius * .08, -e.radius * .65); c.lineTo(e.radius * .08, -.15 * e.radius); c.lineTo(-e.radius * .28, e.radius * .25); c.stroke(); }
             c.restore();
         }
-        drawStation(e, p, time) {
-            const c = this.ctx, color = ns.Data.FACTIONS[e.faction].color, radius = e.radius || 95, phase = hash(e.x, e.y, e.name.length, 7) * Math.PI * 2, t = (time || 0) + phase;
-            const arms = e.faction === 'concord' ? 4 : e.faction === 'corsairs' ? 3 : 6, core = e.major ? 36 : 29;
+        drawStation(e, p, time, state) {
+            const c = this.ctx, color = ns.Data.FACTIONS[e.faction].color, radius = this.stationVisualRadius(e), phase = hash(e.x, e.y, e.name.length, 7) * Math.PI * 2, t = (time || 0) + phase;
+            const arms = e.faction === 'concord' ? 4 : e.faction === 'corsairs' ? 3 : 6, core = e.major ? 48 : 29, issuerColors = this.stationIssuerColors(e, state);
             c.save(); c.translate(p.x, p.y); c.fillStyle = '#061117'; c.strokeStyle = color; c.lineWidth = 2;
-            c.globalAlpha = .22; c.beginPath(); c.arc(0, 0, radius + 10 + Math.sin(t * 1.7) * 4, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
-            c.save(); c.rotate(t * (e.faction === 'corsairs' ? -.08 : .055));
-            for (let i = 0; i < arms; i++) {
-                c.save(); c.rotate(i / arms * Math.PI * 2); c.fillStyle = '#0b2028'; c.strokeStyle = color; c.fillRect(core - 3, -7, radius - core + 2, 14); c.strokeRect(core - 3, -7, radius - core + 2, 14);
-                c.fillStyle = '#102e38'; c.fillRect(radius - 18, -13, 20, 26); c.strokeRect(radius - 18, -13, 20, 26);
-                c.fillStyle = i % 2 ? '#ffbd59' : color; c.globalAlpha = .55 + Math.sin(t * 4 + i) * .25; c.fillRect(radius - 5, -2, 5, 4); c.restore();
+            if (e.major) {
+                const archetype = this.stationArchetype(e), spin = t * (e.faction === 'corsairs' ? -.045 : .038);
+                c.globalAlpha = .18; c.beginPath(); c.arc(0, 0, radius + 24 + Math.sin(t * 1.4) * 6, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
+                c.save(); c.rotate(spin);
+                this.drawStationFrame(radius, color);
+                if (archetype === 'multi_ring') {
+                    c.lineWidth = 3.5; c.strokeStyle = color; this.stationEllipse(0, 0, radius * .92, radius * .34, 0); c.stroke();
+                    c.strokeStyle = '#55d7ff'; this.stationEllipse(0, 0, radius * .72, radius * .26, 0); c.stroke();
+                    c.strokeStyle = '#ffbd59'; this.stationEllipse(0, 0, radius * .5, radius * .18, 0); c.stroke();
+                    c.strokeStyle = '#8faab3'; c.lineWidth = 3;
+                    [-1, 1].forEach(side => this.drawThickBeam(-radius * .86, side * radius * .09, radius * .86, side * radius * .09, '#8faab3', 7));
+                    [-.5, 0, .5].forEach(offset => this.drawThickBeam(radius * offset, -radius * .29, radius * offset, radius * .29, '#8faab3', 7));
+                    for (let i = 0; i < 10; i++) {
+                        c.save(); c.rotate(i / 10 * Math.PI * 2); this.drawAttachedBay(radius * .7, -8, radius * .14, 16, core * .72, 0, i % 2 ? '#8faab3' : color); c.restore();
+                    }
+                    [-1, 1].forEach(side => { this.drawThickBeam(side * radius * .82, 0, side * radius * 1.04, 0, color, 10); this.drawAttachedBay(side * radius * .82 - (side < 0 ? radius * .12 : 0), -12, radius * .12, 24, side * radius * .62, 0, color); });
+                } else if (archetype === 'triple_ring') {
+                    const hubs = [[0, -radius * .34], [-radius * .46, radius * .28], [radius * .46, radius * .28]];
+                    c.strokeStyle = '#8faab3'; c.lineWidth = 11; c.beginPath(); c.moveTo(hubs[0][0], hubs[0][1]); c.lineTo(hubs[1][0], hubs[1][1]); c.lineTo(hubs[2][0], hubs[2][1]); c.closePath(); c.stroke();
+                    c.strokeStyle = color; c.lineWidth = 4; c.beginPath(); c.moveTo(hubs[0][0], hubs[0][1]); c.lineTo(hubs[1][0], hubs[1][1]); c.lineTo(hubs[2][0], hubs[2][1]); c.closePath(); c.stroke();
+                    hubs.forEach(([x, y], index) => {
+                        c.strokeStyle = issuerColors[index] || color; c.lineWidth = 3.5; this.stationEllipse(x, y, radius * .24, radius * .18, index * .45); c.stroke();
+                        this.drawAttachedBay(x - radius * .09, y - radius * .05, radius * .18, radius * .1, 0, 0, issuerColors[index] || color);
+                    });
+                    c.strokeStyle = '#55d7ff'; c.lineWidth = 3; this.stationEllipse(0, 0, radius * .52, radius * .25, .12); c.stroke();
+                } else if (archetype === 'spindle_gate') {
+                    this.drawThickBeam(0, -radius * 1.05, 0, radius * 1.05, color, 13);
+                    this.drawThickBeam(-radius * .24, -radius * .7, radius * .24, radius * .7, '#8faab3', 7);
+                    this.drawThickBeam(radius * .24, -radius * .7, -radius * .24, radius * .7, '#8faab3', 7);
+                    [-.54, .54].forEach(offset => {
+                        c.strokeStyle = offset < 0 ? '#55d7ff' : '#ffbd59'; c.lineWidth = 3.5; this.stationEllipse(0, radius * offset, radius * .52, radius * .2, Math.PI / 2); c.stroke();
+                        this.drawAttachedBay(-radius * .16, radius * offset - 13, radius * .32, 26, 0, radius * offset, offset < 0 ? '#55d7ff' : '#ffbd59');
+                        [-1, 1].forEach(side => this.drawThickBeam(side * radius * .2, radius * offset, side * radius * .48, radius * offset, offset < 0 ? '#55d7ff' : '#ffbd59', 7));
+                    });
+                    for (let i = 0; i < 6; i++) { c.save(); c.rotate(i / 6 * Math.PI * 2); this.drawAttachedBay(radius * .72, -7, 18, 14, core, 0, i % 2 ? '#8faab3' : color); c.restore(); }
+                } else if (archetype === 'crown_array') {
+                    c.strokeStyle = color; c.lineWidth = 4; this.stationEllipse(0, radius * .12, radius * .88, radius * .28, 0); c.stroke();
+                    c.strokeStyle = '#55d7ff'; this.stationEllipse(0, 0, radius * .58, radius * .82, Math.PI / 2); c.stroke();
+                    this.drawThickBeam(-radius * .62, -radius * .12, radius * .62, -radius * .12, '#8faab3', 11);
+                    for (let i = -2; i <= 2; i++) { const x = i * radius * .2, h = radius * (.48 + (2 - Math.abs(i)) * .13), towerColor = i % 2 ? '#ffbd59' : color; this.drawThickBeam(x, -radius * .12, x, -h, towerColor, 8); this.drawThickBeam(x - radius * .08, -radius * .12, x, -h * .72, towerColor, 6); this.drawThickBeam(x + radius * .08, -radius * .12, x, -h * .72, towerColor, 6); this.drawAttachedBay(x - 11, -h - 12, 22, 24, x, -h, towerColor); }
+                    [-1, 1].forEach(side => { this.drawThickBeam(side * radius * .7, -radius * .04, side * radius * .88, radius * .12, color, 8); this.drawThickBeam(side * radius * .88, radius * .12, side * radius * .7, radius * .28, color, 8); });
+                } else {
+                    c.strokeStyle = color; c.lineWidth = 3.5; this.stationEllipse(0, 0, radius * .92, radius * .3, -.18); c.stroke();
+                    c.strokeStyle = '#55d7ff'; this.stationEllipse(0, 0, radius * .7, radius * .22, .22); c.stroke();
+                    c.strokeStyle = '#8faab3'; c.lineWidth = 3;
+                    [-1, 1].forEach(side => this.drawThickBeam(-radius * .78, side * radius * .07, radius * .78, -side * radius * .07, '#8faab3', 7));
+                    this.drawThickBeam(-radius * .62, 0, radius * .62, 0, '#ffbd59', 8);
+                    for (let i = 0; i < 6; i++) {
+                        const x = (i - 2.5) * radius * .21, y = (i % 2 ? 1 : -1) * radius * .11;
+                        this.drawAttachedBay(x - 10, y - 8, 20, 16, x * .72, 0, i % 3 === 0 ? color : i % 3 === 1 ? '#55d7ff' : '#ffbd59');
+                    }
+                    [-1, 1].forEach(side => { this.drawThickBeam(side * radius * .72, -radius * .12, side * radius * .88, 0, color, 8); this.drawThickBeam(side * radius * .88, 0, side * radius * .72, radius * .12, color, 8); });
+                }
+                c.restore();
+                c.save(); c.rotate(-spin * 1.4);
+                for (let i = 0; i < 12; i++) {
+                    c.save(); c.rotate(i / 12 * Math.PI * 2);
+                    this.drawAttachedBay(radius * .84, -7, 22, 14, radius * .34, 0, issuerColors[i % issuerColors.length] || color); c.restore();
+                }
+                c.restore();
+            } else {
+                c.globalAlpha = .22; c.beginPath(); c.arc(0, 0, radius + 10 + Math.sin(t * 1.7) * 4, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
+                c.save(); c.rotate(t * (e.faction === 'corsairs' ? -.08 : .055));
+                for (let i = 0; i < arms; i++) {
+                    c.save(); c.rotate(i / arms * Math.PI * 2); c.fillStyle = '#0b2028'; c.strokeStyle = color; c.fillRect(core - 3, -7, radius - core + 2, 14); c.strokeRect(core - 3, -7, radius - core + 2, 14);
+                    c.fillStyle = '#102e38'; c.fillRect(radius - 18, -13, 20, 26); c.strokeRect(radius - 18, -13, 20, 26);
+                    c.fillStyle = i % 2 ? '#ffbd59' : color; c.globalAlpha = .55 + Math.sin(t * 4 + i) * .25; c.fillRect(radius - 5, -2, 5, 4); c.restore();
+                }
+                c.restore(); c.globalAlpha = 1;
+                c.save(); c.rotate(t * -.11); c.setLineDash?.([10, 7]); c.lineWidth = 2; c.beginPath(); c.arc(0, 0, radius * .72, 0, Math.PI * 2); c.stroke(); c.setLineDash?.([]); c.restore();
             }
-            c.restore(); c.globalAlpha = 1;
-            c.save(); c.rotate(t * -.11); c.setLineDash?.([10, 7]); c.lineWidth = e.major ? 3 : 2; c.beginPath(); c.arc(0, 0, radius * .72, 0, Math.PI * 2); c.stroke(); c.setLineDash?.([]); c.restore();
+            c.globalAlpha = 1;
+            if (e.major) issuerColors.forEach((issuerColor, index) => { const a = t * .16 + index / Math.max(1, issuerColors.length) * Math.PI * 2, nodeRadius = radius * (.78 + index * .06); c.fillStyle = issuerColor; c.strokeStyle = '#d7f5ff'; c.beginPath(); c.arc(Math.cos(a) * nodeRadius, Math.sin(a) * nodeRadius, 7, 0, Math.PI * 2); c.fill(); c.stroke(); });
             c.fillStyle = '#07151c'; c.lineWidth = 3; c.beginPath();
             if (e.faction === 'concord') { for (let i = 0; i < 8; i++) { const a = Math.PI / 8 + i * Math.PI / 4, x = Math.cos(a) * core, y = Math.sin(a) * core; i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); }
             else if (e.faction === 'corsairs') { for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, r = i % 2 ? core * .72 : core; const x = Math.cos(a) * r, y = Math.sin(a) * r; i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); }
@@ -92,7 +191,9 @@
             c.fill(); c.stroke();
             c.globalAlpha = .35; c.fillStyle = color; c.beginPath(); c.arc(0, 0, 15 + Math.sin(t * 2.5) * 3, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; c.strokeStyle = '#d7f5ff'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, 8, 0, Math.PI * 2); c.stroke();
             c.strokeStyle = color; c.globalAlpha = .6; c.beginPath(); c.moveTo(-radius - 18, 0); c.lineTo(-radius + 3, 0); c.moveTo(radius - 3, 0); c.lineTo(radius + 18, 0); c.stroke(); c.globalAlpha = 1;
-            c.fillStyle = color; c.font = '11px "Courier New"'; c.textAlign = 'center'; c.fillText(e.name.toUpperCase(), 0, radius + 24); c.font = '8px "Courier New"'; c.fillText(`${e.major ? 'MAJOR ' : ''}${ns.Data.FACTIONS[e.faction].short} FACILITY`, 0, radius + 37); c.restore();
+            c.fillStyle = color; c.font = '11px "Courier New"'; c.textAlign = 'center'; c.fillText(e.name.toUpperCase(), 0, radius + 24); c.font = '8px "Courier New"'; c.fillText(`${e.major ? 'MAJOR ' : ''}${ns.Data.FACTIONS[e.faction].short} FACILITY`, 0, radius + 37);
+            if (e.major) { c.fillStyle = '#9fc8d2'; c.font = '7px "Courier New"'; c.fillText(`${this.stationArchetype(e).replace('_', ' ').toUpperCase()} // ${issuerColors.length} DOCK NETWORK`, 0, radius + 49); }
+            c.restore();
         }
         drawAnomaly(e, p, time) {
             const c = this.ctx; c.save(); c.translate(p.x, p.y); c.rotate(time * .18); c.strokeStyle = '#ce75ff'; c.lineWidth = 2;
@@ -196,40 +297,79 @@
         drawShip(game) {
             const s = game.state.ship, p = this.screen(s, game.camera); this.drawShipModel(game, { x: p.x, y: p.y });
         }
+        drawPlayerDeathCinematic(game) {
+            const death = game.deathCinematic; if (!death) return false;
+            const c = this.ctx, snapshot = death.snapshot, p = this.screen(snapshot, game.camera), t = clamp(death.elapsed / death.duration, 0, 1), pulse = Math.sin(t * Math.PI);
+            c.save(); c.globalCompositeOperation = 'screen'; c.globalAlpha = Math.max(0, .18 - t * .16); c.fillStyle = '#ffbd59'; c.fillRect(0, 0, this.w, this.h); c.globalAlpha = 1;
+            c.strokeStyle = '#ffbd59'; c.lineWidth = 1.5 + pulse * 3; c.beginPath(); c.arc(p.x, p.y, 20 + t * 150, 0, Math.PI * 2); c.stroke();
+            c.strokeStyle = '#55d7ff'; c.lineWidth = 1 + pulse * 1.5; c.beginPath(); c.arc(p.x, p.y, 10 + t * 82, 0, Math.PI * 2); c.stroke();
+            if (t < .18) {
+                const ship = Object.assign({}, game, { state: Object.assign({}, game.state, { ship: Object.assign({}, game.state.ship, snapshot, { slots: snapshot.slots, activeHullId: snapshot.activeHullId, hull: 0, shield: 0, overshield: 0 }) }) });
+                c.globalAlpha = 1 - t / .18; this.drawShipModel(ship, { x: p.x, y: p.y, rotation: snapshot.angle + Math.PI / 2, static: true }); c.globalAlpha = 1;
+            }
+            (death.fragments || []).forEach(fragment => {
+                const age = Math.min(death.elapsed, 2.2), x = p.x + fragment.x + fragment.vx * age, y = p.y + fragment.y + fragment.vy * age;
+                c.save(); c.translate(x, y); c.rotate(fragment.rotation + fragment.spin * age); c.scale(fragment.scale, fragment.scale); c.globalAlpha = Math.max(0, 1 - t * .58); c.fillStyle = '#080b10'; c.strokeStyle = fragment.color || '#55f0ad'; c.lineWidth = 1.5; this.shipPath(fragment.fragment); c.fill(); c.stroke(); c.restore();
+            });
+            (death.sparks || []).forEach((spark, index) => {
+                const drift = spark.speed * Math.min(death.elapsed, 1.9), wobble = Math.sin(death.elapsed * 4 + index) * 2, x = p.x + Math.cos(spark.angle) * drift - Math.sin(spark.angle) * wobble, y = p.y + Math.sin(spark.angle) * drift + Math.cos(spark.angle) * wobble;
+                c.globalAlpha = Math.max(0, .78 - t * .78); c.fillStyle = spark.color; c.fillRect(x, y, spark.size, spark.size);
+            });
+            c.globalAlpha = Math.max(0, .68 - t * .38); c.strokeStyle = '#d9edf2'; c.setLineDash?.([8, 7]); c.beginPath(); c.arc(p.x, p.y, 40 + Math.sin(death.elapsed * 3) * 2, 0, Math.PI * 2); c.stroke(); c.setLineDash?.([]);
+            c.fillStyle = '#d9edf2'; c.font = '10px "Courier New"'; c.textAlign = 'center'; c.fillText('LAST KNOWN TRANSPONDER', p.x, p.y + 72); c.restore(); c.globalAlpha = 1; return true;
+        }
         drawShipPreview(game) {
             const c = this.ctx; c.clearRect(0, 0, this.w, this.h); const glow = c.createRadialGradient(this.w / 2, this.h * .48, 20, this.w / 2, this.h * .48, Math.min(this.w, this.h) * .48); glow.addColorStop(0, '#17404b66'); glow.addColorStop(1, '#06131800'); c.fillStyle = glow; c.fillRect(0, 0, this.w, this.h);
             this.drawShipModel(game, { x: this.w / 2, y: this.h * .5, rotation: 0, scale: Math.max(3.2, Math.min(this.w / 105, this.h / 125)), static: true });
         }
         drawNebulaPuff(x, y, radius, alpha, color) {
             const c = this.ctx, glow = c.createRadialGradient(x, y, radius * .06, x, y, radius);
-            glow.addColorStop(0, `rgba(${color},${alpha})`); glow.addColorStop(.38, `rgba(${color},${alpha * .72})`); glow.addColorStop(.75, `rgba(${color},${alpha * .2})`); glow.addColorStop(1, `rgba(${color},0)`);
+            glow.addColorStop(0, `rgba(${color},${alpha})`); glow.addColorStop(.32, `rgba(${color},${alpha * .86})`); glow.addColorStop(.68, `rgba(${color},${alpha * .32})`); glow.addColorStop(1, `rgba(${color},0)`);
             c.fillStyle = glow; c.fillRect(x - radius, y - radius, radius * 2, radius * 2);
         }
         drawNebula(game) {
             const c = this.ctx, exposure = ns.World.boundaryExposure(game.state.ship.x, game.state.ship.y, game.world?.config); if (exposure.proximity <= 0) return;
-            const bounds = game.world?.config?.bounds || ns.World.WORLD_BOUNDS, edges = [
-                { axis: 'x', side: -1, screen: this.w / 2 + bounds.minX - game.camera.x }, { axis: 'x', side: 1, screen: this.w / 2 + bounds.maxX - game.camera.x },
-                { axis: 'y', side: -1, screen: this.h / 2 + bounds.minY - game.camera.y }, { axis: 'y', side: 1, screen: this.h / 2 + bounds.maxY - game.camera.y }
-            ];
+            const config = game.world?.config, edges = ns.World.exposedRegionEdges(config).map(edge => Object.assign({}, edge, {
+                screen: edge.axis === 'x' ? this.w / 2 + (edge.value - game.camera.x) * (game.camera.zoom || 1) : this.h / 2 + (edge.value - game.camera.y) * (game.camera.zoom || 1),
+                start: edge.axis === 'x' ? this.h / 2 + (edge.min - game.camera.y) * (game.camera.zoom || 1) : this.w / 2 + (edge.min - game.camera.x) * (game.camera.zoom || 1),
+                end: edge.axis === 'x' ? this.h / 2 + (edge.max - game.camera.y) * (game.camera.zoom || 1) : this.w / 2 + (edge.max - game.camera.x) * (game.camera.zoom || 1)
+            }));
+            const intensity = .55 + exposure.proximity * .45;
             c.save(); c.globalCompositeOperation = 'screen'; edges.forEach((edge, edgeIndex) => {
-                const span = edge.axis === 'x' ? this.h : this.w; if (edge.screen < -1150 || edge.screen > (edge.axis === 'x' ? this.w : this.h) + 1150) return;
-                for (let layer = 0; layer < 3; layer++) for (let i = 0; i < 12; i++) {
-                    const along = (i / 11) * span + (hash(771, edgeIndex, i, layer) - .5) * 150, radius = 170 + hash(992, edgeIndex, i, layer) * 230;
-                    const depth = 40 + layer * 230 + hash(445, edgeIndex, i, layer) * 170;
+                const screenLimit = edge.axis === 'x' ? this.w : this.h, alongLimit = edge.axis === 'x' ? this.h : this.w;
+                if (edge.screen < -1150 || edge.screen > screenLimit + 1150 || Math.max(edge.start, edge.end) < -1150 || Math.min(edge.start, edge.end) > alongLimit + 1150) return;
+                const min = Math.min(edge.start, edge.end), max = Math.max(edge.start, edge.end), span = Math.max(1, max - min), count = Math.max(7, Math.min(20, Math.ceil(span / 90)));
+                for (let layer = 0; layer < 4; layer++) for (let i = 0; i < count; i++) {
+                    const along = min + (i / Math.max(1, count - 1)) * span + (hash(771, edgeIndex, i, layer) - .5) * 180, radius = 230 + hash(992, edgeIndex, i, layer) * 320;
+                    const depth = 55 + layer * 180 + hash(445, edgeIndex, i, layer) * 190;
                     const x = edge.axis === 'x' ? edge.screen + edge.side * depth : along;
                     const y = edge.axis === 'y' ? edge.screen + edge.side * depth : along;
-                    this.drawNebulaPuff(x, y, radius, .095 + exposure.proximity * .075 + layer * .018, layer === 1 ? '106,58,132' : '142,62,135');
+                    const color = layer === 2 ? '90,120,190' : layer === 1 ? '160,64,178' : '210,70,145';
+                    this.drawNebulaPuff(x, y, radius, (.14 + exposure.proximity * .14 + layer * .026) * intensity, color);
                 }
-                c.strokeStyle = `rgba(255,120,165,${.1 + exposure.proximity * .16})`; c.lineWidth = 1.5; c.setLineDash([5, 15]); c.beginPath(); if (edge.axis === 'x') { c.moveTo(edge.screen, 0); c.lineTo(edge.screen, this.h); } else { c.moveTo(0, edge.screen); c.lineTo(this.w, edge.screen); } c.stroke(); c.setLineDash([]);
+                c.strokeStyle = `rgba(255,96,178,${.3 + exposure.proximity * .34})`; c.lineWidth = 4; c.setLineDash([14, 10]); c.beginPath(); if (edge.axis === 'x') { c.moveTo(edge.screen, min); c.lineTo(edge.screen, max); } else { c.moveTo(min, edge.screen); c.lineTo(max, edge.screen); } c.stroke();
+                c.strokeStyle = `rgba(166,100,255,${.18 + exposure.proximity * .24})`; c.lineWidth = 10; c.setLineDash([]); c.beginPath(); if (edge.axis === 'x') { c.moveTo(edge.screen + edge.side * 18, min); c.lineTo(edge.screen + edge.side * 18, max); } else { c.moveTo(min, edge.screen + edge.side * 18); c.lineTo(max, edge.screen + edge.side * 18); } c.stroke();
+            });
+            ns.World.exposedRegionCorners(config).forEach((corner, index) => {
+                const zoom = game.camera.zoom || 1, x = this.w / 2 + (corner.x - game.camera.x) * zoom, y = this.h / 2 + (corner.y - game.camera.y) * zoom;
+                if (x < -1200 || x > this.w + 1200 || y < -1200 || y > this.h + 1200) return;
+                for (let layer = 0; layer < 5; layer++) {
+                    const radius = 300 + layer * 105 + hash(3301, index, layer, 1) * 160;
+                    const ox = corner.sideX * (70 + layer * 42 + hash(3302, index, layer, 1) * 90);
+                    const oy = corner.sideY * (70 + layer * 42 + hash(3303, index, layer, 1) * 90);
+                    this.drawNebulaPuff(x + ox, y + oy, radius, (.18 + exposure.proximity * .16 + layer * .018) * intensity, layer % 2 ? '170,72,210' : '230,70,155');
+                }
+                c.strokeStyle = `rgba(255,110,205,${.34 + exposure.proximity * .36})`; c.lineWidth = 5; c.setLineDash([12, 9]); c.beginPath();
+                c.moveTo(x + corner.sideX * 34, y); c.lineTo(x + corner.sideX * 260, y + corner.sideY * 260); c.lineTo(x, y + corner.sideY * 34); c.stroke(); c.setLineDash([]);
             });
             if (exposure.active) {
                 const density = Math.min(1, .48 + exposure.depth / 1400), fieldW = this.w + 700, fieldH = this.h + 700;
-                c.globalCompositeOperation = 'source-over'; c.fillStyle = `rgba(68,18,66,${.1 + density * .18})`; c.fillRect(0, 0, this.w, this.h); c.globalCompositeOperation = 'screen';
+                c.globalCompositeOperation = 'source-over'; c.fillStyle = `rgba(96,20,82,${.16 + density * .24})`; c.fillRect(0, 0, this.w, this.h); c.globalCompositeOperation = 'screen';
                 for (let i = 0; i < 28; i++) {
                     const x = ((hash(1801, i, 1, 1) * fieldW - game.camera.x * (.08 + i % 3 * .025)) % fieldW + fieldW) % fieldW - 350;
                     const y = ((hash(2203, i, 2, 1) * fieldH - game.camera.y * (.08 + i % 4 * .02)) % fieldH + fieldH) % fieldH - 350;
                     const radius = 190 + hash(2711, i, 3, 1) * 330, color = i % 4 === 0 ? '80,100,145' : i % 3 === 0 ? '178,61,128' : '112,58,143';
-                    this.drawNebulaPuff(x, y, radius, .075 + density * .12, color);
+                    this.drawNebulaPuff(x, y, radius, .12 + density * .18, color);
                 }
             }
             c.restore();
@@ -239,7 +379,7 @@
             c.save(); c.translate(x, y); c.fillStyle = '#02090dcc'; c.strokeStyle = '#55f0ad55'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, radius, 0, Math.PI * 2); c.fill(); c.stroke();
             c.beginPath(); c.moveTo(-radius, 0); c.lineTo(radius, 0); c.moveTo(0, -radius); c.lineTo(0, radius); c.stroke();
             const drawBlip = (e, color, size) => { size *= scale; const dx = (e.x - game.state.ship.x) / range * radius, dy = (e.y - game.state.ship.y) / range * radius; if (Math.hypot(dx, dy) > radius) return; c.fillStyle = color; c.fillRect(dx - size / 2, dy - size / 2, size, size); };
-            game.world.nearbyEntities(game.state.ship.x, game.state.ship.y, range).forEach(e => { const definition = e.kind === 'worldObject' ? ns.Data.WORLD_OBJECT_TYPES[e.typeId] : e.kind === 'worldScenario' ? ns.Data.WORLD_SCENARIOS[e.typeId] : null; drawBlip(e, e.kind === 'station' ? ns.Data.FACTIONS[e.faction].color : e.kind === 'asteroid' ? '#56707d' : definition?.color || '#ce75ff', e.kind === 'station' ? 5 : e.kind === 'worldScenario' ? 4 : 3); });
+            game.world.nearbyEntities(game.state.ship.x, game.state.ship.y, range).filter(e => e.kind !== 'worldScenario' || !ns.WorldEvents.isHiddenScenario(e)).forEach(e => { const definition = e.kind === 'worldObject' ? ns.Data.WORLD_OBJECT_TYPES[e.typeId] : e.kind === 'worldScenario' ? ns.Data.WORLD_SCENARIOS[e.typeId] : null; drawBlip(e, e.kind === 'station' ? ns.Data.FACTIONS[e.faction].color : e.kind === 'asteroid' ? '#56707d' : definition?.color || '#ce75ff', e.kind === 'station' ? 5 : e.kind === 'worldScenario' ? 4 : 3); });
             game.enemies.forEach(e => drawBlip(e, '#ff4f91', 4)); const convoy = game.state.contracts.active?.escort?.convoy; if (convoy?.hull > 0) drawBlip(convoy, '#55d7ff', 5); c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 3 * scale, 0, Math.PI * 2); c.fill(); c.restore();
         }
         drawPhaseOverlay(game) {
@@ -385,10 +525,11 @@
             const shake = game.state?.settings?.screenShake ? game.impactShake || 0 : 0; this.shakeX = shake ? (Math.random() * 2 - 1) * shake : 0; this.shakeY = shake ? (Math.random() * 2 - 1) * shake : 0;
             if (ns.LightSpeed.isShifted(game)) { this.drawLightSpeed(game); this.drawContractWaypoint(game); this.drawCustomWaypoint(game); return; }
             this.clear(game.region, game.camera, ns.Galaxies.current(game.state)); const c = this.ctx, zoom = game.camera.zoom || 1;
-            c.save(); c.translate(this.w / 2, this.h / 2); c.scale(zoom, zoom); c.translate(-this.w / 2, -this.h / 2); this.drawWorld(game); this.drawNebula(game); this.drawContractContact(game); this.drawShip(game); c.restore();
+            c.save(); c.translate(this.w / 2, this.h / 2); c.scale(zoom, zoom); c.translate(-this.w / 2, -this.h / 2); this.drawWorld(game); this.drawNebula(game); this.drawContractContact(game); if (game.deathCinematic) this.drawPlayerDeathCinematic(game); else this.drawShip(game); c.restore();
+            if (game.deathCinematic && !game.deathCinematic.promptOpen) return;
             if (ns.LightSpeed.ensure(game).phase === 'charging') this.drawPhaseOverlay(game);
             this.drawInteractionPrompt(game); this.drawInteractionCast(game); this.drawRadar(game); this.drawContractWaypoint(game); this.drawCustomWaypoint(game);
         }
     }
     ns.Renderer = Renderer;
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

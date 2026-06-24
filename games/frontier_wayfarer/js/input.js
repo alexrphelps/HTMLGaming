@@ -30,4 +30,4 @@
         }
     }
     ns.Input = Input;
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

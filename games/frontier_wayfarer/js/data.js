@@ -78,8 +78,9 @@
     const WORLD_SCENARIOS = {
         distress_call: { id: 'distress_call', name: 'Pilot Recovery Signal', backdrops: { core: 3, frontier: 6, null: 5 }, minDanger: 2, triggerRadius: 420, interactionDuration: 4, requiresInteraction: true, style: 'distress', color: '#ffbd59', falseSignalChance: { core: .15, frontier: .34, null: .68 } },
         border_skirmish: { id: 'border_skirmish', name: 'Border Skirmish', backdrops: { core: 3, null: 3 }, minDanger: 4, triggerRadius: 520, style: 'crossfire', color: '#f2f7ff', hostile: true },
-        raider_sweep: { id: 'raider_sweep', name: 'Raider Sweep', backdrops: { frontier: 4, null: 5 }, minDanger: 3, triggerRadius: 500, style: 'warning', color: '#ff597f', hostile: true },
-        abandoned_worksite: { id: 'abandoned_worksite', name: 'Abandoned Worksite', backdrops: { belt: 5, frontier: 4 }, minDanger: 1, triggerRadius: 380, style: 'worksite', color: '#8faab3', companionObject: 'emergency_supply_pod' }
+        raider_sweep: { id: 'raider_sweep', name: 'Raider Sweep', backdrops: { frontier: 4, null: 5 }, minDanger: 3, triggerRadius: 500, style: 'warning', color: '#ff597f', hostile: true, hidden: true },
+        abandoned_worksite: { id: 'abandoned_worksite', name: 'Abandoned Worksite', backdrops: { belt: 5, frontier: 4 }, minDanger: 1, triggerRadius: 380, style: 'worksite', color: '#8faab3', companionObject: 'emergency_supply_pod' },
+        station_invasion: { id: 'station_invasion', name: 'Station Invasion', backdrops: { core: 2, null: 2, frontier: 1, belt: 1 }, minDanger: 2, triggerRadius: 560, style: 'crossfire', color: '#ffbd59', hostile: true }
     };
 
     const LANDMARKS = [
@@ -195,6 +196,7 @@
         seeker_rack: { id: 'seeker_rack', name: 'Seeker Rack', slot: 'primary', mass: 7, energy: 14, heat: 18, damage: 70, fireRate: 1.6, cost: C(360, 4, 14), tier: 2, unlock: 'combat' },
         reactor_mk1: { id: 'reactor_mk1', name: 'Arc Reactor I', slot: 'reactor', mass: 5, reactor: 80, cost: C(0), tier: 1, unlock: 'starter' },
         reactor_mk2: { id: 'reactor_mk2', name: 'Arc Reactor II', slot: 'reactor', mass: 7, reactor: 100, cost: C(400, 8, 0), tier: 2, unlock: 'contracts3' },
+        reactor_mk3: { id: 'reactor_mk3', name: 'Arc Reactor III', slot: 'reactor', mass: 9, reactor: 118, energyRecharge: 18, cost: C(680, 14, 12), tier: 3, unlock: 'lightDrive', majorOnly: true },
         drive_mk1: { id: 'drive_mk1', name: 'Vector Drive I', slot: 'engine', mass: 6, thrust: 225, cost: C(0), tier: 1, unlock: 'starter' },
         drive_mk2: { id: 'drive_mk2', name: 'Vector Drive II', slot: 'engine', mass: 8, thrust: 285, cost: C(450, 0, 8), tier: 2, unlock: 'contracts3' },
         light_drive: { id: 'light_drive', name: 'Asterion Light Drive', slot: 'engine', mass: 10, thrust: 300, cost: C(900, 20, 12), tier: 3, unlock: 'lightDrive', majorOnly: true },
@@ -221,7 +223,7 @@
     };
     const MODULE_DESCRIPTIONS = {
         pulse_mk1: 'Reliable short-cycle pulse weapon with forgiving power demand.', pulse_mk2: 'Higher-output pulse cannon built for sustained combat.', rail_driver: 'Heavy precision driver trading cadence for decisive impact.', seeker_rack: 'Slow-cycling guided ordnance with exceptional burst damage.',
-        reactor_mk1: 'Starter arc core supplying the Wayfarer energy reserve.', reactor_mk2: 'Expanded reactor core for weapon and active-module endurance.', drive_mk1: 'Balanced vector drive for routine frontier flight.', drive_mk2: 'Reinforced drive delivering stronger acceleration authority.', light_drive: 'Asterion phase engine enabling controlled inter-sector Light Speed.',
+        reactor_mk1: 'Starter arc core supplying the Wayfarer energy reserve.', reactor_mk2: 'Expanded reactor core for weapon and active-module endurance.', reactor_mk3: 'Light Speed-rated arc core with enough support load for tier-three phase engines.', drive_mk1: 'Balanced vector drive for routine frontier flight.', drive_mk2: 'Reinforced drive delivering stronger acceleration authority.', light_drive: 'Asterion phase engine enabling controlled inter-sector Light Speed.',
         shield_scout: 'Fast-recharging light screen with a short recovery delay.', shield_balanced: 'General-purpose shield balancing capacity and recovery.', shield_bulwark: 'Massive defensive screen with deliberately slow recovery.', shield_prism: 'Experimental screen optimized for rapid regeneration.',
         cargo_mk1: 'Compact internal lattice for routine freight.', cargo_mk2: 'Expanded hold structure for contract and trade operations.', repair_drones: 'Autonomous drones that restore damaged hull over time.', sensor_array: 'Long-baseline scanner extending contact detection range.', heat_sink: 'Phase vents that sharply improve weapon heat dissipation.', cargo_pods: 'External pods adding capacity at a meaningful mass cost.', tractor_lattice: 'A gravitic collector that extends every non-station interaction link to 240 KM.',
         afterburner: 'Short vector surge for pursuit and disengagement.', blink_drive: 'Instant short-range translation along the current vector.', shield_overcharger: 'Temporary reserve screen for emergency defense.', emp_wave: 'Radial disruption pulse that damages and disables hostiles.', repair_swarm: 'Active repair cloud restoring hull during a timed cycle.', phase_cloak: 'Brief phase masking that breaks hostile firing solutions.',
@@ -267,6 +269,7 @@
         { id: 'bounty', name: 'Bounty Hunt', verb: 'Eliminate marked raiders', baseReward: C(90, 0, 18), risk: 2 },
         { id: 'escort', name: 'Convoy Escort', verb: 'Protect a convoy beacon', baseReward: C(220, 0, 6), risk: 2 },
         { id: 'salvage', name: 'Salvage Claim', verb: 'Recover marked salvage', baseReward: C(140, 4), risk: 1 },
+        { id: 'mining', name: 'Mining Claim', verb: 'Collect mineral fragments', baseReward: C(170, 0, 6), risk: 1 },
         { id: 'survey', name: 'Deep Survey', verb: 'Scan an uncharted signal', baseReward: C(90, 14), risk: 1 },
         { id: 'rescue', name: 'Distress Call', verb: 'Reach a stranded pilot', baseReward: C(240), risk: 2 },
         { id: 'smuggle', name: 'Quiet Delivery', verb: 'Move contraband unseen', baseReward: C(220, 8, 5), risk: 3 },
@@ -284,5 +287,13 @@
         gemini_directorate: ['Two Voices', 'One Vector', 'Veil Doctrine', 'The Final Accord']
     };
 
-    ns.Data = { FACTIONS: F, REGIONS, LANDMARKS, WORLD_OBJECT_TYPES, WORLD_SCENARIOS, COMMODITIES, MODULES, TRAITS, CONTRACT_TYPES, QUESTS };
-})(window.MiniInvadersV2);
+    function normalizeModuleTravelFlags() {
+        Object.values(MODULES).forEach(module => {
+            if (module.slot === 'engine' && (module.tier || 1) >= 3) module.lightSpeed = true;
+            if (module.slot === 'reactor' && (module.tier || 1) >= 3) module.lightSpeedSupport = true;
+        });
+    }
+    normalizeModuleTravelFlags();
+
+    ns.Data = { FACTIONS: F, REGIONS, LANDMARKS, WORLD_OBJECT_TYPES, WORLD_SCENARIOS, COMMODITIES, MODULES, TRAITS, CONTRACT_TYPES, QUESTS, normalizeModuleTravelFlags };
+})(window.FrontierWayfarer);

@@ -20,4 +20,4 @@
     }
     function fragments(enemy) { const points = shape(enemy), count = enemy.bossType ? Math.min(points.length, 12) : Math.min(points.length, enemy.radius >= 18 ? 6 : 4), step = Math.max(1, Math.floor(points.length / count)); return Array.from({length:count},(_,i) => [[0,0], points[(i*step)%points.length], points[((i+1)*step)%points.length]]); }
     ns.Geometry = { SHAPES, definition, shape, scale, polygon, componentPoint, pointInPolygon, segmentPolygonHit, fragments };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

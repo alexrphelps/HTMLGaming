@@ -8,11 +8,12 @@
 
     function createState(seed) {
         return {
-            schemaVersion: 11,
+            schemaVersion: 12,
             worldSeed: Number.isFinite(seed) ? seed : Math.floor(Math.random() * 0x7fffffff),
             galaxyId: 'galaxy_a',
             visitedGalaxies: ['galaxy_a'],
             galaxyCharts: {},
+            stationControl: { schema: 1, galaxies: {}, travelTicks: 0, activeBattle: null },
             lastStargateTravelAt: 0,
             playTime: 0,
             pilot: { level: 1, xp: 0, traitPoints: 0, traits: {}, achievements: {}, wallet: { banked: { aetherium: 250, sunshards: 0, helionite: 0 }, unbanked: { aetherium: 0, sunshards: 0, helionite: 0 } }, allegiance: null },
@@ -28,9 +29,9 @@
             reputations: Object.fromEntries(Object.keys(ns.Data.FACTIONS).map(id => [id, id === 'independents' ? 5 : 0])),
             economy: {},
             marketInventories: {},
-            contracts: { board: [], active: null, completed: 0, history: [], boardRevision: 0, lastManualRefreshAt: 0 },
+            contracts: { board: [], active: null, completed: 0, history: [], boardRevision: 0, boardStationId: null, lastManualRefreshAt: 0 },
             quests: Object.fromEntries(Object.keys(ns.Data.FACTIONS).map(id => [id, 0])),
-            progression: { tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, nextRoamingThreatAt: 0 },
+            progression: { tutorialStep: 0, legacyCareer: false, legacyShield: false, pendingDebrief: null, serviceDiscount: null, bossesDefeated: {}, roamingThreat: null, roamingThreats: {}, nextRoamingThreatAt: 0, roamingThreatCooldowns: {} },
             discoveries: ['waypoint_zero'],
             customWaypoint: null,
             consumedEntityIds: [],
@@ -58,4 +59,4 @@
     }
 
     ns.State = { createState, xpForLevel, addExperience, DEFAULT_SLOTS };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

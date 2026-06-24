@@ -82,4 +82,4 @@
     const basicControl = control;
     control = function (game, slot, held, dt) { if (advancedControl(game, slot, held, dt)) return; return basicControl(game, slot, held, dt); };
     ns.Weapons = { RESOURCE_SCALE, weaponData, jammed, targetFor, fire, control, updateProjectile, playerHit };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

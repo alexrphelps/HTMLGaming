@@ -29,7 +29,7 @@ class FrontierWayfarerGame {
         }
     }
     start() { this.iframe?.focus(); }
-    stop() { this.iframe?.contentWindow?.postMessage({ type: 'mini-invaders-v2:pause' }, '*'); }
+    stop() { this.iframe?.contentWindow?.postMessage({ type: 'frontier-wayfarer:pause' }, '*'); }
     cleanup() { this.iframe?.remove(); this.iframe = null; this.container = null; }
 }
 if (typeof window !== 'undefined') window.FrontierWayfarerGame = FrontierWayfarerGame;

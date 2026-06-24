@@ -77,4 +77,4 @@
     registerMany('ability', Object.values(ns.Data.MODULES).filter(module => module.ability).map(module => Object.assign({}, module.ability, { id: module.id, handlerId: null, effectType: module.ability.type })));
 
     ns.Registry = { register, registerMany, registerHandler, get, all, handler, hasHandler, validate };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

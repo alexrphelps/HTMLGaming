@@ -45,4 +45,4 @@
     function loseUnbanked(state) { const wallet = ensure(state); const lost = normalize(wallet.unbanked); wallet.unbanked = empty(); return lost; }
     function isZero(value) { const normalized = normalize(value); return KEYS.every(key => normalized[key] === 0); }
     ns.Wallet = { KEYS, empty, normalize, ensure, scale, canAfford, canAffordCombined, shortfall, debit, debitCombined, total, credit, deposit, loseUnbanked, isZero };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);

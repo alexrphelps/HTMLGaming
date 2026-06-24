@@ -25,8 +25,8 @@
         Object.values(state.ship.slots).filter(Boolean).forEach((id, index) => {
             if ((index + state.contracts.completed) % 3 === 0) state.ship.moduleDamage[id] = clamp((state.ship.moduleDamage[id] || 0) + .18, 0, .75);
         });
-        const station = world.nearestStation(state.ship.x, state.ship.y, l => state.reputations[l.faction] > -50) || ns.Data.LANDMARKS[0];
-        state.ship.x = station.x + 180; state.ship.y = station.y; state.ship.vx = 0; state.ship.vy = 0;
+        const station = ns.World.nearestValidStation(state, world, state.ship.x, state.ship.y, l => state.reputations[l.faction] > -50) || ns.World.nearestValidStation(state, world, state.ship.x, state.ship.y) || ns.Galaxies.availableLandmarks(state).find(item => item.type === 'station');
+        state.ship.x = station.x; state.ship.y = station.y; state.ship.vx = 0; state.ship.vy = 0;
         state.dockedAt = station.id;
         const stats = ns.Progression.calculateShipStats(state);
         state.ship.hull = Math.max(45, stats.hull * .45); state.ship.shield = stats.shield; state.ship.overshield = 0; state.ship.energy = stats.reactor; state.ship.heat = 0;
@@ -44,4 +44,4 @@
         ns.Progression.updateAchievements(state); return true;
     }
     ns.Combat = { applyDamage, applyHullDamage, defeatConsequences, repairAll };
-})(window.MiniInvadersV2);
+})(window.FrontierWayfarer);
